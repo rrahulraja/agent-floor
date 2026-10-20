@@ -15,6 +15,7 @@ const { execFile } = require('child_process');
 const T = require('./lib/transcript');
 const G = require('./lib/git');
 const { createConfig } = require('./lib/config');
+const C = require('./lib/control');
 
 const PORT = Number(process.env.PORT || 4777);
 const HOST = '127.0.0.1';
@@ -26,6 +27,8 @@ const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
 const NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const SESSION_RE = /^[A-Za-z0-9-]{8,64}$/;
 const KEYS = new Set(['Enter', 'Escape', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'BTab', 'Up', 'Down']);
+const QUEUE = C.jsonStore(path.join(DATA_DIR, 'queue.json'), () => ({}));
+const PROMPTS = C.jsonStore(path.join(DATA_DIR, 'prompts.json'), () => C.cleanPrompts(C.DEFAULT_PROMPTS));
 const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
 const { short, textOf } = T;
 const INDEX_FILE = path.join(__dirname, 'public', 'index.html');
@@ -71,8 +74,8 @@ try { saved = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8')).filter((a) => NAM
 const cleanLabel = (s) => String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
 function persist() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  const keep = ({ name, cwd, label, sessionId, contextWindow }) =>
-    Object.fromEntries(Object.entries({ name, cwd, label, sessionId, contextWindow }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  const keep = ({ name, cwd, label, sessionId, contextWindow, repo, worktree }) =>
+    Object.fromEntries(Object.entries({ name, cwd, label, sessionId, contextWindow, repo, worktree }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
   fs.writeFileSync(AGENTS_FILE, JSON.stringify(saved.map(keep), null, 2));
 }
 
@@ -441,6 +444,7 @@ function settingsForPage() {
   return {
     theme: c.theme, desksPerRow: c.desksPerRow, proseQuestion: c.proseQuestion, maxHelpersShown: c.maxHelpersShown,
     celebrateSeconds: c['celebrate.seconds'], contextWarnPct: c.contextWarnPct, contextAlertPct: c.contextAlertPct,
+    savedPromptClick: c.savedPromptClick, prompts: PROMPTS.get(),
   };
 }
 
@@ -525,8 +529,24 @@ async function poll() {
     const wasWorking = prev.state && WORKING_KINDS.has(prev.state);
     item.finishedAt = item.state === 'idle' ? (wasWorking ? now : prev.finishedAt || 0) : 0;
     item.since = prev.state === item.state ? prev.since : now;
+    item.queue = C.queueOf(QUEUE.get(), a.name);
+    item.lastDispatchAt = prev.lastDispatchAt || 0;
+    if (a.worktree) item.worktree = { repo: a.repo };
+    if (s && C.shouldDispatch({
+      state: item.state, question: item.question, proseMode: CONFIG.get('proseQuestion'), sessionUnknown: item.sessionUnknown,
+      now, quietSince: Math.max(item.since, item.lastChangeAt || 0), idleSecs: CONFIG.get('queueIdleSeconds'), queue: item.queue, lastDispatchAt: item.lastDispatchAt,
+    })) {
+      const next = item.queue.items[0];
+      try {
+        await sendPrompt(a.name, next.text);
+        QUEUE.set(C.dequeue(QUEUE.get(), a.name, next.id));
+        item.queue = C.queueOf(QUEUE.get(), a.name);
+        item.lastDispatchAt = now;
+        item.detail = 'Sent the next queued instruction';
+      } catch (e) { console.warn(`queue: could not send to ${a.name}: ${e.message}`); }
+    }
     memory.set(a.name, item);
-    const { fileStamp, lastChangeAt, screenAt, ...pub } = item;
+    const { fileStamp, lastChangeAt, screenAt, lastDispatchAt, ...pub } = item;
     agents.push(pub);
   }
   snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage() };
@@ -540,6 +560,35 @@ async function poll() {
 async function loop() {
   try { await poll(); } catch (e) { console.error('poll failed:', e.message); }
   setTimeout(loop, CONFIG.get('pollMs'));
+}
+
+// ---------- worktrees ----------
+async function createWorktree(dir, branch, base) {
+  const top = await run('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { timeout: 5000 });
+  if (!top.ok) return { error: `${dir} is not inside a git repository.` };
+  const repo = top.stdout.trim();
+  const fmt = await run('git', ['check-ref-format', '--branch', branch], { timeout: 5000 });
+  if (!fmt.ok || branch.startsWith('-')) return { error: `"${branch}" is not a valid branch name.` };
+  if (!base) {
+    const head = await run('git', ['-C', repo, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { timeout: 5000 });
+    base = head.ok ? head.stdout.trim() : 'HEAD';
+  }
+  if (base.startsWith('-')) return { error: `"${base}" is not a valid base.` };
+  const wtPath = C.worktreePathFor(CONFIG.get('worktreePath'), repo, branch);
+  if (fs.existsSync(wtPath)) return { error: `A folder already exists at ${wtPath}.` };
+  fs.mkdirSync(path.dirname(wtPath), { recursive: true });
+  const exists = await run('git', ['-C', repo, 'rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], { timeout: 5000 });
+  const args = exists.ok ? ['-C', repo, 'worktree', 'add', wtPath, branch] : ['-C', repo, 'worktree', 'add', '-b', branch, wtPath, base];
+  const r = await run('git', args, { timeout: 60000 });
+  if (!r.ok) return { error: `git worktree add failed: ${r.stderr}` };
+  return { path: wtPath, repo };
+}
+async function removeWorktree(agent) {
+  const st = await run('git', ['-C', agent.cwd, 'status', '--porcelain'], { timeout: 10000 });
+  if (!st.ok) return { error: `Could not check ${agent.cwd}: ${st.stderr}` };
+  if (st.stdout.trim()) return { error: `The worktree at ${agent.cwd} has uncommitted changes, so it was kept. Commit or discard them first, or remove the agent without removing the worktree.` };
+  const r = await run('git', ['-C', agent.repo, 'worktree', 'remove', agent.cwd], { timeout: 30000 });
+  return r.ok ? {} : { error: `git worktree remove failed: ${r.stderr}` };
 }
 
 // ---------- http ----------
@@ -600,16 +649,44 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, values: CONFIG.all() });
     }
 
+    if (req.method === 'POST' && p === '/api/prompts') {
+      const prompts = C.cleanPrompts((await readBody(req)).prompts);
+      PROMPTS.set(prompts);
+      await poll();
+      return send(res, 200, { ok: true, prompts });
+    }
+    if (req.method === 'POST' && p === '/api/broadcast') {
+      const { names, text } = await readBody(req);
+      if (!text || !String(text).trim()) return send(res, 400, { error: 'Write an instruction first.' });
+      const sessions = await listSessions();
+      const results = {};
+      for (const name of Array.isArray(names) ? names.slice(0, 50) : []) {
+        const agent = saved.find((a) => a.name === name);
+        if (!agent || !sessions.has(name)) { results[name] = 'skipped (not running)'; continue; }
+        const state = (memory.get(name) || {}).state;
+        if (state === 'idle') { await sendPrompt(name, String(text)); results[name] = 'sent'; }
+        else { QUEUE.set(C.enqueue(QUEUE.get(), name, String(text)).all); results[name] = 'queued'; }
+      }
+      await poll();
+      return send(res, 200, { ok: true, results });
+    }
+
     if (req.method === 'POST' && p === '/api/agents') {
-      const { name, cwd, conversation, label } = await readBody(req);
+      const { name, cwd, conversation, label, worktree } = await readBody(req);
       if (!NAME_RE.test(name || '')) return send(res, 400, { error: 'Use 1–32 letters, numbers, dashes or underscores for the name.' });
       if (saved.find((a) => a.name === name)) return send(res, 409, { error: `There is already an agent called ${name}.` });
       const dir = path.resolve(expandHome(String(cwd || '').trim()));
       let st; try { st = await fsp.stat(dir); } catch {}
       if (!st || !st.isDirectory()) return send(res, 400, { error: `Folder not found: ${dir}` });
+      let agentDir = dir, repoRoot;
+      if (worktree && worktree.branch) {
+        const wt = await createWorktree(dir, String(worktree.branch).trim(), String(worktree.base || '').trim());
+        if (wt.error) return send(res, 400, { error: wt.error });
+        agentDir = wt.path; repoRoot = wt.repo;
+      }
       // Save first: a poll running while tmux starts would otherwise adopt cc-<name> and we'd add it twice.
-      saved.push({ name, cwd: dir, label: cleanLabel(label) || undefined });
-      try { saved.find((a) => a.name === name).sessionId = await startAgent(name, dir, conversation || ''); }
+      saved.push({ name, cwd: agentDir, label: cleanLabel(label) || undefined, repo: repoRoot, worktree: repoRoot ? true : undefined });
+      try { saved.find((a) => a.name === name).sessionId = await startAgent(name, agentDir, repoRoot ? '' : conversation || ''); }
       catch (e) { saved = saved.filter((a) => a.name !== name); throw e; }
       startedAt.set(name, Date.now());
       persist();
@@ -617,9 +694,9 @@ const server = http.createServer(async (req, res) => {
       return send(res, 201, { ok: true });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
-      const [, name, action] = m;
+      const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
       if (!agent) return send(res, 404, { error: `No agent called ${name}.` });
       const running = (await listSessions()).has(name);
@@ -644,6 +721,20 @@ const server = http.createServer(async (req, res) => {
         agent.label = label; persist();
         await poll();
         return send(res, 200, { ok: true });
+      }
+      if (action === 'queue') {
+        if (req.method === 'POST' && !itemId) {
+          const body = await readBody(req);
+          if (typeof body.paused === 'boolean') QUEUE.set(C.setPaused(QUEUE.get(), name, body.paused));
+          else {
+            if (!body.text || !String(body.text).trim()) return send(res, 400, { error: 'Write an instruction first.' });
+            QUEUE.set(C.enqueue(QUEUE.get(), name, String(body.text)).all);
+          }
+        } else if (req.method === 'POST' && itemId && moveDir) QUEUE.set(C.moveItem(QUEUE.get(), name, itemId, moveDir === 'up' ? -1 : 1));
+        else if (req.method === 'DELETE' && itemId) QUEUE.set(C.dequeue(QUEUE.get(), name, itemId));
+        else return send(res, 404, { error: 'Not found' });
+        await poll();
+        return send(res, 200, { ok: true, queue: C.queueOf(QUEUE.get(), name) });
       }
       if (req.method === 'POST' && action === 'context') {
         const { contextWindow } = await readBody(req);
@@ -674,6 +765,11 @@ const server = http.createServer(async (req, res) => {
       }
       if (req.method === 'DELETE' && !action) {
         if (running) return send(res, 409, { error: `Stop ${name} before removing it.` });
+        if (url.searchParams.get('removeWorktree') === '1' && agent.worktree) {
+          const r = await removeWorktree(agent);
+          if (r.error) return send(res, 409, { error: r.error });
+        }
+        const q = QUEUE.get(); if (q[name]) { const { [name]: _, ...rest } = q; QUEUE.set(rest); }
         saved = saved.filter((a) => a.name !== name); persist();
         memory.delete(name);
         await poll();

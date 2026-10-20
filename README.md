@@ -59,6 +59,11 @@ tmux attach -t cc-billing     # detach again with Ctrl-b d
 - Send an instruction (⌘/Ctrl + Enter). Multi-line text is pasted as one message.
 - Answer permission prompts: Approve (Enter), Choose option 2, or Decline (Esc).
 - Answer Claude's questions: when an agent asks you something, the panel shows the question and its options as buttons.
+- **Queue instructions.** While an agent is busy, new instructions go into its queue and are sent one at a time when it's idle (pause, reorder or remove them in the panel). The queue survives restarts (`~/.agent-floor/queue.json`).
+- **Saved prompts.** One-click chips above the instruction box ("Run the tests and fix any failures", `/code-review`, …). Click inserts, Shift+click sends; edit the list from the panel (`~/.agent-floor/prompts.json`).
+- **Broadcast** one instruction to several agents from the header. Idle agents get it now; busy ones get it queued.
+- **Worktree agents.** When adding an agent, tick *New branch in its own git worktree* and it starts on a fresh branch in `<repo>.worktrees/<branch>`, so several agents can work on one repo safely. Removing the agent can remove the worktree too, but only if it has no uncommitted changes; the branch is always kept.
+- **Keyboard shortcuts.** `j`/`k` switch agents, `/` writes an instruction, `a`/`d` approve or decline, `1`–`9` answer a question, `?` shows the list.
 - Interrupt (Esc) or Switch mode (Shift+Tab, cycles accept-edits and plan mode).
 - Stop an agent, then later start it again and continue its last conversation.
 - Turn on browser alerts for "needs you" and "finished" while the tab is in the background.

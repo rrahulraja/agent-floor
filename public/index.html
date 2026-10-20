@@ -167,6 +167,22 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
   min-height: 240px; max-height: 58vh; flex: 1;
 }
 .compose label { display: block; font-weight: 600; margin-bottom: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.chips button { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 2px 10px; font-size: 13px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chips button:hover { border-color: var(--work); }
+.chips .edit { border-style: dashed; color: var(--muted); }
+.queue h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.queue h3 .btn { padding: 1px 8px; font-size: 12px; text-transform: none; letter-spacing: 0; }
+.qitem { display: flex; gap: 8px; align-items: flex-start; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.qitem span { flex: 1; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 4.8em; overflow: hidden; }
+.qitem button { border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 0 6px; cursor: pointer; line-height: 1.5; }
+.agent-list { display: grid; gap: 4px; max-height: 40vh; overflow: auto; margin-bottom: 10px; }
+.agent-list label { display: flex; gap: 8px; align-items: center; font-weight: 400; }
+.wt-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.wt-fields input { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: var(--bg); }
+.keys { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+.keys dt kbd { font: 600 13px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; background: var(--bg); }
+.keys dd { margin: 0; }
 .compose textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; background: var(--bg); }
 .compose .row { margin-top: 8px; align-items: center; }
 .compose small { color: var(--muted); }
@@ -220,6 +236,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     </div>
   </div>
   <button class="btn" id="alertsBtn" hidden>Turn on alerts</button>
+  <button class="btn" id="broadcastBtn">Broadcast</button>
   <button class="btn" id="settingsBtn">Settings</button>
   <button class="btn primary" id="addBtn">Add agent</button>
 </header>
@@ -270,12 +287,16 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 
         <form class="compose" id="compose">
           <label for="promptText" id="promptLabel">Instruction</label>
+          <div class="chips" id="chips"></div>
           <textarea id="promptText" placeholder="Tell this agent what to do next"></textarea>
           <div class="row">
             <button class="btn primary" type="submit" id="sendBtn">Send</button>
-            <small>⌘ or Ctrl + Enter sends</small>
+            <button class="btn" type="button" id="queueBtn">Add to queue</button>
+            <small id="composeHint">⌘ or Ctrl + Enter sends</small>
           </div>
         </form>
+
+        <div class="queue" id="dQueue" hidden></div>
 
         <div class="row" id="dTools">
           <button class="btn" data-key="Escape">Interrupt</button>
@@ -316,12 +337,52 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
       <select id="fConv"><option value="">Start fresh</option></select>
       <small id="fConvHint">Enter the project folder to see its past conversations.</small>
     </div>
+    <div class="field">
+      <label class="check"><input type="checkbox" id="fWt"> New branch in its own git worktree</label>
+      <div class="wt-fields" id="fWtFields" hidden>
+        <input type="text" id="fBranch" placeholder="Branch, e.g. feat/refunds" autocomplete="off" aria-label="Branch name">
+        <input type="text" id="fBase" placeholder="Base (default: origin's main)" autocomplete="off" aria-label="Base branch">
+      </div>
+      <small>Lets several agents work on the same repo without getting in each other's way.</small>
+    </div>
     <p class="error" id="fError" hidden></p>
     <div class="row">
       <button class="btn primary" type="submit" value="ok">Start agent</button>
       <button class="btn" type="button" id="cancelAdd">Cancel</button>
     </div>
   </form>
+</dialog>
+<dialog id="broadcastDialog">
+  <form id="broadcastForm" method="dialog">
+    <h2>Broadcast an instruction</h2>
+    <p class="hint" style="margin:-6px 0 12px">Idle agents get it now; busy ones get it queued.</p>
+    <div class="agent-list" id="bAgents"></div>
+    <div class="field"><label for="bText">Instruction</label>
+      <textarea id="bText" style="width:100%;min-height:90px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--bg)"></textarea></div>
+    <p class="error" id="bError" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Send</button><button class="btn" type="button" id="bCancel">Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="promptsDialog">
+  <form id="promptsForm" method="dialog">
+    <h2>Saved prompts</h2>
+    <p class="hint" style="margin:-6px 0 12px">One prompt per block. Separate prompts with a line containing only <code>---</code>.</p>
+    <textarea id="pText" style="width:100%;min-height:260px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--bg);font:14px/1.5 var(--mono)"></textarea>
+    <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="pCancel">Cancel</button></div>
+  </form>
+</dialog>
+<dialog id="keysDialog">
+  <h2>Keyboard shortcuts</h2>
+  <dl class="keys">
+    <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next / previous agent</dd>
+    <dt><kbd>/</kbd></dt><dd>Write an instruction</dd>
+    <dt><kbd>a</kbd></dt><dd>Approve (when the agent needs your approval)</dd>
+    <dt><kbd>d</kbd></dt><dd>Decline (when the agent needs your approval)</dd>
+    <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Pick an answer (when the agent has a question)</dd>
+    <dt><kbd>?</kbd></dt><dd>This list</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Leave the instruction box</dd>
+  </dl>
+  <div class="row" style="margin-top:14px"><button class="btn" id="keysClose">Close</button></div>
 </dialog>
 <dialog id="settingsDialog" class="settings">
   <form id="settingsForm" method="dialog">
@@ -529,6 +590,8 @@ function renderPanel() {
   $('dError').hidden = !a.error; $('dError').textContent = a.error || '';
   $('dNeeds').hidden = a.state !== 'waiting';
   renderQuestion(a); renderHealth(a); renderStatus(a); renderHelpers(a);
+  if (a.state !== 'stopped') renderCompose(a);
+  renderQueue(a);
 
   const running = a.state !== 'stopped';
   $('dRunning').hidden = !running;
@@ -704,6 +767,7 @@ async function openSettings() {
     let input;
     if (f.type === 'bool') { input = el('input'); input.type = 'checkbox'; input.checked = !!settingsLoaded.values[f.key]; }
     else if (f.type === 'enum') { input = el('select'); for (const v of f.values) { const o = el('option', '', v); o.value = v; input.append(o); } input.value = settingsLoaded.values[f.key]; }
+    else if (f.type === 'string') { input = el('input'); input.type = 'text'; input.value = settingsLoaded.values[f.key]; input.style.gridColumn = '1 / -1'; }
     else { input = el('input'); input.type = 'number'; input.min = f.min; input.max = f.max; input.step = 1; input.value = settingsLoaded.values[f.key]; }
     input.id = id; input.dataset.key = f.key;
     const note = el('small');
@@ -734,15 +798,136 @@ $('settingsForm').addEventListener('submit', async (e) => {
   catch (err) { $('sError').textContent = err.message; $('sError').hidden = false; }
 });
 
+// A busy agent gets new instructions queued by default; an idle one gets them straight away.
+const isBusy = (a) => a && a.state !== 'idle' && a.state !== 'stopped';
+async function sendOrQueue(text, forceSend) {
+  const a = agents.find((x) => x.name === selected);
+  if (!a || !text.trim()) return false;
+  const queue = !forceSend && isBusy(a);
+  try {
+    if (queue) { await api('POST', `/api/agents/${a.name}/queue`, { text }); toast(`Queued for ${labelOf(a.name)}`); }
+    else { await api('POST', `/api/agents/${a.name}/prompt`, { text }); toast(`Sent to ${labelOf(a.name)}`); }
+    return true;
+  } catch (err) { toast(err.message); return false; }
+}
 $('compose').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const text = $('promptText').value;
-  if (!text.trim() || !selected) return;
   $('sendBtn').disabled = true;
-  try { await api('POST', `/api/agents/${selected}/prompt`, { text }); $('promptText').value = ''; toast(`Sent to ${labelOf(selected)}`); }
-  catch (err) { toast(err.message); }
-  finally { $('sendBtn').disabled = false; }
+  const a = agents.find((x) => x.name === selected);
+  // The primary button reads "Add to queue" while busy; the secondary one then sends right away.
+  if (await sendOrQueue($('promptText').value, !isBusy(a))) $('promptText').value = '';
+  $('sendBtn').disabled = false;
 });
+$('queueBtn').addEventListener('click', async () => {
+  const a = agents.find((x) => x.name === selected);
+  if (await sendOrQueue($('promptText').value, isBusy(a))) $('promptText').value = '';
+});
+function renderCompose(a) {
+  const busy = isBusy(a);
+  $('sendBtn').textContent = busy ? 'Add to queue' : 'Send';
+  $('queueBtn').textContent = busy ? 'Send now' : 'Add to queue';
+  $('composeHint').textContent = busy ? `⌘/Ctrl + Enter queues it. ${labelOf(a.name)} is busy; it goes out when it's idle.` : '⌘ or Ctrl + Enter sends';
+  const chips = $('chips');
+  const prompts = settings.prompts || [];
+  if (!sameAs(chips, prompts.map((p) => p.text))) {
+    chips.replaceChildren(...prompts.map((p) => {
+      const b = el('button', '', p.text.split('\n')[0]);
+      b.type = 'button'; b.title = `${p.text}\n\nClick: ${settings.savedPromptClick === 'send' ? 'send' : 'insert'} · Shift+click: ${settings.savedPromptClick === 'send' ? 'insert' : 'send'}`;
+      b.addEventListener('click', async (e) => {
+        const send = (settings.savedPromptClick === 'send') !== e.shiftKey;
+        if (send) await sendOrQueue(p.text, false);
+        else { const t = $('promptText'); t.value = t.value ? `${t.value}\n${p.text}` : p.text; t.focus(); }
+      });
+      return b;
+    }), (() => { const b = el('button', 'edit', 'Edit prompts'); b.type = 'button'; b.addEventListener('click', openPrompts); return b; })());
+  }
+}
+function renderQueue(a) {
+  const box = $('dQueue');
+  const q = a.queue || { paused: false, items: [] };
+  box.hidden = a.state === 'stopped' || (!q.items.length && !q.paused);
+  if (sameAs(box, [a.name, q])) return;
+  const h = el('h3', '', `Queue (${q.items.length})${q.paused ? ' · paused' : ''}`);
+  const toggle = el('button', 'btn', q.paused ? 'Resume' : 'Pause'); toggle.type = 'button';
+  toggle.addEventListener('click', () => api('POST', `/api/agents/${a.name}/queue`, { paused: !q.paused }).catch((err) => toast(err.message)));
+  h.append(toggle);
+  box.replaceChildren(h, ...q.items.map((it, i) => {
+    const row = el('div', 'qitem');
+    const btn = (txt, label, fn) => { const b = el('button', '', txt); b.type = 'button'; b.setAttribute('aria-label', label); b.addEventListener('click', () => fn().catch((err) => toast(err.message))); return b; };
+    row.append(el('span', '', it.text));
+    if (i > 0) row.append(btn('↑', 'Move up', () => api('POST', `/api/agents/${a.name}/queue/${it.id}/up`)));
+    if (i < q.items.length - 1) row.append(btn('↓', 'Move down', () => api('POST', `/api/agents/${a.name}/queue/${it.id}/down`)));
+    row.append(btn('×', 'Remove', () => api('DELETE', `/api/agents/${a.name}/queue/${it.id}`)));
+    return row;
+  }));
+  if (q.paused) box.append(el('p', 'hint', 'Paused: nothing is sent until you resume.'));
+  else if (a.sessionUnknown) box.append(el('p', 'hint', "Waiting: can't tell which conversation is this agent's, so nothing is sent."));
+}
+
+// ---------- saved prompts editor ----------
+function openPrompts() {
+  $('pText').value = (settings.prompts || []).map((p) => p.text).join('\n---\n');
+  $('promptsDialog').showModal();
+}
+$('pCancel').addEventListener('click', () => $('promptsDialog').close());
+$('promptsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const prompts = $('pText').value.split(/^---$/m).map((t) => t.trim()).filter(Boolean);
+  try { await api('POST', '/api/prompts', { prompts }); $('promptsDialog').close(); toast('Saved prompts updated'); }
+  catch (err) { toast(err.message); }
+});
+
+// ---------- broadcast ----------
+$('broadcastBtn').addEventListener('click', () => {
+  const running = agents.filter((a) => a.state !== 'stopped');
+  if (!running.length) { toast('No agents are running.'); return; }
+  $('bError').hidden = true;
+  $('bAgents').replaceChildren(...running.map((a) => {
+    const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.value = a.name; c.checked = true;
+    l.append(c, document.createTextNode(`${a.label || a.name}  `), el('span', 'hint', LABEL[displayState(a)] || a.state));
+    return l;
+  }));
+  $('broadcastDialog').showModal(); $('bText').focus();
+});
+$('bCancel').addEventListener('click', () => $('broadcastDialog').close());
+$('broadcastForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const names = [...$('bAgents').querySelectorAll('input:checked')].map((c) => c.value);
+  const text = $('bText').value;
+  if (!names.length || !text.trim()) { $('bError').textContent = 'Pick at least one agent and write an instruction.'; $('bError').hidden = false; return; }
+  try {
+    const r = await api('POST', '/api/broadcast', { names, text });
+    const sent = Object.values(r.results).filter((v) => v === 'sent').length, queued = Object.values(r.results).filter((v) => v === 'queued').length;
+    $('broadcastDialog').close(); $('bText').value = '';
+    toast(`Sent to ${sent}, queued for ${queued}`);
+  } catch (err) { $('bError').textContent = err.message; $('bError').hidden = false; }
+});
+
+// ---------- keyboard shortcuts ----------
+document.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  const t = e.target;
+  if (t.closest && t.closest('input, textarea, select, dialog[open]')) {
+    if (e.key === 'Escape' && t.id === 'promptText') t.blur();
+    return;
+  }
+  if (document.querySelector('dialog[open]')) return;
+  const idx = agents.findIndex((a) => a.name === selected);
+  const a = agents[idx];
+  const key = (k) => api('POST', `/api/agents/${a.name}/key`, { key: k }).catch((err) => toast(err.message));
+  if (e.key === 'j' || e.key === 'k') {
+    if (!agents.length) return;
+    const n = idx < 0 ? 0 : (idx + (e.key === 'j' ? 1 : -1) + agents.length) % agents.length;
+    select(agents[n].name);
+  } else if (e.key === '/') { e.preventDefault(); $('promptText').focus(); }
+  else if (e.key === '?') $('keysDialog').showModal();
+  else if (e.key === 'a' && a && a.state === 'waiting') key('Enter');
+  else if (e.key === 'd' && a && a.state === 'waiting') key('Escape');
+  else if (/^[1-9]$/.test(e.key) && a && a.state === 'asking' && a.question && a.question.kind === 'tool') key(e.key);
+  else return;
+  e.preventDefault();
+});
+$('keysClose').addEventListener('click', () => $('keysDialog').close());
 $('promptText').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('compose').requestSubmit(); }
 });
@@ -843,7 +1028,9 @@ async function fillConversations(select, cwd, hintEl, preferLatest) {
 let convLoadedFor = null;
 $('removeBtn').addEventListener('click', async () => {
   if (!selected || !confirm(`Remove ${labelOf(selected)} from the floor? Its conversation history stays in Claude Code.`)) return;
-  try { await api('DELETE', `/api/agents/${selected}`); select(null); } catch (err) { toast(err.message); }
+  const a = agents.find((x) => x.name === selected);
+  const wt = a && a.worktree && confirm(`Also delete its worktree folder?\n\n${a.cwd}\n\nOnly done if it has no uncommitted changes. The branch itself is kept.`);
+  try { await api('DELETE', `/api/agents/${selected}${wt ? '?removeWorktree=1' : ''}`); select(null); } catch (err) { toast(err.message); }
 });
 
 // ---------- add dialog ----------
@@ -875,7 +1062,7 @@ function updateNameHint() {
   $('fNameHint').textContent = v ? `Session: cc-${slugFor(v)}` : 'Any name you like.';
 }
 function openAdd() {
-  $('fError').hidden = true; $('addForm').reset(); nameTouched = false;
+  $('fError').hidden = true; $('addForm').reset(); nameTouched = false; $('fWtFields').hidden = true;
   $('fConv').replaceChildren(new Option('Start fresh', ''));
   $('fConvHint').textContent = 'Pick a project to see its past conversations.';
   updateNameHint();
@@ -891,6 +1078,7 @@ $('fCwd').addEventListener('input', () => {
   if (v) cwdTimer = setTimeout(() => fillConversations($('fConv'), v, $('fConvHint'), false), known ? 0 : 400);
 });
 $('fName').addEventListener('input', () => { nameTouched = true; updateNameHint(); });
+$('fWt').addEventListener('change', () => { $('fWtFields').hidden = !$('fWt').checked; $('fConv').disabled = $('fWt').checked; if ($('fWt').checked) $('fBranch').focus(); });
 $('addBtn').addEventListener('click', openAdd);
 $('cancelAdd').addEventListener('click', () => $('addDialog').close());
 $('addForm').addEventListener('submit', async (e) => {
@@ -898,7 +1086,9 @@ $('addForm').addEventListener('submit', async (e) => {
   const label = $('fName').value.trim();
   const name = slugFor(label);
   try {
-    await api('POST', '/api/agents', { name, label, cwd: $('fCwd').value, conversation: $('fConv').value });
+    const worktree = $('fWt').checked ? { branch: $('fBranch').value.trim(), base: $('fBase').value.trim() } : undefined;
+    if (worktree && !worktree.branch) throw new Error('Give the new branch a name.');
+    await api('POST', '/api/agents', { name, label, cwd: $('fCwd').value, conversation: worktree ? '' : $('fConv').value, worktree });
     $('addDialog').close(); select(name); toast(`Started ${label}`);
   } catch (err) { $('fError').textContent = err.message; $('fError').hidden = false; }
 });
