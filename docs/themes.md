@@ -1,6 +1,6 @@
 # Making a theme
 
-Agent Floor ships with two themes: **Pixel office** (the default, drawn in code) and **Example office**, a small flat-vector theme whose only job is to show how a theme is built. You can make your own and drop it in a folder; it appears in the theme menu in the header.
+Agent Floor ships with **Pixel office** (the default, drawn in code) and several flat-vector themes generated from `tools/themes/specs/`. You can make your own and drop it in a folder; it appears in the theme menu in the header.
 
 A theme only changes how things *look*. Where agents sit, walking between desk, lounge and door, name tags, badges, celebrations and clicks all stay the same.
 
@@ -15,7 +15,7 @@ The folder name must match the theme's `id`. Built-in themes win if two themes s
 
 ## How the built-in themes are made
 
-All flat-vector themes except *Example office* are generated from small data files in `tools/themes/specs/` by a character builder (`tools/themes/character.js`): each character is described by skin, hair, beard, crown or hat, clothes, a prop (flute, bow, mace, wand, cauldron, walkie-talkie…), a pose and an animation. Change a spec and run:
+All flat-vector themes are generated from small data files in `tools/themes/specs/` by a character builder (`tools/themes/character.js`): each character is described by skin, hair, beard, crown or hat, clothes, a prop (flute, bow, mace, wand, cauldron, walkie-talkie…), a pose and an animation. Change a spec and run:
 
 ```bash
 npm run build:themes
@@ -24,10 +24,10 @@ node tools/themes/sheet.js public/themes/mahabharata /tmp/cast.svg   # a contact
 
 You can use the same builder for your own theme: add a spec file, build, then copy the generated folder to `~/.agent-floor/themes/`.
 
-## Start from the example
+## Start from an existing theme
 
 ```bash
-cp -r public/themes/example ~/.agent-floor/themes/my-theme
+cp -r public/themes/office ~/.agent-floor/themes/my-theme
 # edit ~/.agent-floor/themes/my-theme/theme.json: set "id": "my-theme" and a name
 node server.js --check-theme ~/.agent-floor/themes/my-theme
 ```

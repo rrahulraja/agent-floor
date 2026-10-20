@@ -104,7 +104,6 @@ Nothing is sent while a dashboard tab is on screen (you can already see it). Eac
 | [Wizard school](public/themes/wizard-school/README.md) | Castle classroom | Headmaster plans, Alchemist tests, Owl courier deploys, the Talking hat asks questions |
 | [Space saga](public/themes/space-saga/README.md) | Starship hangar | Admiral plans, robot clerk writes, mechanic builds, starfighter launches deploys |
 | [Small town, 1980s](public/themes/small-town-80s/README.md) | Basement HQ | Game master plans, science teacher tests, ham-radio kid builds, police chief reviews |
-| [Example office](public/themes/example/README.md) | Minimal office | The smallest theme, to copy when making your own |
 
 Each theme also restyles the top bar: *Kurukshetra* in gold with Sanskrit times of day (Brahma muhurta, Sandhya, Ratri), *Hangar Bay* with a glowing clock and a stardate, *HQ* with a green LCD clock. The wizard, space and 1980s themes are original characters inspired by those genres, not copies of any film or book. Your own themes go in `~/.agent-floor/themes/<id>/`: a `theme.json` plus SVG or PNG images, one character per kind of work. See [docs/themes.md](docs/themes.md).
 
