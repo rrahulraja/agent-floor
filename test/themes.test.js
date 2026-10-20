@@ -28,6 +28,11 @@ test('validateManifest accepts a good theme and reports problems', () => {
   const text = bad.problems.join(' | ');
   for (const frag of ['id must be', 'kind must be', 'roles.default is required', 'roles.dancing', 'room.desk', 'roles.writing: w.svg not found']) assert.ok(text.includes(frag), frag);
   assert.equal(Th.validateManifest({ ...good, id: 'pixel' }, all).ok, false);
+  const hdr = Th.validateManifest({ ...good, header: { title: 'Kurukshetra', font: 'cinzel', clock: 'digital', era: 'stardate', colors: { bar: '#3A1A10', accent: '#E8B830' }, phases: { dawn: 'Brahma muhurta' } } }, all);
+  assert.equal(hdr.ok, true, hdr.problems.join('; '));
+  assert.deepEqual(hdr.theme.header, { title: 'Kurukshetra', font: 'Cinzel', clockFont: 'Cinzel', clock: 'digital', era: 'stardate', colors: { bar: '#3A1A10', accent: '#E8B830' }, phases: { dawn: 'Brahma muhurta' } });
+  const badHdr = Th.validateManifest({ ...good, header: { font: 'comic-sans', clock: 'sundial', colors: { bar: 'red', glow: '#fff' }, phases: { noon: 'x' } } }, all);
+  assert.equal(badHdr.problems.length, 5);
 });
 
 test('listThemes reads folders, checks files, and keeps the first id', () => {

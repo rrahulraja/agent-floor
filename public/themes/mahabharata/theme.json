@@ -58,6 +58,24 @@
     "idle": "Balarama · Resting",
     "done": "Balarama · Done"
   },
+  "header": {
+    "title": "Kurukshetra",
+    "font": "cinzel",
+    "clockFont": "cinzel",
+    "colors": {
+      "bar": "#5A1E14",
+      "ink": "#F7E7C4",
+      "accent": "#E8B830",
+      "muted": "#D9B98A"
+    },
+    "phases": {
+      "dawn": "Brahma muhurta",
+      "morning": "Pratah",
+      "afternoon": "Madhyahna",
+      "evening": "Sandhya",
+      "night": "Ratri"
+    }
+  },
   "size": {
     "sit": 30,
     "helper": 13,

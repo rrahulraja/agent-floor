@@ -8,6 +8,7 @@ module.exports = {
   name: 'Space saga',
   description: 'A starship hangar. The Admiral plans, the Robot writes, the Mechanic builds, the Starfighter launches your deploys. Original characters.',
   defaultRole: 'thinking',
+  header: { title: 'Hangar Bay', font: 'orbitron', clockFont: 'orbitron', clock: 'digital', era: 'stardate', colors: { bar: '#0C1024', ink: '#D8E4FF', accent: '#5CC7F2', muted: '#8A9AC0' }, phases: { dawn: 'Dawn cycle', morning: 'Day cycle', afternoon: 'Day cycle', evening: 'Dusk cycle', night: 'Night cycle' } },
   cast: {
     planning: { name: 'The Admiral', skin: '#8E5A3A', hair: { style: 'buzz', color: '#BDBDBD' }, face: { eyes: 'focus' }, outfit: { style: 'jacket', color: '#2F4F6E', accent: '#1E3550', inner: '#C7CCD8' }, necklace: '#E8B830', pose: 'hold', prop: { type: 'holo' } },
     writing: { name: 'Robot clerk', label: 'Robot clerk · Writing code', head: 'gold', color: '#8FB8B0', outfit: { style: 'armor', color: '#8FB8B0', accent: '#5A8A80' }, handSkin: '#8FB8B0', pose: 'typing', prop: { type: 'laptop', color: '#8A90A6' } },

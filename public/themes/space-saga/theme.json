@@ -58,6 +58,26 @@
     "idle": "Galley break",
     "done": "Medal ceremony · Done"
   },
+  "header": {
+    "title": "Hangar Bay",
+    "font": "orbitron",
+    "clockFont": "orbitron",
+    "clock": "digital",
+    "era": "stardate",
+    "colors": {
+      "bar": "#0C1024",
+      "ink": "#D8E4FF",
+      "accent": "#5CC7F2",
+      "muted": "#8A9AC0"
+    },
+    "phases": {
+      "dawn": "Dawn cycle",
+      "morning": "Day cycle",
+      "afternoon": "Day cycle",
+      "evening": "Dusk cycle",
+      "night": "Night cycle"
+    }
+  },
   "size": {
     "sit": 30,
     "helper": 12,

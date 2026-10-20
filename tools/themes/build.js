@@ -35,7 +35,7 @@ for (const file of fs.readdirSync(SPECS).filter((f) => f.endsWith('.js')).sort()
   const manifest = {
     id: spec.id, name: spec.name, version: spec.version || '1.0.0', author: 'agent-floor', description: spec.description, kind: 'vector',
     tint: !!spec.tint, room: spec.room, roles: { default: roles[spec.defaultRole || 'thinking'], ...roles }, celebration: spec.celebration || {},
-    labels, size: { sit: 30, helper: 13, aspect: 1.6, ...(spec.size || {}) },
+    labels, header: spec.header, size: { sit: 30, helper: 13, aspect: 1.6, ...(spec.size || {}) },
   };
   fs.writeFileSync(path.join(dir, 'theme.json'), JSON.stringify(manifest, null, 2) + '\n');
   // A cast list, so people can see who does what.

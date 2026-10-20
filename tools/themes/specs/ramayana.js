@@ -8,6 +8,7 @@ module.exports = {
   name: 'Ramayana',
   description: 'A forest ashram by the sea. Valmiki writes, Rama runs commands, Lakshmana tests, Nala builds the bridge, Hanuman deploys, Kumbhakarna sleeps.',
   defaultRole: 'thinking',
+  header: { title: 'Panchavati', font: 'tiro-sanskrit', clockFont: 'cinzel', colors: { bar: '#1F3A24', ink: '#F2E8C9', accent: '#E8B830', muted: '#B8C9A0' }, phases: { dawn: 'Brahma muhurta', morning: 'Pratah', afternoon: 'Madhyahna', evening: 'Sandhya', night: 'Ratri' } },
   cast: {
     planning: { name: 'Vasishtha', label: 'Vasishtha · Planning', skin: '#D9A27A', hair: { style: 'topknot', color: '#EDEDED' }, beard: { style: 'long', color: '#EDEDED' },
       face: { eyes: 'closed', tilak: 'ash' }, outfit: { style: 'robe', color: '#F2C27A', accent: '#C98F3A' }, pose: 'staff', prop: { type: 'staff', color: '#7A4A26' } },

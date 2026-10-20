@@ -6,6 +6,7 @@ module.exports = {
   name: 'Office',
   description: 'A bright modern office. The product lead plans, the developer writes, QA tests, the SRE deploys, the data analyst queries.',
   defaultRole: 'thinking',
+  header: { title: 'Agent floor', font: 'inter', clockFont: 'inter' },
   tint: false,
   cast: {
     planning: { name: 'Product lead', skin: '#E2B38E', hair: { style: 'bun', color: '#2B1D14' }, face: { eyes: 'focus' }, earrings: '#E8B830', outfit: { style: 'jacket', color: '#2A4E9E', accent: '#1E3570', inner: '#F4F1E8' }, pose: 'hold', prop: { type: 'scroll' } },

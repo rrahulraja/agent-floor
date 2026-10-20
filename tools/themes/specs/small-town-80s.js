@@ -6,6 +6,7 @@ module.exports = {
   name: 'Small town, 1980s',
   description: 'A basement HQ in a small town. The Game master plans, the Science teacher tests, the Ham-radio kid builds, the Chief reviews.',
   defaultRole: 'thinking',
+  header: { title: 'HQ', font: 'vt323', clockFont: 'vt323', clock: 'lcd', colors: { bar: '#2A1E14', ink: '#F2E6C8', accent: '#F2545B', muted: '#C9B08A' } },
   cast: {
     planning: { name: 'The Game master', label: 'Game master · Planning the campaign', skin: '#E2B38E', hair: { style: 'fluffy', color: '#2B1D14' }, face: { eyes: 'focus' }, outfit: { style: 'tunic', color: '#3B6FD8', accent: '#F2B825' }, pose: 'hold', prop: { type: 'dice' } },
     writing: { name: 'The Note-taker', skin: '#C98F62', hair: { style: 'curly', color: '#1B1B1B' }, face: { eyes: 'focus' }, outfit: { style: 'jacket', color: '#C8352E', accent: '#8E2020', inner: '#F2B825' }, pose: 'typing', prop: { type: 'quill' } },

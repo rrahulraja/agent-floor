@@ -33,15 +33,25 @@ button, input, textarea, select { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--work); outline-offset: 2px; }
 
 .bar { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-.bar h1 { font: 700 24px/1 var(--pixel); margin: 0; letter-spacing: .5px; }
+.bar h1 { font: 700 24px/1 var(--title-font, var(--pixel)); margin: 0; letter-spacing: .5px; }
 .summary { margin: 0; color: var(--muted); flex: 1; min-width: 180px; }
+/* A theme can restyle the header: background, ink, accent, fonts, clock face. */
+.bar.themed { background: var(--hb, transparent); color: var(--hi, inherit); }
+.bar.themed h1 { color: var(--ha, inherit); }
+.bar.themed .summary, .bar.themed .clock-phase { color: var(--hm, var(--muted)); }
+.bar.themed .summary .needs { color: var(--ha, var(--wait)); }
+.bar.themed .btn:not(.primary) { background: color-mix(in srgb, var(--hb, var(--surface)) 80%, #fff 20%); color: var(--hi, inherit); border-color: color-mix(in srgb, var(--hi, var(--line)) 30%, transparent); }
+.bar.themed .btn.primary { background: var(--ha, var(--ink)); border-color: var(--ha, var(--ink)); color: var(--hb, var(--bg)); }
+.bar.clock-digital .clock-time b { color: var(--ha, var(--work)); text-shadow: 0 0 6px color-mix(in srgb, var(--ha, var(--work)) 60%, transparent); letter-spacing: 2px; }
+.bar.clock-lcd .clock-time b { background: #0B1A0E; color: #5CF28A; padding: 3px 7px; border-radius: 4px; letter-spacing: 2px; text-shadow: 0 0 5px rgba(92,242,138,.6); font-size: 22px; }
+.bar.themed .cal-grid .today { background: var(--ha, var(--ink)); color: var(--hb, var(--bg)); }
 .summary b { font-weight: 600; }
 .summary .needs { color: var(--wait); }
 
 .clock { position: relative; display: flex; align-items: center; gap: 10px; }
 .phase-icon svg { display: block; }
 .clock-time { display: flex; flex-direction: column; line-height: 1.1; }
-.clock-time b { font: 700 20px/1 var(--pixel); font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+.clock-time b { font: 700 20px/1 var(--clock-font, var(--pixel)); font-variant-numeric: tabular-nums; letter-spacing: .5px; }
 .clock-phase { font-size: 12px; color: var(--muted); }
 .date-btn { font-size: 14px; padding: 6px 11px; }
 .cal {
@@ -248,7 +258,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 </head>
 <body>
 <header class="bar">
-  <h1>Agent floor</h1>
+  <h1 id="appTitle">Agent floor</h1>
   <p class="summary" id="summary" aria-live="polite">Connecting…</p>
   <div class="clock">
     <span class="phase-icon" id="phaseIcon" aria-hidden="true"></span>
@@ -471,6 +481,7 @@ const LABEL = {
   tests: 'Running tests', build: 'Building', deploy: 'Deploying', data: 'Querying data', review: 'Reviewing', git: 'Git work',
   waiting: 'Needs you', asking: 'Has a question', idle: 'Idle', done: 'Done', stopped: 'Stopped',
 };
+let theme = { id: 'pixel', kind: 'pixel' }; // the active theme (see the themes section)
 let settings = { desksPerRow: 4, proseQuestion: 'floor+pause', maxHelpersShown: 3, celebrateSeconds: 5 };
 const isProse = (a) => !!(a.question && a.question.kind === 'prose');
 // Counts toward "needs you": approvals, real questions, and prose questions unless set to floor-only.
@@ -618,7 +629,8 @@ function renderSummary() {
     if (idle) parts.push(`${idle} idle or stopped`);
   }
   $('summary').innerHTML = parts.join(', ');
-  document.title = waiting ? `(${waiting}) Agent floor` : 'Agent floor';
+  const appName = (theme.header && theme.header.title) || 'Agent floor';
+  document.title = waiting ? `(${waiting}) ${appName}` : appName;
   $('empty').hidden = agents.length > 0;
   $('alertsBtn').hidden = !('Notification' in window) || Notification.permission !== 'default';
 }
@@ -1356,7 +1368,8 @@ function tickClock() {
   const newDay = lastClock && !lastClock.startsWith(d.toDateString());
   lastClock = key;
   $('clockTime').textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  $('clockPhase').textContent = PHASE_LABEL[phase];
+  const ph = (theme.header && theme.header.phases && theme.header.phases[phase]) || PHASE_LABEL[phase];
+  $('clockPhase').textContent = theme.header && theme.header.era === 'stardate' ? `Stardate ${stardate(d)} · ${ph}` : ph;
   $('phaseIcon').innerHTML = PHASE_ICON[phase];
   $('dateBtn').textContent = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
   $('dateBtn').title = d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -1764,7 +1777,6 @@ function drawConfetti(dt, t) {
 // Pixel is drawn on the canvas. Other themes are images (from the theme's folder) placed over the same
 // floor plan, so walking, seats, tags and clicks work the same; the canvas stays on top for confetti,
 // the selection glow and evening light.
-let theme = { id: 'pixel', kind: 'pixel' };
 let themesAvail = [];
 const vEls = new Map(); // key -> <img>
 const themeUrl = (f) => `/themes/${encodeURIComponent(theme.id)}/${f.split('/').map(encodeURIComponent).join('/')}`;
@@ -1774,12 +1786,46 @@ async function loadThemes() {
   sel.replaceChildren(...themesAvail.map((t) => { const o = el('option', '', t.name); o.value = t.id; o.title = t.description || ''; return o; }));
   sel.value = theme.id;
 }
+// Stardate: year, then day of the year (e.g. 2026.293).
+function stardate(d) {
+  const day = Math.floor((new Date(d.getFullYear(), d.getMonth(), d.getDate()) - new Date(d.getFullYear(), 0, 0)) / 86400000);
+  return `${d.getFullYear()}.${String(day).padStart(3, '0')}`;
+}
+// Header fonts come from Google Fonts, by name only (names are from the server's allow-list).
+const loadedFonts = new Set(['Pixelify Sans', 'Inter', 'JetBrains Mono']);
+function loadFont(name) {
+  if (!name || loadedFonts.has(name)) return;
+  loadedFonts.add(name);
+  const l = document.createElement('link');
+  l.rel = 'stylesheet';
+  l.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, '+')}:wght@400;700&display=swap`;
+  document.head.append(l);
+}
+function applyHeader(t) {
+  const bar = document.querySelector('.bar');
+  const h = t.header;
+  const vars = { '--title-font': '', '--clock-font': '', '--hb': '', '--hi': '', '--ha': '', '--hm': '' };
+  bar.classList.remove('themed', 'clock-digital', 'clock-lcd');
+  if (h) {
+    if (h.font) { loadFont(h.font); vars['--title-font'] = `"${h.font}", var(--pixel)`; }
+    if (h.clockFont) { loadFont(h.clockFont); vars['--clock-font'] = `"${h.clockFont}", var(--pixel)`; }
+    const c = h.colors || {};
+    if (c.bar) vars['--hb'] = c.bar; if (c.ink) vars['--hi'] = c.ink; if (c.accent) vars['--ha'] = c.accent; if (c.muted) vars['--hm'] = c.muted;
+    if (Object.keys(c).length) bar.classList.add('themed');
+    if (h.clock === 'digital') bar.classList.add('clock-digital');
+    if (h.clock === 'lcd') bar.classList.add('clock-lcd');
+  }
+  for (const [k, v] of Object.entries(vars)) { if (v) bar.style.setProperty(k, v); else bar.style.removeProperty(k); }
+  $('appTitle').textContent = (h && h.title) || 'Agent floor';
+  lastClock = ''; tickClock(); renderSummary();
+}
 function useTheme(id) {
   if (theme.id === id) return;
   const t = id === 'pixel' ? { id: 'pixel', kind: 'pixel' } : themesAvail.find((x) => x.id === id);
   if (!t) { if (id !== 'pixel') loadThemes().then(() => { if (themesAvail.some((x) => x.id === id)) useTheme(id); }); return; }
   theme = t;
   $('themeSel').value = id;
+  applyHeader(t);
   const layer = $('vlayer');
   for (const img of vEls.values()) img.remove();
   vEls.clear();

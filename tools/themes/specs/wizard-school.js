@@ -8,6 +8,7 @@ module.exports = {
   name: 'Wizard school',
   description: 'A castle classroom. The Headmaster plans, the Alchemist tests, the Owl courier deploys, the Talking hat asks questions. Original characters.',
   defaultRole: 'thinking',
+  header: { title: 'The Castle', font: 'cinzel-decorative', clockFont: 'cinzel', colors: { bar: '#1E1A2E', ink: '#EDE3C8', accent: '#E8B830', muted: '#A89CC0' }, phases: { dawn: 'First light', evening: 'Moonrise', night: 'Witching hour' } },
   cast: {
     planning: { name: 'The Headmaster', skin: '#F0C8A6', hair: { style: 'long', color: '#E8E6E0' }, beard: { style: 'long', color: '#E8E6E0' }, wear: { type: 'wizard', color: PURPLE, stars: true },
       face: { eyes: 'smile', glasses: 'half' }, outfit: { style: 'robe', color: PURPLE, accent: GOLD }, pose: 'staff', prop: { type: 'staff', top: 'orb', color: '#6B4A33' } },

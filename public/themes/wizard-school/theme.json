@@ -58,6 +58,22 @@
     "idle": "Dozing by the fire",
     "done": "Gold star · Done"
   },
+  "header": {
+    "title": "The Castle",
+    "font": "cinzel-decorative",
+    "clockFont": "cinzel",
+    "colors": {
+      "bar": "#1E1A2E",
+      "ink": "#EDE3C8",
+      "accent": "#E8B830",
+      "muted": "#A89CC0"
+    },
+    "phases": {
+      "dawn": "First light",
+      "evening": "Moonrise",
+      "night": "Witching hour"
+    }
+  },
   "size": {
     "sit": 30,
     "helper": 13,

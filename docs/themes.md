@@ -70,7 +70,33 @@ Reload the dashboard and pick it from the theme menu. The choice is saved in `~/
 | `tint` | no | `true` gives each agent its own colour by rotating the image's hue |
 | `size.sit` | no | Character width in floor units (default 30; a desk is 64) |
 | `size.helper` | no | Helper (subagent) width in floor units (default 14) |
+| `header` | no | Restyles the top bar: see below |
 | `size.aspect` | no | Character height ÷ width (default 4/3); the bottom edge sits on the seat |
+
+### Header
+
+A theme can match the top bar (title, clock and calendar) to its world:
+
+```json
+"header": {
+  "title": "Kurukshetra",
+  "font": "cinzel",
+  "clockFont": "cinzel",
+  "clock": "default",
+  "era": "none",
+  "colors": { "bar": "#5A1E14", "ink": "#F7E7C4", "accent": "#E8B830", "muted": "#D9B98A" },
+  "phases": { "dawn": "Brahma muhurta", "evening": "Sandhya", "night": "Ratri" }
+}
+```
+
+| Field | Values |
+| --- | --- |
+| `title` | Replaces "Agent floor" (up to 30 characters) |
+| `font`, `clockFont` | `pixel`, `inter`, `cinzel`, `cinzel-decorative`, `tiro-sanskrit`, `orbitron`, `vt323`, `press-start` |
+| `clock` | `default`, `digital` (glowing digits), `lcd` (green-on-black) |
+| `era` | `none`, `stardate` (shows e.g. *Stardate 2026.293*) |
+| `colors` | `bar` (background), `ink` (text), `accent` (title, buttons, today in the calendar), `muted` (secondary text), as `#hex` |
+| `phases` | Names for `dawn`, `morning`, `afternoon`, `evening`, `night` |
 
 ### Roles
 

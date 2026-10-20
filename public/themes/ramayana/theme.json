@@ -58,6 +58,24 @@
     "idle": "Kumbhakarna · Asleep",
     "done": "Rama · Home to Ayodhya (done)"
   },
+  "header": {
+    "title": "Panchavati",
+    "font": "tiro-sanskrit",
+    "clockFont": "cinzel",
+    "colors": {
+      "bar": "#1F3A24",
+      "ink": "#F2E8C9",
+      "accent": "#E8B830",
+      "muted": "#B8C9A0"
+    },
+    "phases": {
+      "dawn": "Brahma muhurta",
+      "morning": "Pratah",
+      "afternoon": "Madhyahna",
+      "evening": "Sandhya",
+      "night": "Ratri"
+    }
+  },
   "size": {
     "sit": 30,
     "helper": 13,

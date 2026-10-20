@@ -8,6 +8,7 @@ module.exports = {
   name: 'Mahabharata',
   description: 'A pavilion at Kurukshetra. Krishna plans, Ganesha writes, Arjuna runs commands, Drona tests, Bhishma waits for you.',
   defaultRole: 'thinking',
+  header: { title: 'Kurukshetra', font: 'cinzel', clockFont: 'cinzel', colors: { bar: '#5A1E14', ink: '#F7E7C4', accent: '#E8B830', muted: '#D9B98A' }, phases: { dawn: 'Brahma muhurta', morning: 'Pratah', afternoon: 'Madhyahna', evening: 'Sandhya', night: 'Ratri' } },
   tint: false,
   cast: {
     planning: { name: 'Krishna', skin: BLUE, hair: { style: 'long', color: '#14182A' }, wear: { type: 'mukut', color: GOLD, gem: RED }, feather: true,

@@ -58,6 +58,11 @@
     "idle": "Coffee break",
     "done": "Shipped it · Done"
   },
+  "header": {
+    "title": "Agent floor",
+    "font": "inter",
+    "clockFont": "inter"
+  },
   "size": {
     "sit": 30,
     "helper": 13,

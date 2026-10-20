@@ -58,6 +58,18 @@
     "idle": "Basement couch · Resting",
     "done": "Quest complete · Done"
   },
+  "header": {
+    "title": "HQ",
+    "font": "vt323",
+    "clockFont": "vt323",
+    "clock": "lcd",
+    "colors": {
+      "bar": "#2A1E14",
+      "ink": "#F2E6C8",
+      "accent": "#F2545B",
+      "muted": "#C9B08A"
+    }
+  },
   "size": {
     "sit": 30,
     "helper": 13,
