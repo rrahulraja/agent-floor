@@ -1,0 +1,1121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent floor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Pixelify+Sans:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  color-scheme: light;
+  --bg: #E6E9F2; --surface: #FFFFFF; --ink: #1E2235; --muted: #5D637A; --line: #C8CEDF;
+  --work: #2F5FC4; --wait: #A86400; --wait-fill: #F29E1F; --done: #23845A; --idle: #6E748C;
+  --screen-bg: #1B1F2E; --screen-ink: #D8DCEA; --danger: #B3261E;
+  --pixel: "Pixelify Sans", "Courier New", monospace;
+  --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --bg: #151826; --surface: #1F2336; --ink: #E6E8F2; --muted: #9BA1B8; --line: #33395A;
+    --work: #8AAAF2; --wait: #F5B544; --wait-fill: #F29E1F; --done: #5CC793; --idle: #9BA1B8;
+    --screen-bg: #0E111B; --screen-ink: #D8DCEA; --danger: #FF8A80;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--sans); display: flex; flex-direction: column; }
+button, input, textarea, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--work); outline-offset: 2px; }
+
+.bar { display: flex; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.bar h1 { font: 700 24px/1 var(--pixel); margin: 0; letter-spacing: .5px; }
+.summary { margin: 0; color: var(--muted); flex: 1; min-width: 180px; }
+.summary b { font-weight: 600; }
+.summary .needs { color: var(--wait); }
+
+.clock { position: relative; display: flex; align-items: center; gap: 10px; }
+.phase-icon svg { display: block; }
+.clock-time { display: flex; flex-direction: column; line-height: 1.1; }
+.clock-time b { font: 700 20px/1 var(--pixel); font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+.clock-phase { font-size: 12px; color: var(--muted); }
+.date-btn { font-size: 14px; padding: 6px 11px; }
+.cal {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 20; width: 264px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+  box-shadow: 0 8px 24px rgb(10 12 20 / .18);
+}
+.cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.cal-head b { font: 700 16px/1 var(--pixel); }
+.cal-nav { padding: 2px 10px; line-height: 1.4; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.cal-grid .dow { font-size: 11px; font-weight: 600; color: var(--muted); padding-bottom: 4px; }
+.cal-grid span { padding: 5px 0; border-radius: 4px; }
+.cal-grid .other { color: var(--muted); opacity: .45; }
+.cal-grid .today { background: var(--ink); color: var(--bg); font-weight: 600; }
+.cal-today { margin-top: 8px; width: 100%; font-size: 13px; padding: 5px; }
+
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 7px 13px; cursor: pointer; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.btn.warn { background: var(--wait-fill); border-color: var(--wait-fill); color: #1E2235; font-weight: 600; }
+.btn.danger { color: var(--danger); }
+.btn:disabled { opacity: .5; cursor: default; }
+
+.layout { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) var(--panel-w, 520px); min-height: 0; }
+.floor { padding: 20px; overflow: auto; }
+.stage { position: relative; width: 100%; max-width: 1180px; margin: 0 auto; }
+#office { display: block; width: 100%; image-rendering: pixelated; border-radius: 4px; cursor: pointer; }
+.tags { position: absolute; inset: 0; pointer-events: none; }
+.tag {
+  position: absolute; transform: translateX(-50%); pointer-events: auto;
+  font: 500 12px/1.15 var(--pixel); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; cursor: pointer;
+}
+.tag small { display: block; font: 400 11px/1.2 var(--sans); color: var(--muted); }
+.tag.waiting { border-color: var(--wait-fill); box-shadow: 0 0 0 1px var(--wait-fill); }
+.tag.waiting small { color: var(--wait); font-weight: 600; }
+.tag.done small { color: var(--done); }
+.tag.selected { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.tag.selected small { color: var(--bg); opacity: .8; }
+.empty { max-width: 520px; margin: 18px auto 0; color: var(--muted); text-align: center; }
+
+.panel { position: relative; border-left: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; overflow: auto; }
+.panel-inner { padding: 20px; display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
+.hint { color: var(--muted); margin: 0; }
+.head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.head h2 { font: 700 22px/1.1 var(--pixel); margin: 0; }
+.chip { font-size: 13px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.chip.working { color: var(--work); } .chip.waiting { color: var(--wait); } .chip.done { color: var(--done); }
+.chip.idle, .chip.stopped { color: var(--idle); }
+.path { margin: -8px 0 0; color: var(--muted); font: 13px/1.4 var(--mono); word-break: break-all; }
+.activity { margin: 0; font-size: 16px; }
+.panel-inner { font-size: 15px; line-height: 1.6; }
+.resizer { position: absolute; left: 0; top: 0; bottom: 0; width: 7px; cursor: col-resize; z-index: 5; touch-action: none; }
+.resizer:hover, .resizer:focus-visible, .resizer.dragging { background: color-mix(in srgb, var(--work) 35%, transparent); outline: none; }
+body.resizing { cursor: col-resize; user-select: none; }
+.rename { padding: 2px 9px; font-size: 13px; }
+.rename-form { display: flex; gap: 8px; flex-wrap: wrap; }
+.rename-form input { flex: 1; min-width: 160px; border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; background: var(--bg); font: 600 16px/1.3 var(--sans); }
+.cheers { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 50; display: flex; flex-direction: column; gap: 8px; width: min(520px, calc(100vw - 32px)); pointer-events: none; }
+.cheer {
+  pointer-events: auto; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px;
+  background: var(--ink); color: var(--bg); box-shadow: 0 10px 30px rgb(10 12 20 / .3); animation: cheer-in .35s cubic-bezier(.2, 1.4, .4, 1);
+}
+.cheer .big { font-size: 26px; line-height: 1; }
+.cheer .msg { flex: 1; min-width: 0; }
+.cheer .msg b { display: block; font: 700 17px/1.25 var(--pixel); }
+.cheer .msg span { font-size: 13px; opacity: .8; overflow-wrap: anywhere; }
+.cheer a { color: inherit; font-weight: 600; white-space: nowrap; }
+.cheer button { background: none; border: 0; color: inherit; opacity: .7; cursor: pointer; font-size: 18px; padding: 0 4px; }
+@keyframes cheer-in { from { transform: translateY(-16px) scale(.96); opacity: 0; } }
+.alert { background: color-mix(in srgb, var(--wait-fill) 16%, transparent); border: 1px solid var(--wait-fill); border-radius: 6px; padding: 10px 12px; }
+.alert p { margin: 0 0 8px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+.error { color: var(--danger); margin: 0; }
+.screen {
+  margin: 0; background: var(--screen-bg); color: var(--screen-ink); font: 13.5px/1.5 var(--mono);
+  border-radius: 6px; padding: 10px 12px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  min-height: 240px; max-height: 58vh; flex: 1;
+}
+.compose label { display: block; font-weight: 600; margin-bottom: 6px; }
+.compose textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; background: var(--bg); }
+.compose .row { margin-top: 8px; align-items: center; }
+.compose small { color: var(--muted); }
+.lastline { margin: 0; font-size: 15px; color: var(--muted); }
+.lastline b { color: var(--ink); font-weight: 600; }
+.copy { font: 12px var(--mono); }
+
+dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 22px; width: min(440px, 92vw); }
+dialog::backdrop { background: rgb(10 12 20 / .45); }
+dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
+.field { margin-bottom: 14px; }
+.field label { display: block; font-weight: 600; margin-bottom: 4px; }
+.field select, .picker select { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--bg); }
+.picker label { display: block; font-weight: 600; margin-bottom: 4px; }
+.picker .row { margin-top: 10px; }
+.field input[type=text] { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--bg); }
+.field small { color: var(--muted); }
+.check { display: flex; gap: 8px; align-items: center; }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 9px 14px; border-radius: 6px; max-width: 90vw; }
+
+@media (max-width: 900px) {
+  html, body { height: auto; }
+  .layout { grid-template-columns: 1fr; grid-auto-rows: auto; }
+  .panel { border-left: 0; border-top: 1px solid var(--line); }
+  .resizer { display: none; }
+  .floor { padding: 12px; }
+}
+@media (max-width: 600px) {
+  .tag { font-size: 10px; padding: 1px 4px; }
+  .tag small { font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } .cheer { animation: none; } }
+</style>
+</head>
+<body>
+<header class="bar">
+  <h1>Agent floor</h1>
+  <p class="summary" id="summary" aria-live="polite">Connecting…</p>
+  <div class="clock">
+    <span class="phase-icon" id="phaseIcon" aria-hidden="true"></span>
+    <div class="clock-time"><b id="clockTime">--:--</b><span class="clock-phase" id="clockPhase"></span></div>
+    <button class="btn date-btn" id="dateBtn" aria-expanded="false" aria-controls="cal"></button>
+    <div class="cal" id="cal" role="dialog" aria-label="Calendar" hidden>
+      <div class="cal-head">
+        <button class="btn cal-nav" id="calPrev" aria-label="Previous month">‹</button>
+        <b id="calTitle"></b>
+        <button class="btn cal-nav" id="calNext" aria-label="Next month">›</button>
+      </div>
+      <div class="cal-grid" id="calGrid"></div>
+      <button class="btn cal-today" id="calToday">Back to today</button>
+    </div>
+  </div>
+  <button class="btn" id="alertsBtn" hidden>Turn on alerts</button>
+  <button class="btn primary" id="addBtn">Add agent</button>
+</header>
+
+<main class="layout">
+  <section class="floor" aria-label="Office floor">
+    <div class="stage">
+      <canvas id="office" width="384" height="208" aria-hidden="true"></canvas>
+      <div class="tags" id="tags"></div>
+    </div>
+    <p class="empty" id="empty" hidden>No agents yet. Add one and give it a project folder, or start any tmux session named <code>cc-something</code> that runs <code>claude</code>, and it will show up here.</p>
+  </section>
+
+  <aside class="panel" aria-label="Agent details">
+    <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="Resize panel (arrow keys)" tabindex="0"></div>
+    <div class="panel-inner" id="panel">
+      <p class="hint" id="panelHint">Pick an agent to see its screen and send it instructions.</p>
+      <div id="detail" style="display:none">
+        <div class="head" id="dHead"><h2 id="dName"></h2><span class="chip" id="dChip"></span><button class="btn rename" id="renameBtn">Rename</button></div>
+        <form class="rename-form" id="renameForm" hidden>
+          <input type="text" id="renameInput" maxlength="60" aria-label="Agent name" autocomplete="off">
+          <button class="btn primary" type="submit">Save</button>
+          <button class="btn" type="button" id="renameCancel">Cancel</button>
+        </form>
+        <p class="path" id="dPath"></p>
+        <p class="activity" id="dActivity"></p>
+        <p class="error" id="dError" hidden></p>
+
+        <div class="alert" id="dNeeds" hidden>
+          <p>This agent is asking for permission. Check the screen below, then answer.</p>
+          <div class="row">
+            <button class="btn warn" data-key="Enter">Approve</button>
+            <button class="btn" data-key="2">Choose option 2</button>
+            <button class="btn" data-key="Escape">Decline</button>
+          </div>
+        </div>
+
+        <div id="dRunning">
+          <pre class="screen" id="dScreen" tabindex="0" aria-label="Agent terminal"></pre>
+        </div>
+
+        <p class="lastline" id="dLastPrompt" hidden></p>
+
+        <form class="compose" id="compose">
+          <label for="promptText" id="promptLabel">Instruction</label>
+          <textarea id="promptText" placeholder="Tell this agent what to do next"></textarea>
+          <div class="row">
+            <button class="btn primary" type="submit" id="sendBtn">Send</button>
+            <small>⌘ or Ctrl + Enter sends</small>
+          </div>
+        </form>
+
+        <div class="row" id="dTools">
+          <button class="btn" data-key="Escape">Interrupt</button>
+          <button class="btn" data-key="BTab" title="Cycles Claude Code modes, like accept edits and plan mode">Switch mode</button>
+          <button class="btn copy" id="copyAttach">Copy attach command</button>
+          <button class="btn danger" id="stopBtn">Stop agent</button>
+        </div>
+
+        <div class="picker" id="dStopped" hidden>
+          <label for="dConv">Conversation</label>
+          <select id="dConv"><option value="">Start fresh</option></select>
+          <div class="row">
+            <button class="btn primary" id="startBtn">Start agent</button>
+            <button class="btn danger" id="removeBtn">Remove from floor</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<dialog id="addDialog">
+  <form id="addForm" method="dialog">
+    <h2>Add an agent</h2>
+    <div class="field">
+      <label for="fCwd">Project</label>
+      <input type="text" id="fCwd" required list="projectList" placeholder="Pick a project, or type a folder path" autocomplete="off">
+      <datalist id="projectList"></datalist>
+      <small id="fCwdHint">Your Claude Code projects are in the list.</small>
+    </div>
+    <div class="field">
+      <label for="fName">Name</label>
+      <input type="text" id="fName" required maxlength="60" placeholder="Billing API refunds" autocomplete="off">
+      <small id="fNameHint">Any name you like.</small>
+    </div>
+    <div class="field">
+      <label for="fConv">Conversation</label>
+      <select id="fConv"><option value="">Start fresh</option></select>
+      <small id="fConvHint">Enter the project folder to see its past conversations.</small>
+    </div>
+    <p class="error" id="fError" hidden></p>
+    <div class="row">
+      <button class="btn primary" type="submit" value="ok">Start agent</button>
+      <button class="btn" type="button" id="cancelAdd">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<div class="cheers" id="cheers" aria-live="polite"></div>
+
+<script>
+'use strict';
+// ---------- state ----------
+let agents = [];
+let selected = localStorage.getItem('af:selected') || null;
+let seen = {};
+try { seen = JSON.parse(localStorage.getItem('af:seen') || '{}') || {}; } catch {}
+const prevStates = {};
+let firstSnapshot = true;
+
+const WORKING = new Set(['thinking', 'reading', 'writing', 'running', 'delegating', 'browsing', 'planning']);
+const LABEL = {
+  thinking: 'Thinking', reading: 'Reading', writing: 'Writing code', running: 'Running a command',
+  delegating: 'Handing off', browsing: 'Using tools', planning: 'Planning',
+  waiting: 'Needs you', idle: 'Idle', done: 'Done', stopped: 'Stopped',
+};
+const isDone = (a) => a.state === 'idle' && a.finishedAt && a.finishedAt > (seen[a.name] || 0);
+const displayState = (a) => (isDone(a) ? 'done' : a.state);
+const chipClass = (s) => (WORKING.has(s) ? 'working' : s);
+
+const $ = (id) => document.getElementById(id);
+const labelOf = (name) => { const a = agents.find((x) => x.name === name); return (a && a.label) || name; };
+
+// ---------- api ----------
+async function api(method, url, body) {
+  const r = await fetch(url, {
+    method, headers: { 'Content-Type': 'application/json', 'X-Agent-Floor': '1' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Request failed (${r.status})`);
+  return j;
+}
+let toastTimer;
+function toast(msg) {
+  let el = document.querySelector('.toast');
+  if (!el) { el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); document.body.append(el); }
+  el.textContent = msg;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.remove(), 3200);
+}
+
+// ---------- live updates ----------
+function connect() {
+  const es = new EventSource('/events');
+  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || []); };
+  es.onerror = () => { $('summary').textContent = 'Lost connection to the Agent Floor server. Retrying…'; };
+}
+
+function onSnapshot(list) {
+  for (const a of list) {
+    const before = prevStates[a.name];
+    const now = displayState(a);
+    if (!firstSnapshot && before !== now) {
+      if (now === 'waiting') notify(`${a.label || a.name} needs you`, a.detail);
+      if (now === 'done') notify(`${a.label || a.name} finished`, a.lastReply || 'Ready for the next instruction');
+    }
+    prevStates[a.name] = now;
+    for (const c of a.celebrations || []) if (!cheered.has(c.id)) { rememberCheer(c.id); cheer(a, c); }
+  }
+  agents = list;
+  if (selected && !agents.find((a) => a.name === selected)) selected = null;
+  if (selected) markSeen(selected);
+  firstSnapshot = false;
+  renderSummary(); renderTags(); renderPanel();
+}
+
+function markSeen(name) {
+  const a = agents.find((x) => x.name === name);
+  if (a && a.finishedAt && (seen[name] || 0) < a.finishedAt) {
+    seen[name] = a.finishedAt; localStorage.setItem('af:seen', JSON.stringify(seen));
+  }
+}
+
+// ---------- celebrations ----------
+const cheered = new Set();
+try { for (const id of JSON.parse(localStorage.getItem('af:cheered') || '[]')) cheered.add(id); } catch {}
+function rememberCheer(id) {
+  cheered.add(id);
+  try { localStorage.setItem('af:cheered', JSON.stringify([...cheered].slice(-200))); } catch {}
+}
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const cheering = new Map(); // agent name -> { kind, until }
+const confetti = [];
+const CONFETTI = ['#F29E1F', '#3B6FD8', '#2E9E6A', '#C2417A', '#9B4DCA', '#FFE27A', '#D8572A'];
+function cheer(a, c) {
+  const label = a.label || a.name;
+  const pr = c.kind === 'pr';
+  const title = pr ? `${label} opened PR #${c.number}` : `${label} pushed ${c.branch}`;
+  const sub = pr ? c.repo : c.repo ? `to ${c.repo}` : 'Pushed to the remote';
+  cheering.set(a.name, { kind: c.kind, until: performance.now() / 1000 + 5 });
+  burst(a.name, pr ? 90 : 55);
+  showCheer(pr ? '🎉' : '🚀', title, sub, c.url, pr ? 'Open PR' : 'View branch');
+  notify(pr ? `🎉 ${title}` : `🚀 ${title}`, sub);
+}
+function burst(name, n) {
+  if (reducedMotion.matches) return;
+  const i = agents.findIndex((x) => x.name === name);
+  const ch = chars.get(name);
+  const s = i >= 0 ? slot(i) : null;
+  const x = ch ? ch.x : s ? s.seatX : W / 2, y = ch ? ch.y - 20 : s ? s.sy + 10 : 40;
+  for (let k = 0; k < n; k++) {
+    const ang = -Math.PI / 2 + (Math.random() - 0.5) * 2.2, sp = 40 + Math.random() * 70;
+    confetti.push({ x, y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp, life: 1.6 + Math.random() * 1.2, col: CONFETTI[k % CONFETTI.length], w: Math.random() < 0.5 ? 2 : 1 });
+  }
+}
+function showCheer(icon, title, sub, url, linkText) {
+  const el = document.createElement('div');
+  el.className = 'cheer'; el.setAttribute('role', 'status');
+  const big = document.createElement('span'); big.className = 'big'; big.textContent = icon;
+  const msg = document.createElement('div'); msg.className = 'msg';
+  const b = document.createElement('b'); b.textContent = title;
+  const small = document.createElement('span'); small.textContent = sub || '';
+  msg.append(b, small);
+  el.append(big, msg);
+  if (/^https:\/\/[^\s"<>]+$/.test(url || '')) {
+    const link = document.createElement('a'); link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = linkText;
+    el.append(link);
+  }
+  const close = document.createElement('button'); close.type = 'button'; close.setAttribute('aria-label', 'Dismiss'); close.textContent = '×';
+  close.addEventListener('click', () => el.remove());
+  el.append(close);
+  $('cheers').prepend(el);
+  while ($('cheers').children.length > 3) $('cheers').lastChild.remove();
+  setTimeout(() => el.remove(), 9000);
+}
+
+function notify(title, body) {
+  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+    new Notification(title, { body: (body || '').slice(0, 140) });
+  }
+}
+
+function renderSummary() {
+  const working = agents.filter((a) => WORKING.has(a.state)).length;
+  const waiting = agents.filter((a) => a.state === 'waiting').length;
+  const done = agents.filter(isDone).length;
+  const parts = [];
+  if (!agents.length) parts.push('No agents yet');
+  else {
+    parts.push(`<b>${working}</b> working`);
+    if (waiting) parts.push(`<span class="needs"><b>${waiting}</b> ${waiting === 1 ? 'needs' : 'need'} you</span>`);
+    if (done) parts.push(`<b>${done}</b> finished`);
+    const idle = agents.length - working - waiting - done;
+    if (idle) parts.push(`${idle} idle or stopped`);
+  }
+  $('summary').innerHTML = parts.join(', ');
+  document.title = waiting ? `(${waiting}) Agent floor` : 'Agent floor';
+  $('empty').hidden = agents.length > 0;
+  $('alertsBtn').hidden = !('Notification' in window) || Notification.permission !== 'default';
+}
+
+// ---------- panel ----------
+function select(name) {
+  selected = name;
+  localStorage.setItem('af:selected', name || '');
+  if (name) markSeen(name);
+  renderTags(); renderPanel();
+}
+
+let lastScreen = '';
+let lastScreenFor = null;
+function renderPanel() {
+  const a = agents.find((x) => x.name === selected);
+  $('panelHint').hidden = !!a;
+  $('detail').style.display = a ? 'contents' : 'none';
+  if (!a) return;
+  const s = displayState(a);
+  $('dName').textContent = a.label || a.name;
+  if (renameFor && renameFor !== a.name) closeRename();
+  $('dChip').textContent = LABEL[s] || s;
+  $('dChip').className = `chip ${chipClass(s)}`;
+  $('dPath').textContent = `${a.cwd}  ·  ${a.session}`;
+  $('dActivity').textContent = a.detail || '';
+  $('dError').hidden = !a.error; $('dError').textContent = a.error || '';
+  $('dNeeds').hidden = a.state !== 'waiting';
+
+  const running = a.state !== 'stopped';
+  $('dRunning').hidden = !running;
+  $('compose').hidden = !running;
+  $('dTools').hidden = !running;
+  $('dStopped').hidden = running;
+  if (!running && convLoadedFor !== a.name) { convLoadedFor = a.name; fillConversations($('dConv'), a.cwd, null, true); }
+  if (running && convLoadedFor === a.name) convLoadedFor = null;
+  $('promptLabel').textContent = `Instruction for ${a.label || a.name}`;
+
+  if (a.lastPrompt) {
+    $('dLastPrompt').hidden = false;
+    $('dLastPrompt').innerHTML = '';
+    const b = document.createElement('b'); b.textContent = 'Last instruction: ';
+    $('dLastPrompt').append(b, document.createTextNode(a.lastPrompt));
+  } else $('dLastPrompt').hidden = true;
+
+  const scr = $('dScreen');
+  const text = a.screen || '';
+  const switched = lastScreenFor !== a.name;
+  if (text !== lastScreen || switched) {
+    const atBottom = scr.scrollHeight - scr.scrollTop - scr.clientHeight < 24;
+    scr.textContent = text;
+    // A different agent starts at the bottom, whatever the previous one was scrolled to.
+    if (atBottom || switched || lastScreen === '') scr.scrollTop = scr.scrollHeight;
+    lastScreen = text;
+    lastScreenFor = a.name;
+  }
+}
+
+$('compose').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('promptText').value;
+  if (!text.trim() || !selected) return;
+  $('sendBtn').disabled = true;
+  try { await api('POST', `/api/agents/${selected}/prompt`, { text }); $('promptText').value = ''; toast(`Sent to ${labelOf(selected)}`); }
+  catch (err) { toast(err.message); }
+  finally { $('sendBtn').disabled = false; }
+});
+$('promptText').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('compose').requestSubmit(); }
+});
+document.querySelectorAll('[data-key]').forEach((btn) => btn.addEventListener('click', async () => {
+  if (!selected) return;
+  try { await api('POST', `/api/agents/${selected}/key`, { key: btn.dataset.key }); }
+  catch (err) { toast(err.message); }
+}));
+$('copyAttach').addEventListener('click', async () => {
+  const a = agents.find((x) => x.name === selected); if (!a) return;
+  try { await navigator.clipboard.writeText(a.attach); toast(`Copied: ${a.attach}`); }
+  catch { toast(a.attach); }
+});
+$('stopBtn').addEventListener('click', async () => {
+  if (!selected || !confirm(`Stop ${labelOf(selected)}? Its Claude Code session will end. You can continue the conversation later.`)) return;
+  try { await api('POST', `/api/agents/${selected}/stop`); toast(`Stopped ${labelOf(selected)}`); } catch (err) { toast(err.message); }
+});
+$('startBtn').addEventListener('click', async () => {
+  const name = selected;
+  try { await api('POST', `/api/agents/${name}/start`, { conversation: $('dConv').value }); toast(`Started ${labelOf(name)}`); }
+  catch (err) { toast(err.message); }
+});
+
+// ---------- rename ----------
+let renameFor = null;
+function closeRename() { renameFor = null; $('renameForm').hidden = true; $('dHead').hidden = false; }
+$('renameBtn').addEventListener('click', () => {
+  if (!selected) return;
+  renameFor = selected;
+  $('renameInput').value = labelOf(selected);
+  $('dHead').hidden = true; $('renameForm').hidden = false;
+  $('renameInput').focus(); $('renameInput').select();
+});
+$('renameCancel').addEventListener('click', closeRename);
+$('renameInput').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); closeRename(); } });
+$('renameForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name = renameFor, label = $('renameInput').value.trim();
+  if (!name || !label) return;
+  try { await api('POST', `/api/agents/${name}/label`, { label }); closeRename(); toast(`Renamed to ${label}`); }
+  catch (err) { toast(err.message); }
+});
+
+// ---------- resizable panel ----------
+const panelMax = () => Math.max(360, Math.min(980, window.innerWidth * 0.7));
+function setPanelWidth(w, save) {
+  w = Math.round(Math.min(panelMax(), Math.max(360, w)));
+  document.documentElement.style.setProperty('--panel-w', `${w}px`);
+  if (save) try { localStorage.setItem('af:panelW', String(w)); } catch {}
+  return w;
+}
+try { const w = Number(localStorage.getItem('af:panelW')); if (w) setPanelWidth(w, false); } catch {}
+$('resizer').addEventListener('pointerdown', (e) => {
+  const el = $('resizer');
+  el.setPointerCapture(e.pointerId); el.classList.add('dragging'); document.body.classList.add('resizing');
+  const move = (ev) => setPanelWidth(window.innerWidth - ev.clientX, false);
+  const up = (ev) => {
+    el.removeEventListener('pointermove', move); el.removeEventListener('pointerup', up); el.removeEventListener('pointercancel', up);
+    el.classList.remove('dragging'); document.body.classList.remove('resizing');
+    setPanelWidth(window.innerWidth - ev.clientX, true);
+  };
+  el.addEventListener('pointermove', move); el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
+});
+$('resizer').addEventListener('keydown', (e) => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault();
+  setPanelWidth($('resizer').parentElement.getBoundingClientRect().width + (e.key === 'ArrowLeft' ? 32 : -32), true);
+});
+
+// ---------- past conversations ----------
+function fmtWhen(ms) {
+  const d = new Date(ms);
+  const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return d.toDateString() === new Date().toDateString() ? `Today ${time}` : `${d.toLocaleDateString([], { day: 'numeric', month: 'short' })} ${time}`;
+}
+async function fillConversations(select, cwd, hintEl, preferLatest) {
+  const opt = (v, t, title) => { const o = document.createElement('option'); o.value = v; o.textContent = t; if (title) o.title = title; return o; };
+  const token = (select.dataset.token = String(Number(select.dataset.token || 0) + 1));
+  let list = [];
+  try {
+    const r = await fetch(`/api/conversations?cwd=${encodeURIComponent(cwd)}`);
+    list = (await r.json()).conversations || [];
+  } catch {}
+  if (select.dataset.token !== token) return; // a newer folder or agent was picked while this loaded
+  select.replaceChildren(opt('', 'Start fresh'));
+  if (list.length) {
+    select.append(opt('latest', `Continue the latest (${fmtWhen(list[0].updatedAt)})`));
+    const group = document.createElement('optgroup');
+    group.label = 'Or pick a conversation';
+    for (const c of list) group.append(opt(c.id, `${fmtWhen(c.updatedAt)}: ${c.title}`, c.firstPrompt));
+    select.append(group);
+    if (preferLatest) select.value = 'latest';
+  }
+  if (hintEl) hintEl.textContent = list.length
+    ? `${list.length} past conversation${list.length > 1 ? 's' : ''} in this folder.`
+    : 'No past conversations in this folder yet.';
+}
+let convLoadedFor = null;
+$('removeBtn').addEventListener('click', async () => {
+  if (!selected || !confirm(`Remove ${labelOf(selected)} from the floor? Its conversation history stays in Claude Code.`)) return;
+  try { await api('DELETE', `/api/agents/${selected}`); select(null); } catch (err) { toast(err.message); }
+});
+
+// ---------- add dialog ----------
+// The tmux session needs a short id; the name people see can be anything.
+function slugFor(label) {
+  const base = label.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 28).replace(/-+$/, '') || 'agent';
+  const taken = new Set(agents.map((a) => a.name));
+  let slug = base, n = 2;
+  while (taken.has(slug)) slug = `${base}-${n++}`;
+  return slug;
+}
+let projects = [];
+let nameTouched = false;
+async function loadProjects() {
+  try { projects = (await (await fetch('/api/projects')).json()).projects || []; } catch { projects = []; }
+  $('projectList').replaceChildren(...projects.map((p) => {
+    const o = document.createElement('option');
+    o.value = p.cwd;
+    o.label = p.lastUsed ? `${p.name} · ${fmtWhen(p.lastUsed)}` : p.name;
+    return o;
+  }));
+  $('fCwdHint').textContent = projects.length
+    ? `${projects.length} project${projects.length > 1 ? 's' : ''} in the list. Click the field or start typing.`
+    : 'Type the path of a project folder.';
+}
+function updateNameHint() {
+  const v = $('fName').value.trim();
+  $('fNameHint').textContent = v ? `Session: cc-${slugFor(v)}` : 'Any name you like.';
+}
+function openAdd() {
+  $('fError').hidden = true; $('addForm').reset(); nameTouched = false;
+  $('fConv').replaceChildren(new Option('Start fresh', ''));
+  $('fConvHint').textContent = 'Pick a project to see its past conversations.';
+  updateNameHint();
+  $('addDialog').showModal(); $('fCwd').focus();
+  loadProjects();
+}
+let cwdTimer;
+$('fCwd').addEventListener('input', () => {
+  clearTimeout(cwdTimer);
+  const v = $('fCwd').value.trim();
+  const known = projects.find((p) => p.cwd === v);
+  if (known && !nameTouched) { $('fName').value = known.name; updateNameHint(); }
+  if (v) cwdTimer = setTimeout(() => fillConversations($('fConv'), v, $('fConvHint'), false), known ? 0 : 400);
+});
+$('fName').addEventListener('input', () => { nameTouched = true; updateNameHint(); });
+$('addBtn').addEventListener('click', openAdd);
+$('cancelAdd').addEventListener('click', () => $('addDialog').close());
+$('addForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const label = $('fName').value.trim();
+  const name = slugFor(label);
+  try {
+    await api('POST', '/api/agents', { name, label, cwd: $('fCwd').value, conversation: $('fConv').value });
+    $('addDialog').close(); select(name); toast(`Started ${label}`);
+  } catch (err) { $('fError').textContent = err.message; $('fError').hidden = false; }
+});
+$('alertsBtn').addEventListener('click', async () => { await Notification.requestPermission(); renderSummary(); });
+
+// ---------- local time: clock, calendar, time of day ----------
+// ?hour=21.5 previews the office at another time of day.
+const HOUR_PREVIEW = (() => { const h = parseFloat(new URLSearchParams(location.search).get('hour')); return h >= 0 && h < 24 ? h : null; })();
+function localNow() {
+  const d = new Date();
+  if (HOUR_PREVIEW !== null) d.setHours(Math.floor(HOUR_PREVIEW), Math.round((HOUR_PREVIEW % 1) * 60), 0, 0);
+  return d;
+}
+const hourOf = (d) => d.getHours() + d.getMinutes() / 60 + d.getSeconds() / 3600;
+// dawn 5–7, morning 7–12, afternoon 12–17, evening 17–20, night 20–5
+function phaseOf(d) {
+  const h = hourOf(d);
+  return h >= 5 && h < 7 ? 'dawn' : h >= 7 && h < 12 ? 'morning' : h >= 12 && h < 17 ? 'afternoon' : h >= 17 && h < 20 ? 'evening' : 'night';
+}
+const PHASE_LABEL = { dawn: 'Early morning', morning: 'Morning', afternoon: 'Afternoon', evening: 'Evening', night: 'Night' };
+const SKY_FOR = { dawn: 'sunrise', morning: 'day', afternoon: 'day', evening: 'sunset', night: 'night' };
+
+const pr = (x, y, w, h) => `<rect x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+const DISC = pr(5, 3, 6, 10) + pr(3, 5, 10, 6) + pr(4, 4, 8, 8);
+const HALF = pr(5, 6, 6, 5) + pr(3, 8, 10, 3) + pr(4, 7, 8, 4) + pr(0, 12, 16, 2) + pr(7, 1, 2, 3) + pr(1, 4, 2, 2) + pr(13, 4, 2, 2);
+const svg = (body) => `<svg viewBox="0 0 16 16" width="22" height="22" shape-rendering="crispEdges">${body}</svg>`;
+const PHASE_ICON = {
+  dawn: svg(`<g fill="#E8A317">${HALF}</g>`),
+  morning: svg(`<g fill="#E8A317">${DISC}${pr(7, 0, 2, 2)}${pr(7, 14, 2, 2)}${pr(0, 7, 2, 2)}${pr(14, 7, 2, 2)}${pr(1, 1, 2, 2)}${pr(13, 1, 2, 2)}${pr(1, 13, 2, 2)}${pr(13, 13, 2, 2)}</g>`),
+  evening: svg(`<g fill="#E0663A">${HALF}</g>`),
+  night: svg(`<g fill="#C9B458">${DISC}</g><g style="fill:var(--bg)">${pr(8, 2, 6, 9)}${pr(9, 1, 6, 11)}</g>`),
+};
+PHASE_ICON.afternoon = PHASE_ICON.morning;
+
+let calMonth = null; // first day of the month on show
+function firstWeekday() {
+  try { const l = new Intl.Locale(navigator.language); const w = (l.getWeekInfo && l.getWeekInfo()) || l.weekInfo; if (w && w.firstDay) return w.firstDay % 7; } catch {}
+  return 0; // Sunday
+}
+function renderCalendar() {
+  const today = localNow();
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  $('calTitle').textContent = calMonth.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  const start = firstWeekday();
+  const grid = $('calGrid');
+  grid.replaceChildren();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(2024, 0, 7 + ((start + i) % 7)); // 7 Jan 2024 was a Sunday
+    const el = document.createElement('span'); el.className = 'dow';
+    el.textContent = d.toLocaleDateString([], { weekday: 'narrow' }); el.title = d.toLocaleDateString([], { weekday: 'long' });
+    grid.append(el);
+  }
+  const lead = (new Date(y, m, 1).getDay() - start + 7) % 7;
+  for (let i = 0; i < 42; i++) {
+    const d = new Date(y, m, 1 - lead + i);
+    const el = document.createElement('span');
+    el.textContent = d.getDate();
+    if (d.getMonth() !== m) el.className = 'other';
+    else if (d.toDateString() === today.toDateString()) { el.className = 'today'; el.setAttribute('aria-current', 'date'); }
+    grid.append(el);
+  }
+  $('calToday').hidden = y === today.getFullYear() && m === today.getMonth();
+}
+function openCalendar(open) {
+  $('cal').hidden = !open;
+  $('dateBtn').setAttribute('aria-expanded', String(open));
+  if (open) { const t = localNow(); calMonth = new Date(t.getFullYear(), t.getMonth(), 1); renderCalendar(); }
+}
+$('dateBtn').addEventListener('click', (e) => { e.stopPropagation(); openCalendar($('cal').hidden); });
+$('calPrev').addEventListener('click', () => { calMonth.setMonth(calMonth.getMonth() - 1); renderCalendar(); });
+$('calNext').addEventListener('click', () => { calMonth.setMonth(calMonth.getMonth() + 1); renderCalendar(); });
+$('calToday').addEventListener('click', () => openCalendar(true));
+document.addEventListener('click', (e) => { if (!$('cal').hidden && !e.target.closest('.clock')) openCalendar(false); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('cal').hidden) { openCalendar(false); $('dateBtn').focus(); } });
+
+let lastClock = '';
+function tickClock() {
+  const d = localNow();
+  const phase = phaseOf(d);
+  const key = `${d.toDateString()} ${d.getHours()}:${d.getMinutes()}`;
+  if (key === lastClock) return;
+  const newDay = lastClock && !lastClock.startsWith(d.toDateString());
+  lastClock = key;
+  $('clockTime').textContent = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  $('clockPhase').textContent = PHASE_LABEL[phase];
+  $('phaseIcon').innerHTML = PHASE_ICON[phase];
+  $('dateBtn').textContent = d.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
+  $('dateBtn').title = d.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  if (newDay && !$('cal').hidden) renderCalendar();
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+// ---------- office drawing ----------
+const W = 384, WALL = 58, ROW_H = 64, COLS = 4, SLOT_W = 68, X0 = 10;
+const canvas = $('office');
+const ctx = canvas.getContext('2d');
+const dark = matchMedia('(prefers-color-scheme: dark)');
+let H = 208;
+
+const SHIRTS = ['#3B6FD8', '#D8572A', '#2E9E6A', '#9B4DCA', '#D4A017', '#1C9AAE', '#C2417A', '#5A6B7D'];
+const HAIR = ['#2B1D14', '#6B3E1F', '#C9A15A', '#1B1B1B', '#8C2F1C', '#E0D6C8'];
+const SKIN = ['#F2C9A0', '#D9A27A', '#A8714A', '#7A4E2E', '#F6D7BE'];
+function hash(s) { let h = 2166136261; for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; }
+function lookFor(name, i) { const h = hash(name); return { shirt: SHIRTS[i % SHIRTS.length], hair: HAIR[h % HAIR.length], skin: SKIN[(h >>> 8) % SKIN.length], seed: h % 97 }; }
+
+function palette() {
+  return dark.matches ? {
+    wall: '#2B3152', wallLine: '#202640', sky: '#0F1530', frame: '#4A5280', floorA: '#3A4646', floorB: '#3F4C4B',
+    deskTop: '#7A5638', desk: '#5E412A', chair: '#23283C', lid: '#8A90A6', board: '#D9DCE6', couch: '#5B4A86', couchDark: '#46386C',
+    rug: '#344055', plant: '#3E8A5A', pot: '#8A5A3C', machine: '#9AA0B5', door: '#4A3A2E', ink: '#1E2235', bubble: '#F4F5FA',
+  } : {
+    wall: '#D7DDEB', wallLine: '#BAC2D6', sky: '#9FD3F2', frame: '#FFFFFF', floorA: '#A9BC98', floorB: '#A2B591',
+    deskTop: '#C08A5A', desk: '#A87449', chair: '#3A3F55', lid: '#C7CCD8', board: '#FFFFFF', couch: '#7D6BB8', couchDark: '#62539A',
+    rug: '#C9B7E0', plant: '#3E8A5A', pot: '#B07650', machine: '#5A6178', door: '#8B6A4E', ink: '#1E2235', bubble: '#FFFFFF',
+  };
+}
+
+const px = (c, col, x, y, w, h) => { c.fillStyle = col; c.fillRect(Math.round(x), Math.round(y), w, h); };
+
+const ICONS = {
+  reading: ['###..', '#.#..', '###..', '...#.', '....#'],
+  writing: ['...##', '..###', '.###.', '###..', '#....'],
+  running: ['#....', '.#...', '#....', '.....', '..###'],
+  delegating: ['..#..', '...#.', '#####', '...#.', '..#..'],
+  browsing: ['.###.', '#.#.#', '#####', '#.#.#', '.###.'],
+  planning: ['#.###', '.....', '#.###', '.....', '#.###'],
+  done: ['....#', '...#.', '#.#..', '.#...', '.....'],
+  waiting: ['..#..', '..#..', '..#..', '.....', '..#..'],
+  push: ['..#..', '.###.', '.###.', '#####', '.#.#.'],
+  pr: ['..#..', '#####', '.###.', '.#.#.', '#...#'],
+};
+const ICON_COLOR = { reading: '#2F5FC4', writing: '#2F5FC4', running: '#2F5FC4', delegating: '#2F5FC4', browsing: '#2F5FC4', planning: '#2F5FC4', done: '#23845A', push: '#D8572A', pr: '#C2417A' };
+
+function slot(i) {
+  const col = i % COLS, row = Math.floor(i / COLS);
+  const sx = X0 + col * SLOT_W, sy = WALL + 6 + row * ROW_H;
+  return { sx, sy, seatX: sx + 38, seatY: sy + 31, tagX: sx + 34, tagY: sy + 42 };
+}
+function rowsFor(n) { return Math.max(2, Math.ceil((n + 1) / COLS)); }
+function idleSpot(k) {
+  const couch = [[314, WALL + 50, 'couch'], [336, WALL + 50, 'couch'], [358, WALL + 50, 'couch']];
+  const stand = [[350, WALL + 14, 'stand'], [322, WALL + 16, 'stand'], [306, WALL + 96, 'stand'], [334, WALL + 100, 'stand'], [362, WALL + 96, 'stand']];
+  const all = couch.concat(stand);
+  if (k < all.length) return all[k];
+  return [300 + ((k * 13) % 70), WALL + 112 + ((k * 7) % 30), 'stand'];
+}
+const DOOR = [205, WALL + 3];
+
+const chars = new Map(); // name -> {x,y,pose}
+
+function targetFor(a, idx, idleIdx) {
+  if (a.state === 'stopped') return { x: DOOR[0], y: DOOR[1], pose: 'walk', leave: true };
+  if (a.state === 'idle') { const [x, y, pose] = idleSpot(idleIdx); return { x, y, pose }; }
+  const s = slot(idx); return { x: s.seatX, y: s.seatY, pose: 'sit' };
+}
+
+function person(c, fx, fy, look, pose, t, mood, P) {
+  fx = Math.round(fx); fy = Math.round(fy);
+  const pants = '#3A3F55', shoe = '#22252F';
+  let headY = fy - 18;
+  if (pose === 'couch') { headY = fy - 16; px(c, pants, fx - 4, fy - 4, 8, 3); px(c, shoe, fx - 4, fy - 1, 3, 1); px(c, shoe, fx + 1, fy - 1, 3, 1); }
+  if (pose === 'walk' || pose === 'stand') {
+    const step = pose === 'walk' ? Math.floor(t * 8) % 2 : 0;
+    px(c, pants, fx - 3, fy - 6, 3, step ? 5 : 6); px(c, pants, fx, fy - 6, 3, step ? 6 : 5);
+    px(c, shoe, fx - 3, fy - (step ? 2 : 1), 3, 1); px(c, shoe, fx, fy - (step ? 1 : 2), 3, 1);
+  }
+  const ty = headY + 6;
+  px(c, look.shirt, fx - 4, ty, 8, 6);
+  let la = 0, ra = 0;
+  if (mood === 'writing' || mood === 'running') { la = Math.floor(t * 9) % 2; ra = 1 - la; }
+  if (mood !== 'cheer') { px(c, look.shirt, fx - 6, ty + la, 2, 4); px(c, look.skin, fx - 6, ty + 4 + la, 2, 1); }
+  if (mood === 'cheer') {
+    const wave = Math.floor(t * 8) % 2;
+    px(c, look.shirt, fx - 6, ty - 4 + wave, 2, 5); px(c, look.skin, fx - 6, ty - 5 + wave, 2, 1);
+    px(c, look.shirt, fx + 4, ty - 4 + (1 - wave), 2, 5); px(c, look.skin, fx + 4, ty - 5 + (1 - wave), 2, 1);
+  } else if (mood === 'waiting') {
+    const wave = Math.floor(t * 4) % 2;
+    px(c, look.shirt, fx + 4, ty - 4 + wave, 2, 5); px(c, look.skin, fx + 4, ty - 5 + wave, 2, 1);
+  } else { px(c, look.shirt, fx + 4, ty + ra, 2, 4); px(c, look.skin, fx + 4, ty + 4 + ra, 2, 1); }
+  px(c, look.skin, fx - 3, headY, 6, 6);
+  px(c, look.hair, fx - 3, headY, 6, 2); px(c, look.hair, fx - 3, headY + 2, 1, 2); px(c, look.hair, fx + 2, headY + 2, 1, 1);
+  const blink = Math.floor(t * 6 + look.seed) % 29 === 0;
+  if (!blink) {
+    const ey = headY + (mood === 'reading' ? 4 : mood === 'thinking' ? 2 : 3);
+    px(c, P.ink, fx - 2, ey, 1, 1); px(c, P.ink, fx + 1, ey, 1, 1);
+  }
+  return headY;
+}
+
+function bubble(c, x, top, kind, t, P) {
+  x = Math.round(x);
+  const bounce = kind === 'waiting' ? Math.round(Math.abs(Math.sin(t * 5)) * -2) : 0;
+  const y = top - 10 + bounce;
+  const fill = kind === 'waiting' ? '#F29E1F' : P.bubble;
+  px(c, P.ink, x - 6, y - 1, 13, 10); px(c, fill, x - 5, y, 11, 8);
+  px(c, P.ink, x - 1, y + 9, 3, 1); px(c, fill, x, y + 8, 1, 1);
+  if (kind === 'thinking') {
+    const n = Math.floor(t * 3) % 4;
+    for (let i = 0; i < 3; i++) if (i < n) px(c, '#2F5FC4', x - 3 + i * 3, y + 4, 1, 1);
+    return;
+  }
+  const icon = ICONS[kind]; if (!icon) return;
+  const col = kind === 'waiting' ? '#FFFFFF' : ICON_COLOR[kind];
+  icon.forEach((row, r) => [...row].forEach((ch, k) => { if (ch === '#') px(c, col, x - 2 + k, y + 1 + r, 1, 1); }));
+}
+
+const SKY = {
+  day: { bands: ['#9FD3F2'], cloud: '#FFFFFF', city: '#7FA7C9' },
+  sunrise: { bands: ['#8A9BD6', '#E9A6A0', '#F6C98A'], cloud: '#FBE3D6', city: '#5E6394' },
+  sunset: { bands: ['#4B4F9A', '#C9608A', '#F2945A'], cloud: '#F4B6A6', city: '#3C3F72' },
+  night: { bands: ['#0F1530'], cloud: null, city: '#1A2140' },
+};
+const SKY_X0 = 20, SKY_SPAN = 146; // left edge and width of both windows together
+
+function drawSky(c, t, tod) {
+  const s = SKY[tod.sky];
+  const bh = Math.ceil(28 / s.bands.length);
+  s.bands.forEach((col, i) => px(c, col, SKY_X0, 10 + i * bh, SKY_SPAN + 4, bh));
+  const h = tod.hour;
+  if (tod.sky === 'night') {
+    for (let i = 0; i < 14; i++) { const sx = SKY_X0 + 4 + ((i * 37) % 140), sy = 12 + ((i * 11) % 14); if (Math.floor(t * 1.5 + i) % 5) px(c, '#E8EBFF', sx, sy, 1, 1); }
+    // moon rises around 19:00 and sets around 06:00
+    const f = Math.min(1, Math.max(0, ((h < 12 ? h + 24 : h) - 19) / 11));
+    const mx = SKY_X0 + 6 + f * (SKY_SPAN - 12), my = 32 - Math.sin(Math.PI * f) * 18;
+    px(c, '#F3EBC6', mx - 3, my - 3, 6, 6); px(c, s.bands[0], mx - 1, my - 4, 5, 5);
+  } else {
+    // sun crosses from 06:00 to 19:00
+    const f = Math.min(1, Math.max(0, (h - 6) / 13));
+    const sx = SKY_X0 + 6 + f * (SKY_SPAN - 12), sy = 34 - Math.sin(Math.PI * f) * 20;
+    const sun = tod.sky === 'day' ? '#FFE27A' : '#FFB347';
+    px(c, sun, sx - 3, sy - 2, 6, 4); px(c, sun, sx - 2, sy - 3, 4, 6);
+    for (let k = 0; k < 2; k++) {
+      const cx = SKY_X0 + ((t * 3 + k * 80) % (SKY_SPAN + 20)) - 12, cy = 14 + k * 5;
+      px(c, s.cloud, cx, cy + 2, 10, 3); px(c, s.cloud, cx + 3, cy, 5, 2);
+    }
+  }
+  for (let i = 0; i < 15; i++) {
+    const bx = SKY_X0 + i * 10, bhgt = 8 + ((i * 7) % 9);
+    px(c, s.city, bx, 38 - bhgt, 8, bhgt);
+    if (tod.sky === 'night' || tod.sky === 'sunset') { if (i % 2) px(c, '#E8C66A', bx + 3, 38 - bhgt + 3, 1, 1); if (i % 3 === 0) px(c, '#E8C66A', bx + 5, 38 - bhgt + 5, 1, 1); }
+  }
+}
+
+const DIGITS = ['###/#.#/#.#/#.#/###', '.#./##./.#./.#./###', '###/..#/###/#../###', '###/..#/###/..#/###', '#.#/#.#/###/..#/..#',
+  '###/#../###/..#/###', '###/#../###/#.#/###', '###/..#/.#./.#./.#.', '###/#.#/###/#.#/###', '###/#.#/###/..#/###'].map((d) => d.split('/'));
+function drawDigits(c, col, str, x, y) {
+  [...str].forEach((ch, n) => DIGITS[+ch].forEach((row, j) => [...row].forEach((v, k) => { if (v === '#') px(c, col, x + n * 4 + k, y + j, 1, 1); })));
+}
+function drawWallCalendar(c, P, d) {
+  const x = 289, y = 12;
+  px(c, P.ink, x, y, 20, 24); px(c, '#FFFFFF', x + 1, y + 1, 18, 22); px(c, '#D8572A', x + 1, y + 1, 18, 6);
+  px(c, P.ink, x + 5, y - 1, 1, 3); px(c, P.ink, x + 14, y - 1, 1, 3);
+  const day = String(d.getDate());
+  drawDigits(c, P.ink, day, x + 10 - Math.floor((day.length * 4 - 1) / 2), y + 11);
+  px(c, '#C9CFDF', x + 3, y + 19, 14, 1);
+}
+function drawWallClock(c, P, d) {
+  const cx = 324, cy = 23;
+  px(c, P.ink, cx - 5, cy - 7, 11, 15); px(c, P.ink, cx - 7, cy - 5, 15, 11); px(c, P.ink, cx - 6, cy - 6, 13, 13);
+  px(c, '#FFFFFF', cx - 4, cy - 6, 9, 13); px(c, '#FFFFFF', cx - 6, cy - 4, 13, 9); px(c, '#FFFFFF', cx - 5, cy - 5, 11, 11);
+  for (const [u, v] of [[0, -5], [5, 0], [0, 5], [-5, 0]]) px(c, '#9AA0B5', cx + u, cy + v, 1, 1);
+  const hand = (turns, len, col) => {
+    const a = turns * Math.PI * 2;
+    for (let k = 1; k <= len; k++) px(c, col, cx + Math.round(Math.sin(a) * k), cy - Math.round(Math.cos(a) * k), 1, 1);
+  };
+  hand(((d.getHours() % 12) + d.getMinutes() / 60) / 12, 3, P.ink);
+  hand((d.getMinutes() + d.getSeconds() / 60) / 60, 4, '#3B6FD8');
+  px(c, P.ink, cx, cy, 1, 1);
+}
+
+function drawRoom(c, P, t, counts, tod) {
+  // floor tiles
+  for (let j = 0, y = WALL; y < H; y += 12, j++) for (let i = 0, x = 0; x < W; x += 12, i++) px(c, (i + j) % 2 ? P.floorA : P.floorB, x, y, 12, 12);
+  // wall
+  px(c, P.wall, 0, 0, W, WALL); px(c, P.wallLine, 0, WALL - 2, W, 2);
+  // windows: the sky follows local time; sun and moon cross both panes
+  for (const wx of [22, 104]) {
+    px(c, P.frame, wx - 2, 8, 64, 32);
+    c.save(); c.beginPath(); c.rect(wx, 10, 60, 28); c.clip();
+    drawSky(c, t, tod);
+    c.restore();
+    px(c, P.frame, wx + 29, 10, 2, 28);
+  }
+  drawWallCalendar(c, P, tod.date);
+  drawWallClock(c, P, tod.date);
+  // door
+  px(c, P.door, 196, 24, 18, WALL - 26); px(c, '#D4B04A', 210, 40, 2, 2);
+  // whiteboard with live tally
+  px(c, P.ink, 230, 10, 54, 34); px(c, P.board, 231, 11, 52, 32);
+  const bars = [[counts.working, '#3B6FD8'], [counts.waiting, '#F29E1F'], [counts.done, '#2E9E6A'], [counts.idle, '#8A90A6']];
+  const max = Math.max(1, ...bars.map((b) => b[0]));
+  bars.forEach(([n, col], i) => { const h = Math.round((n / max) * 22); px(c, col, 238 + i * 11, 39 - h, 7, Math.max(h, n ? 2 : 0)); });
+  px(c, '#9AA0B5', 236, 40, 44, 1);
+  // coffee corner
+  px(c, P.machine, 340, 30, 14, 22); px(c, P.ink, 343, 34, 8, 4); px(c, '#D8572A', 345, 46, 4, 3);
+  if (Math.floor(t * 2) % 2) px(c, '#E8EBFF', 346, 42, 1, 2);
+  // plant
+  px(c, P.pot, 368, 44, 10, 10); px(c, P.plant, 365, 30, 6, 14); px(c, P.plant, 372, 26, 6, 18); px(c, P.plant, 377, 33, 5, 11);
+  // rug
+  px(c, P.rug, 296, WALL + 26, 84, 44);
+}
+
+function drawCouch(c, P) {
+  px(c, P.couchDark, 302, WALL + 28, 68, 12);
+  px(c, P.couch, 302, WALL + 40, 68, 7);
+  px(c, P.couchDark, 298, WALL + 32, 5, 18); px(c, P.couchDark, 369, WALL + 32, 5, 18);
+}
+
+function drawDesk(c, P, s, a, t) {
+  const { sx, sy } = s;
+  px(c, P.deskTop, sx + 6, sy + 24, 54, 3);
+  px(c, P.desk, sx + 6, sy + 27, 54, 9);
+  px(c, P.desk, sx + 8, sy + 36, 3, 5); px(c, P.desk, sx + 55, sy + 36, 3, 5);
+  if (!a) return;
+  const on = a.state !== 'stopped';
+  if (on) {
+    px(c, P.lid, sx + 12, sy + 14, 16, 10);
+    px(c, '#FFFFFF', sx + 19, sy + 18, 2, 2);
+    const st = displayState(a);
+    const glow = st === 'waiting' ? '#F29E1F' : WORKING.has(st) ? '#6FA0FF' : st === 'done' ? '#5CC793' : '#9AA0B5';
+    px(c, glow, sx + 12, sy + 13, 16, 1);
+    if (a.state === 'running' && Math.floor(t * 6) % 2) px(c, '#5CC793', sx + 26, sy + 22, 1, 1);
+  } else {
+    px(c, P.lid, sx + 12, sy + 22, 16, 2);
+  }
+  px(c, '#EDEFF5', sx + 48, sy + 19, 5, 5); px(c, '#EDEFF5', sx + 53, sy + 20, 2, 2);
+  if (on && WORKING.has(a.state) && Math.floor(t * 2) % 2) px(c, '#C9CFDF', sx + 50, sy + 16, 1, 2);
+}
+
+let lastT = performance.now();
+function frame(now) {
+  const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  const t = now / 1000;
+  const P = palette();
+  const rows = rowsFor(agents.length);
+  const newH = WALL + rows * ROW_H + 22;
+  if (newH !== H) { H = newH; canvas.height = H; renderTags(); }
+  ctx.clearRect(0, 0, W, H);
+
+  const counts = { working: 0, waiting: 0, done: 0, idle: 0 };
+  for (const a of agents) {
+    const s = displayState(a);
+    if (WORKING.has(s)) counts.working++; else if (s === 'waiting') counts.waiting++; else if (s === 'done') counts.done++; else counts.idle++;
+  }
+  const date = localNow();
+  const phase = phaseOf(date);
+  const tod = { date, hour: hourOf(date), phase, sky: SKY_FOR[phase] };
+  drawRoom(ctx, P, t, counts, tod);
+
+  // selected slot highlight
+  const selIdx = agents.findIndex((a) => a.name === selected);
+  if (selIdx >= 0) { const s = slot(selIdx); ctx.globalAlpha = 0.18; px(ctx, '#FFFFFF', s.sx + 2, s.sy + 2, 64, 44); ctx.globalAlpha = 1; }
+
+  // chairs (always behind people)
+  agents.forEach((a, i) => { const s = slot(i); px(ctx, P.chair, s.seatX - 6, s.sy + 12, 12, 13); });
+
+  // move characters
+  let idleIdx = 0;
+  const live = new Set();
+  agents.forEach((a, i) => {
+    const tgt = targetFor(a, i, a.state === 'idle' ? idleIdx++ : 0);
+    let ch = chars.get(a.name);
+    if (!ch) {
+      if (a.state === 'stopped') return;
+      ch = firstFrameDone ? { x: DOOR[0], y: DOOR[1], pose: 'walk' } : { x: tgt.x, y: tgt.y, pose: tgt.pose };
+      chars.set(a.name, ch);
+    }
+    live.add(a.name);
+    const dx = tgt.x - ch.x, dy = tgt.y - ch.y, d = Math.hypot(dx, dy);
+    if (d > 0.6) { const step = Math.min(d, 42 * dt); ch.x += (dx / d) * step; ch.y += (dy / d) * step; ch.pose = 'walk'; }
+    else { ch.x = tgt.x; ch.y = tgt.y; ch.pose = tgt.pose; if (tgt.leave) { chars.delete(a.name); live.delete(a.name); } }
+  });
+  for (const k of [...chars.keys()]) if (!live.has(k)) chars.delete(k);
+  if (!firstSnapshot) firstFrameDone = true;
+
+  // depth-sorted drawables
+  const items = [];
+  const slots = rows * COLS;
+  for (let i = 0; i < slots; i++) { const s = slot(i); items.push({ y: s.sy + 27.5, draw: () => drawDesk(ctx, P, s, agents[i], t) }); }
+  items.push({ y: WALL + 41, draw: () => drawCouch(ctx, P) });
+  const heads = [];
+  agents.forEach((a, i) => {
+    const ch = chars.get(a.name); if (!ch) return;
+    const party = cheering.get(a.name);
+    const mood = party ? 'cheer' : ch.pose === 'sit' ? a.state : 'idle';
+    // a celebrating agent hops in place
+    const hop = party && ch.pose !== 'walk' && !reducedMotion.matches ? Math.round(Math.abs(Math.sin(t * 9)) * 4) : 0;
+    items.push({ y: ch.y, draw: () => { const hy = person(ctx, ch.x, ch.y - hop, lookFor(a.name, i), ch.pose, t, mood, P); heads.push({ a, x: ch.x, hy, ch, party }); } });
+  });
+  items.sort((p, q) => p.y - q.y).forEach((it) => it.draw());
+
+  // evening and night: the room dims and desk lamps come on
+  const dim = { evening: 0.08, night: 0.2 }[phase] || 0;
+  if (dim) {
+    ctx.fillStyle = `rgba(14,18,48,${dark.matches ? dim / 2 : dim})`; ctx.fillRect(0, 0, W, H);
+    agents.forEach((a, i) => {
+      if (a.state === 'stopped') return;
+      const s = slot(i);
+      const g = ctx.createRadialGradient(s.sx + 34, s.sy + 22, 2, s.sx + 34, s.sy + 22, 30);
+      g.addColorStop(0, `rgba(255,214,140,${phase === 'night' ? 0.24 : 0.14})`); g.addColorStop(1, 'rgba(255,214,140,0)');
+      ctx.fillStyle = g; ctx.fillRect(s.sx, s.sy - 8, 68, 60);
+    });
+  }
+
+  // bubbles on top
+  for (const { a, x, hy, ch, party } of heads) {
+    const s = displayState(a);
+    if (party) { bubble(ctx, x, hy, party.kind, t, P); continue; }
+    if (ch.pose === 'walk') continue;
+    if (s === 'waiting' || s === 'done' || WORKING.has(s)) bubble(ctx, x, hy, s, t, P);
+    else if (ch.pose === 'couch' && Math.floor(t / 2 + (hash(a.name) % 5)) % 3 === 0) {
+      const zy = Math.round(hy - 4 - (t * 4) % 6);
+      [[0, 0], [1, 0], [2, 0], [1, 1], [0, 2], [1, 2], [2, 2]].forEach(([u, v]) => px(ctx, P.ink, x + 4 + u, zy + v, 1, 1));
+    }
+  }
+  // confetti over everything
+  for (let k = confetti.length - 1; k >= 0; k--) {
+    const p = confetti[k];
+    p.life -= dt; p.vy += 90 * dt; p.vx *= 1 - 0.8 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.life <= 0 || p.y > H) { confetti.splice(k, 1); continue; }
+    px(ctx, p.col, p.x, p.y, p.w, Math.floor(t * 10 + k) % 2 ? 1 : 2);
+  }
+  for (const [name, c] of cheering) if (t > c.until) cheering.delete(name);
+  requestAnimationFrame(frame);
+}
+let firstFrameDone = false;
+
+// ---------- name tags + clicks ----------
+const tagEls = new Map();
+function renderTags() {
+  const box = $('tags');
+  const scale = canvas.clientWidth / W;
+  const names = new Set(agents.map((a) => a.name));
+  for (const [n, el] of tagEls) if (!names.has(n)) { el.remove(); tagEls.delete(n); }
+  agents.forEach((a, i) => {
+    let b = tagEls.get(a.name);
+    if (!b) {
+      b = document.createElement('button');
+      b.append(document.createElement('span'), document.createElement('small'));
+      b.addEventListener('click', () => select(a.name));
+      box.append(b); tagEls.set(a.name, b);
+    }
+    const s = slot(i);
+    const st = displayState(a);
+    b.className = `tag ${st === 'waiting' ? 'waiting' : st === 'done' ? 'done' : ''} ${a.name === selected ? 'selected' : ''}`;
+    b.style.left = `${s.tagX * scale}px`;
+    b.style.top = `${s.tagY * scale}px`;
+    b.style.maxWidth = `${(SLOT_W - 4) * scale}px`;
+    b.setAttribute('aria-pressed', String(a.name === selected));
+    b.title = `${a.label || a.name}: ${a.detail || LABEL[st]}`;
+    b.firstChild.textContent = a.label || a.name;
+    b.lastChild.textContent = LABEL[st] || st;
+  });
+}
+canvas.addEventListener('click', (e) => {
+  const r = canvas.getBoundingClientRect();
+  const x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+  for (const [name, ch] of chars) if (Math.abs(x - ch.x) < 7 && y > ch.y - 22 && y < ch.y + 2) return select(name);
+  const rows = rowsFor(agents.length);
+  for (let i = 0; i < rows * COLS; i++) {
+    const s = slot(i);
+    if (x >= s.sx && x < s.sx + SLOT_W && y >= s.sy && y < s.sy + ROW_H) return agents[i] ? select(agents[i].name) : openAdd();
+  }
+});
+new ResizeObserver(renderTags).observe(canvas);
+dark.addEventListener('change', renderTags);
+
+connect();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
