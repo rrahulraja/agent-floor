@@ -79,6 +79,14 @@ tmux attach -t cc-billing     # detach again with Ctrl-b d
 - **Git and pull request**: branch, ahead/behind, uncommitted files, and the PR's checks and review state (needs the `gh` CLI, logged in).
 - **Celebrations**: confetti and a banner when an agent pushes or opens a PR.
 
+**Notifications when you're away.** Agent Floor can reach you when an agent needs approval, has a question, opens a PR, pushes, may be stuck, or (optionally) finishes:
+
+- **Desktop**: macOS notifications (or `notify-send` on Linux), on by default.
+- **Slack**: paste an [incoming webhook](https://api.slack.com/messaging/webhooks) URL in Settings.
+- **Phone**: set an [ntfy](https://ntfy.sh) topic and install the ntfy app. Topics on ntfy.sh can be read by anyone who guesses the name, so use a long random topic, an access token, or your own ntfy server.
+
+Nothing is sent while a dashboard tab is on screen (you can already see it). Each alert carries the agent name, the project folder, what happened, and one short detail line (the question, the command waiting for approval, the branch), trimmed to 120 characters. That line is the only piece of your work that leaves the machine, and only to the channels you turn on. Settings has a *Send a test notification* button.
+
 **Settings.** Every threshold above (context window size, warning levels, stuck minutes, how loud a "?" reply is, desks per row, refresh rates, celebrations…) is a setting. Open **Settings** in the header, or edit `~/.agent-floor/config.json`, which only stores what you changed. Each agent's context window can also be set from its panel.
 
 Agents you add are remembered in `~/.agent-floor/agents.json`, so after a reboot they appear as stopped and you can restart them on their latest conversation with one click.
@@ -103,7 +111,7 @@ Sending instructions uses `tmux send-keys` / `paste-buffer`, exactly as if you t
 - Every request that changes something needs an `X-Agent-Floor: 1` header, which stops other websites from posting to it.
 - Only a fixed set of keys can be sent (Enter, Esc, 1–9, Shift+Tab, arrows).
 - External commands (`tmux`, `git`, `gh`) run without a shell, with fixed arguments.
-- Screen contents and transcripts never leave your machine.
+- Screen contents and transcripts never leave your machine. The only outbound traffic is the notifications you turn on (Slack, ntfy) and `gh` talking to GitHub.
 
 Anyone with access to your user account can still type into your agents through tmux, same as without this tool.
 

@@ -16,6 +16,7 @@ const T = require('./lib/transcript');
 const G = require('./lib/git');
 const { createConfig } = require('./lib/config');
 const C = require('./lib/control');
+const N = require('./lib/notify');
 
 const PORT = Number(process.env.PORT || 4777);
 const HOST = '127.0.0.1';
@@ -444,7 +445,7 @@ function settingsForPage() {
   return {
     theme: c.theme, desksPerRow: c.desksPerRow, proseQuestion: c.proseQuestion, maxHelpersShown: c.maxHelpersShown,
     celebrateSeconds: c['celebrate.seconds'], contextWarnPct: c.contextWarnPct, contextAlertPct: c.contextAlertPct,
-    savedPromptClick: c.savedPromptClick, prompts: PROMPTS.get(),
+    savedPromptClick: c.savedPromptClick, prompts: PROMPTS.get(), desktopNotify: c['notify.desktop'],
   };
 }
 
@@ -545,6 +546,7 @@ async function poll() {
         item.detail = 'Sent the next queued instruction';
       } catch (e) { console.warn(`queue: could not send to ${a.name}: ${e.message}`); }
     }
+    notifyFor(prev, item, now);
     memory.set(a.name, item);
     const { fileStamp, lastChangeAt, screenAt, lastDispatchAt, ...pub } = item;
     agents.push(pub);
@@ -560,6 +562,41 @@ async function poll() {
 async function loop() {
   try { await poll(); } catch (e) { console.error('poll failed:', e.message); }
   setTimeout(loop, CONFIG.get('pollMs'));
+}
+
+// ---------- notifications ----------
+let lastVisibleAt = 0; // last time a dashboard tab said it was on screen
+const notifyOnce = N.createDeduper();
+async function deliver(msg) {
+  const results = {};
+  if (CONFIG.get('notify.desktop')) {
+    const cmd = N.desktopCommand(process.platform, msg.title, msg.detail);
+    if (cmd) { const r = await run(cmd[0], cmd[1], { timeout: 10000 }); results.desktop = r.ok ? 'sent' : r.stderr || 'failed'; }
+  }
+  const slack = CONFIG.get('notify.slackWebhookUrl');
+  if (slack) {
+    try {
+      const r = await fetch(slack, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(N.slackPayload(msg)), signal: AbortSignal.timeout(10000) });
+      results.slack = r.ok ? 'sent' : `HTTP ${r.status}`;
+    } catch (e) { results.slack = e.message; }
+  }
+  const topic = CONFIG.get('notify.ntfyTopic');
+  if (topic) {
+    const { url, init } = N.ntfyRequest({ server: CONFIG.get('notify.ntfyServer'), topic, token: CONFIG.get('notify.ntfyToken') }, msg);
+    try { const r = await fetch(url, { ...init, signal: AbortSignal.timeout(10000) }); results.ntfy = r.ok ? 'sent' : `HTTP ${r.status}`; }
+    catch (e) { results.ntfy = e.message; }
+  }
+  for (const [ch, r] of Object.entries(results)) if (r !== 'sent') console.warn(`notify via ${ch} failed: ${r}`);
+  return results;
+}
+function notifyFor(prev, item, now) {
+  const events = N.detectEvents(prev, item, { proseMode: CONFIG.get('proseQuestion'), detailChars: CONFIG.get('notify.detailChars') });
+  if (!events.length) return;
+  if (now - lastVisibleAt < CONFIG.get('notify.quietIfVisibleSeconds') * 1000) return; // you're looking at the dashboard
+  for (const ev of events) {
+    if (!CONFIG.get(`notify.events.${ev.event}`) || !notifyOnce(`${item.name}:${ev.key}`, now)) continue;
+    deliver(ev).catch((e) => console.warn(`notify failed: ${e.message}`));
+  }
 }
 
 // ---------- worktrees ----------
@@ -649,6 +686,14 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, values: CONFIG.all() });
     }
 
+    if (req.method === 'POST' && p === '/api/visible') {
+      if ((await readBody(req)).visible) lastVisibleAt = Date.now();
+      return send(res, 200, { ok: true });
+    }
+    if (req.method === 'POST' && p === '/api/notify/test') {
+      const results = await deliver({ event: 'push', title: 'Agent Floor test notification', detail: 'If you can read this, alerts reach you.', url: '' });
+      return send(res, 200, { ok: true, results });
+    }
     if (req.method === 'POST' && p === '/api/prompts') {
       const prompts = C.cleanPrompts((await readBody(req)).prompts);
       PROMPTS.set(prompts);

@@ -540,6 +540,7 @@ function showCheer(icon, title, sub, url, linkText) {
 }
 
 function notify(title, body) {
+  if (settings.desktopNotify) return; // the server sends desktop notifications itself
   if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
     new Notification(title, { body: (body || '').slice(0, 140) });
   }
@@ -767,7 +768,7 @@ async function openSettings() {
     let input;
     if (f.type === 'bool') { input = el('input'); input.type = 'checkbox'; input.checked = !!settingsLoaded.values[f.key]; }
     else if (f.type === 'enum') { input = el('select'); for (const v of f.values) { const o = el('option', '', v); o.value = v; input.append(o); } input.value = settingsLoaded.values[f.key]; }
-    else if (f.type === 'string') { input = el('input'); input.type = 'text'; input.value = settingsLoaded.values[f.key]; input.style.gridColumn = '1 / -1'; }
+    else if (f.type === 'string') { input = el('input'); input.type = f.secret ? 'password' : 'text'; input.autocomplete = 'off'; input.value = settingsLoaded.values[f.key]; input.style.gridColumn = '1 / -1'; }
     else { input = el('input'); input.type = 'number'; input.min = f.min; input.max = f.max; input.step = 1; input.value = settingsLoaded.values[f.key]; }
     input.id = id; input.dataset.key = f.key;
     const note = el('small');
@@ -779,6 +780,18 @@ async function openSettings() {
     note.append(reset);
     row.append(label, input, note);
     groups.get(f.group).append(row);
+  }
+  const alerts = groups.get('Slack and phone');
+  if (alerts) {
+    const b = el('button', 'btn', 'Send a test notification'); b.type = 'button';
+    const out = el('small', 'hint');
+    b.addEventListener('click', async () => {
+      out.textContent = 'Sending… (save first if you just changed these settings)';
+      try { const r = await api('POST', '/api/notify/test'); out.textContent = Object.entries(r.results).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'No channels are turned on.'; }
+      catch (err) { out.textContent = err.message; }
+    });
+    const row = el('div', 'row'); row.style.margin = '6px 0 8px'; row.append(b, out);
+    alerts.append(row);
   }
   $('settingsDialog').showModal();
 }
@@ -1617,6 +1630,12 @@ canvas.addEventListener('click', (e) => {
 });
 new ResizeObserver(renderTags).observe(canvas);
 dark.addEventListener('change', renderTags);
+
+// Tell the server when this dashboard is on screen, so it doesn't notify you about what you can already see.
+function reportVisible() { if (!document.hidden) api('POST', '/api/visible', { visible: true }).catch(() => {}); }
+document.addEventListener('visibilitychange', reportVisible);
+setInterval(reportVisible, 10000);
+reportVisible();
 
 connect();
 requestAnimationFrame(frame);
