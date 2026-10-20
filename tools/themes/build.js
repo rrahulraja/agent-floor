@@ -32,10 +32,12 @@ for (const file of fs.readdirSync(SPECS).filter((f) => f.endsWith('.js')).sort()
     if (c.name && role !== 'helper') labels[role] = c.label || `${c.name} · ${ROLE_TEXT[role] || role}`;
   }
   for (const [name, svg] of Object.entries(spec.files || {})) fs.writeFileSync(path.join(dir, name), svg.trim() + '\n');
+  // The 3D floor builds characters from the same cast data, so ship it as plain JSON next to the SVGs.
+  fs.writeFileSync(path.join(dir, 'model.json'), JSON.stringify({ version: 1, cast: spec.cast, room3d: spec.room3d || {} }) + '\n');
   const manifest = {
     id: spec.id, name: spec.name, version: spec.version || '1.0.0', author: 'agent-floor', description: spec.description, kind: 'vector',
     tint: !!spec.tint, room: spec.room, roles: { default: roles[spec.defaultRole || 'thinking'], ...roles }, celebration: spec.celebration || {},
-    labels, header: spec.header, size: { sit: 30, helper: 13, aspect: 1.6, ...(spec.size || {}) },
+    labels, header: spec.header, model: 'model.json', size: { sit: 30, helper: 13, aspect: 1.6, ...(spec.size || {}) },
   };
   fs.writeFileSync(path.join(dir, 'theme.json'), JSON.stringify(manifest, null, 2) + '\n');
   // A cast list, so people can see who does what.

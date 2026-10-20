@@ -697,6 +697,8 @@ function readThemes() {
   const pixel = { id: 'pixel', name: 'Pixel office', description: 'The built-in pixel-art office.', builtin: true, ok: true, kind: 'pixel' };
   return [pixel, ...Themes.listThemes(themeFolders()).map((t) => ({ ...t.theme, builtin: t.builtin, ok: t.ok, problems: t.problems }))];
 }
+// The 3D floor's scripts: a fixed list, nothing else under public/ is served.
+const SCRIPTS = { '/floor3d.js': 'floor3d.js', '/vendor/three.module.min.js': 'vendor/three.module.min.js', '/vendor/CSS3DRenderer.js': 'vendor/CSS3DRenderer.js' };
 const THEME_TYPES = { '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
 function serveThemeFile(res, id, file) {
   if (!Themes.ID_RE.test(id) || !Themes.safeFile(file)) { res.writeHead(404); return res.end(); }
@@ -811,6 +813,10 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return fs.createReadStream(INDEX_FILE).pipe(res);
+    }
+    if (req.method === 'GET' && SCRIPTS[p]) {
+      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+      return fs.createReadStream(path.join(__dirname, 'public', SCRIPTS[p])).pipe(res);
     }
     if (req.method === 'GET' && p === '/api/state') return send(res, 200, snapshot);
     if (req.method === 'GET' && p === '/api/config') return send(res, 200, { schema: CONFIG.schema(), values: CONFIG.all(), problems: CONFIG.problems() });

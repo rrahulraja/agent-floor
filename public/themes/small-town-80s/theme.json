@@ -70,6 +70,7 @@
       "muted": "#C9B08A"
     }
   },
+  "model": "model.json",
   "size": {
     "sit": 30,
     "helper": 13,

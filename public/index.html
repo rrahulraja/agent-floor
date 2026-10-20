@@ -15,7 +15,7 @@
   --screen-bg: #1B1F2E; --screen-ink: #D8DCEA; --danger: #B3261E;
   --pixel: "Pixelify Sans", "Courier New", monospace;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --mono: "MesloLGS NF", "MesloLGS Nerd Font", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -97,9 +97,18 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .vlayer img.cel { animation: v-pop 1s ease-in-out infinite; }
 @keyframes v-walk { to { transform: translateY(-4%); } }
 @keyframes v-hop { to { transform: translateY(-12%); } }
+.vlayer img.land { animation: v-land .45s ease-out; transform-origin: 50% 100%; }
 @keyframes v-pop { 50% { transform: scale(1.15) rotate(-6deg); } }
-@media (prefers-reduced-motion: reduce) { .vlayer img { animation: none !important; } }
+@keyframes v-land { 35% { transform: translateY(-9%); } 70% { transform: scale(1.06, .94); } }
+.tag.bump { animation: tag-bump .5s ease-out; }
+@keyframes tag-bump { 30% { transform: translateX(-50%) translateY(-5px) scale(1.06); } 60% { transform: translateX(-50%) translateY(1px); } }
+@media (prefers-reduced-motion: reduce) { .vlayer img, .tag.bump { animation: none !important; } }
 .theme-sel { padding: 6px 8px; }
+.v3d { position: absolute; inset: 0; overflow: hidden; border-radius: 4px; }
+.v3d[hidden] { display: none; }
+.v3d-css, .v3d-gl { position: absolute !important; inset: 0; }
+.v3d-css { pointer-events: none; }
+.view-btn { padding: 6px 9px; font-weight: 700; }
 .tags { position: absolute; inset: 0; pointer-events: none; }
 .tag {
   position: absolute; transform: translateX(-50%); pointer-events: auto;
@@ -291,6 +300,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <button class="btn" id="searchBtn">Search</button>
   <button class="btn" id="broadcastBtn">Broadcast</button>
   <select class="btn theme-sel" id="themeSel" aria-label="Theme" title="Theme"><option value="pixel">Pixel office</option></select>
+  <button class="btn view-btn" id="viewBtn" type="button" hidden title="Switch between the 3D and flat floor" aria-pressed="false">3D</button>
   <button class="btn" id="settingsBtn">Settings</button>
   <button class="btn primary" id="addBtn">Add agent</button>
 </header>
@@ -477,6 +487,8 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 </dialog>
 <div class="cheers" id="cheers" aria-live="polite"></div>
 
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
+<script type="module" src="/floor3d.js"></script>
 <script>
 'use strict';
 // ---------- state ----------
@@ -1739,7 +1751,7 @@ function frame(now) {
 
   // selected slot highlight
   const selIdx = agents.findIndex((a) => a.name === selected);
-  if (selIdx >= 0) { const s = slot(selIdx); ctx.globalAlpha = 0.18; px(ctx, '#FFFFFF', s.sx + 2, s.sy + 2, 64, 44); ctx.globalAlpha = 1; }
+  if (selIdx >= 0 && !(vec && use3d)) { const s = slot(selIdx); ctx.globalAlpha = 0.18; px(ctx, '#FFFFFF', s.sx + 2, s.sy + 2, 64, 44); ctx.globalAlpha = 1; }
 
   // chairs (always behind people)
   if (!vec) agents.forEach((a, i) => { const s = slot(i); px(ctx, P.chair, s.seatX - 6, s.sy + 12, 12, 13); });
@@ -1760,9 +1772,20 @@ function frame(now) {
     if (d > 0.6) { const step = Math.min(d, 42 * dt); ch.x += (dx / d) * step; ch.y += (dy / d) * step; ch.pose = 'walk'; }
     else { ch.x = tgt.x; ch.y = tgt.y; ch.pose = tgt.pose; if (tgt.leave) { chars.delete(a.name); live.delete(a.name); } }
   });
-  for (const k of [...chars.keys()]) if (!live.has(k)) chars.delete(k);
+  for (const k of [...chars.keys()]) if (!live.has(k)) { chars.delete(k); seated.delete(k); }
   if (!firstSnapshot) firstFrameDone = true;
 
+  if (vec && use3d) {
+    const st = { W, H, WALL, DX: DX(), rows, cols: COLS, slot, phase, t, dt, motion: !reducedMotion.matches, agents: floorAgents() };
+    if (window.Floor3D.render(st)) renderTags();
+    // let the stage take the 3D room's shape instead of the flat floor's
+    const r3 = window.Floor3D.ratio();
+    if (r3) { const want = Math.round(canvas.clientWidth * r3 * 1.04); if (Math.abs(canvas.clientHeight - want) > 2) canvas.style.height = `${want}px`; }
+    confetti.length = 0;
+    for (const [name, c] of cheering) if (t > c.until) cheering.delete(name);
+    requestAnimationFrame(frame);
+    return;
+  }
   if (vec) {
     renderVector(rows);
     drawEvening(phase);
@@ -1906,7 +1929,53 @@ function useTheme(id) {
     layer.style.backgroundImage = t.room.floor ? `url("${themeUrl(t.room.floor)}")` : '';
     layer.style.backgroundColor = t.room.floorColor || '';
   }
+  setup3d();
   renderTags();
+}
+// ---------- 3D floor (floor3d.js) ----------
+// Vector themes that ship a model.json can be shown in 3D. The flat floor stays as the fallback and as a choice.
+let use3d = false;
+const want3d = () => { try { return localStorage.getItem('af:3d') !== 'off'; } catch { return true; } };
+async function setup3d() {
+  const F = window.Floor3D;
+  const can = !!(F && F.supported && theme.kind === 'vector' && theme.model);
+  $('viewBtn').hidden = !can;
+  use3d = false;
+  canvas.style.height = '';
+  if (F && F.supported) { F.init(document.querySelector('.stage')); F.setVisible(false); }
+  if (!can || !want3d()) { $('viewBtn').textContent = '3D'; $('viewBtn').setAttribute('aria-pressed', 'false'); $('vlayer').hidden = theme.kind !== 'vector'; return; }
+  const t = theme;
+  const ok = await F.setTheme(t, themeUrl);
+  if (theme !== t) return;
+  use3d = ok;
+  F.setVisible(ok);
+  $('vlayer').hidden = ok;
+  $('viewBtn').textContent = ok ? '2D' : '3D';
+  $('viewBtn').setAttribute('aria-pressed', String(ok));
+  renderTags();
+}
+$('viewBtn').addEventListener('click', () => {
+  try { localStorage.setItem('af:3d', use3d ? 'off' : 'on'); } catch {}
+  setup3d();
+});
+window.addEventListener('floor3d-ready', setup3d);
+// What the 3D floor needs to know about each agent this frame.
+function floorAgents() {
+  const out = [];
+  agents.forEach((a, i) => {
+    const ch = chars.get(a.name);
+    if (!ch) return;
+    const st = displayState(a);
+    const party = cheering.get(a.name);
+    const file = party && theme.celebration[party.kind];
+    out.push({
+      name: a.name, slot: i, x: ch.x, y: ch.y, pose: ch.pose, selected: a.name === selected, done: st === 'done',
+      role: ch.pose === 'sit' ? st : st === 'done' ? 'done' : 'idle',
+      party: file ? { kind: party.kind, file } : null,
+      helpers: helpersShown(a).map((h) => ({ state: h.state })),
+    });
+  });
+  return out;
 }
 $('themeSel').addEventListener('change', async () => {
   const id = $('themeSel').value;
@@ -1925,6 +1994,14 @@ function vImg(key, src, x, y, w, z, cls = '', filter = '') {
   img.dataset.live = '1';
 }
 function roleAsset(st) { return theme.roles[st] || theme.roles.default; }
+// When an agent sits down, give it a small landing hop for a moment.
+const seated = new Map();
+function landing(name, pose) {
+  const was = seated.get(name);
+  if (!was || was.pose !== pose) seated.set(name, { pose, at: was && pose === 'sit' ? performance.now() : 0 });
+  const at = seated.get(name).at;
+  return at && performance.now() - at < 450 ? 'land' : '';
+}
 function renderVector(rows) {
   const t = theme;
   for (const img of vEls.values()) img.dataset.live = '';
@@ -1945,7 +2022,7 @@ function renderVector(rows) {
     const role = ch.pose === 'sit' ? st : st === 'done' ? 'done' : 'idle';
     const w = ch.pose === 'sit' ? sit : sit * 0.9, h = w * aspect;
     const tint = t.tint ? `hue-rotate(${hash(a.name) % 360}deg)` : '';
-    vImg(`p:${a.name}`, themeUrl(roleAsset(role)), ch.x - w / 2, ch.y - h, w, ch.y, ch.pose === 'walk' ? 'walk' : party && !reducedMotion.matches ? 'hop' : '', tint);
+    vImg(`p:${a.name}`, themeUrl(roleAsset(role)), ch.x - w / 2, ch.y - h, w, ch.y, ch.pose === 'walk' ? 'walk' : party && !reducedMotion.matches ? 'hop' : landing(a.name, ch.pose), tint);
     if (party) {
       const cel = t.celebration[party.kind];
       if (cel) vImg(`c:${a.name}`, themeUrl(cel), ch.x + w * 0.2, ch.y - h - 10, 14, 999, 'cel');
@@ -1972,14 +2049,23 @@ function renderTags() {
       const meter = el('i', 'tm'); meter.append(el('b'));
       b.append(el('span', 'nm'), el('small', 'st'), el('span', 'meta'), meter);
       b.addEventListener('click', () => select(a.name));
+      b.addEventListener('animationend', () => b.classList.remove('bump'));
       box.append(b); tagEls.set(a.name, b);
     }
     const s = slot(i);
     const st = displayState(a);
-    b.className = `tag ${st === 'waiting' ? 'waiting' : st === 'asking' && needsYou(a) ? 'asking' : st === 'done' ? 'done' : ''} ${a.name === selected ? 'selected' : ''}`;
-    b.style.left = `${s.tagX * scale}px`;
-    b.style.top = `${s.tagY * scale}px`;
-    b.style.maxWidth = `${(SLOT_W - 4) * scale}px`;
+    // Bounce the name tag when the agent's state changes (not on first paint).
+    const bump = (b.dataset.st && b.dataset.st !== st) || (b.classList.contains('bump') && b.dataset.st === st);
+    b.dataset.st = st;
+    b.className = `tag ${st === 'waiting' ? 'waiting' : st === 'asking' && needsYou(a) ? 'asking' : st === 'done' ? 'done' : ''} ${a.name === selected ? 'selected' : ''}${bump ? ' bump' : ''}`;
+    if (use3d) {
+      const p = window.Floor3D.project(s.seatX - 2, s.seatY + 18), q = window.Floor3D.project(s.seatX - 2 + SLOT_W - 4, s.seatY + 18);
+      b.style.left = `${p.left}px`; b.style.top = `${p.top}px`; b.style.maxWidth = `${Math.max(60, q.left - p.left)}px`;
+    } else {
+      b.style.left = `${s.tagX * scale}px`;
+      b.style.top = `${s.tagY * scale}px`;
+      b.style.maxWidth = `${(SLOT_W - 4) * scale}px`;
+    }
     b.setAttribute('aria-pressed', String(a.name === selected));
     b.title = `${a.label || a.name}: ${a.detail || LABEL[st]}`;
     b.querySelector('.nm').textContent = a.label || a.name;
@@ -2003,7 +2089,8 @@ function renderTags() {
 }
 canvas.addEventListener('click', (e) => {
   const r = canvas.getBoundingClientRect();
-  const x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+  let x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+  if (use3d) { const f = window.Floor3D.pick(e.clientX - r.left, e.clientY - r.top); if (!f) return; x = f.x; y = f.y; }
   for (const [name, ch] of chars) if (Math.abs(x - ch.x) < 7 && y > ch.y - 22 && y < ch.y + 2) return select(name);
   const rows = rowsFor(agents.length);
   for (let i = 0; i < rows * COLS; i++) {

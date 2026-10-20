@@ -74,6 +74,7 @@
       "night": "Witching hour"
     }
   },
+  "model": "model.json",
   "size": {
     "sit": 30,
     "helper": 13,

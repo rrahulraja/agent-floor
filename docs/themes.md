@@ -71,6 +71,7 @@ Reload the dashboard and pick it from the theme menu. The choice is saved in `~/
 | `size.sit` | no | Character width in floor units (default 30; a desk is 64) |
 | `size.helper` | no | Helper (subagent) width in floor units (default 14) |
 | `header` | no | Restyles the top bar: see below |
+| `model` | no | A `.json` file that lets the floor show this theme in 3D: `{ "cast": { "<role>": character }, "room3d": { floor, wall, desk, lounge } }`. Characters use the same fields as the built-in specs in `tools/themes/specs/`. Without it the theme is flat only |
 | `size.aspect` | no | Character height ÷ width (default 4/3); the bottom edge sits on the seat |
 
 ### Header

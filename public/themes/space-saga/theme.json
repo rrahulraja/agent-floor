@@ -78,6 +78,7 @@
       "night": "Night cycle"
     }
   },
+  "model": "model.json",
   "size": {
     "sit": 30,
     "helper": 12,
