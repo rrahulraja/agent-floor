@@ -1,3 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 60"><style>.f{animation:f .5s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:bottom}@keyframes f{to{transform:scale(.9,1.12)}}@media (prefers-reduced-motion: reduce){*{animation:none!important}}</style>
-<rect x="24" y="2" width="40" height="34" fill="#6E6E80"/><rect x="30" y="12" width="28" height="24" fill="#2A1A14"/><path class="f" d="M36 36 q2 -14 8 -18 q6 6 8 18z" fill="#F2945A"/><path class="f" d="M40 36 q2 -8 4 -10 q3 4 4 10z" fill="#FFE27A"/>
-<rect x="0" y="40" width="88" height="20" rx="4" fill="#7A1F2A"/><rect x="0" y="34" width="20" height="16" rx="4" fill="#5A121C"/><rect x="68" y="34" width="20" height="16" rx="4" fill="#5A121C"/></svg>

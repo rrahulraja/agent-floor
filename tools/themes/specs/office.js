@@ -8,6 +8,7 @@ module.exports = {
   defaultRole: 'thinking',
   header: { title: 'Agent floor', font: 'inter', clockFont: 'inter' },
   tint: false,
+  feed: {"start": "{hero} started on: {detail}", "waiting": "{hero} needs your approval: {detail}", "asking": "{hero} has a question: {detail}", "done": "✅ {hero} shipped it. {detail}", "tests_pass": "{hero}: tests green ({summary})", "tests_fail": "{hero}: tests red ({summary})", "build_pass": "{hero}: build passed", "build_fail": "{hero}: build broke ({summary})", "push": "🚀 {hero} pushed {branch}", "pr": "🎉 {hero} opened PR #{number}", "checks_pass": "PR #{number}: CI green", "checks_fail": "PR #{number}: CI red", "helpers": "{hero} pulled in {count} helpers", "stuck": "{hero} may be stuck ({detail})", "joined": "{agent} joined the team", "left": "{agent} signed off"},
   cast: {
     planning: { name: 'Product lead', skin: '#E2B38E', hair: { style: 'bun', color: '#2B1D14' }, face: { eyes: 'focus' }, earrings: '#E8B830', outfit: { style: 'jacket', color: '#2A4E9E', accent: '#1E3570', inner: '#F4F1E8' }, pose: 'hold', prop: { type: 'scroll' } },
     writing: { name: 'Developer', skin: '#C98F62', hair: { style: 'curly', color: '#1B1B1B' }, face: { eyes: 'focus', glasses: 'round' }, outfit: { style: 'tunic', color: '#3B6FD8', accent: '#2A4E9E' }, pose: 'typing', prop: { type: 'laptop' } },

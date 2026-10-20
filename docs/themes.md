@@ -19,7 +19,7 @@ All flat-vector themes are generated from small data files in `tools/themes/spec
 
 ```bash
 npm run build:themes
-node tools/themes/sheet.js public/themes/mahabharata /tmp/cast.svg   # a contact sheet of the whole cast
+node tools/themes/sheet.js public/themes/office /tmp/cast.svg   # a contact sheet of the whole cast
 ```
 
 You can use the same builder for your own theme: add a spec file, build, then copy the generated folder to `~/.agent-floor/themes/`.

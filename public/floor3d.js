@@ -7,6 +7,7 @@ import { CSS3DRenderer, CSS3DObject } from '/vendor/CSS3DRenderer.js';
 
 const WALL_H = 46;          // back wall height, in floor units
 const SEAT = 8;             // hip height when sitting
+const STAGE_RATIO = 0.58;   // 3D stage height / width (the camera tilts to fill it, within limits)
 const STAND = 12;           // hip height when standing
 const TAU = Math.PI * 2;
 
@@ -780,9 +781,9 @@ class Floor {
     const L = this.L, D = L.H - L.WALL;
     const cam = this.camera; cam.aspect = w / h;
     const pts = [[0, 0, 0], [L.W, 0, 0], [0, 0, D], [L.W, 0, D], [0, WALL_H, 0], [L.W, WALL_H, 0]].map((p) => new THREE.Vector3(...p));
-    const pitch = 0.62;
     const target = new THREE.Vector3(L.W / 2, 0, D * 0.5);
     cam.clearViewOffset();
+    let pitch = 0.62;
     const place = (dist) => {
       cam.position.set(target.x, target.y + Math.sin(pitch) * dist, target.z + Math.cos(pitch) * dist);
       cam.lookAt(target); cam.updateMatrixWorld(); cam.updateProjectionMatrix();
@@ -790,10 +791,18 @@ class Floor {
       for (const p of pts) { const v = p.clone().project(cam); x0 = Math.min(x0, v.x); x1 = Math.max(x1, v.x); y0 = Math.min(y0, v.y); y1 = Math.max(y1, v.y); }
       return { x0, x1, y0, y1 };
     };
-    // closest distance where the room's width and height both fit, then shift the picture so it is centred
-    let lo = 50, hi = 5000;
-    for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; const b = place(mid); if (b.x1 - b.x0 > 1.96 || b.y1 - b.y0 > 1.92) lo = mid; else hi = mid; }
-    const b = place(hi);
+    // closest distance where the room's width and height both fit
+    const fitAt = () => {
+      let lo = 50, hi = 5000;
+      for (let i = 0; i < 40; i++) { const mid = (lo + hi) / 2; const b = place(mid); if (b.x1 - b.x0 > 1.96 || b.y1 - b.y0 > 1.92) lo = mid; else hi = mid; }
+      const b = place(hi);
+      return { b, dist: hi, ratio: ((b.y1 - b.y0) * h) / ((b.x1 - b.x0) * w) };
+    };
+    // tilt the camera down until the room is as tall as we want the stage to be (a taller, roomier view)
+    let lo = 0.45, hi = 0.82; // steeper than ~47° hides faces and the wall
+    for (let i = 0; i < 18; i++) { pitch = (lo + hi) / 2; if (fitAt().ratio < STAGE_RATIO) lo = pitch; else hi = pitch; }
+    pitch = (lo + hi) / 2;
+    const { b } = fitAt();
     // how tall the stage should be for its width, so the room fills it (the same at any size)
     this.ratio = ((b.y1 - b.y0) * h) / ((b.x1 - b.x0) * w);
     cam.setViewOffset(w, h, ((b.x0 + b.x1) / 2) * (w / 2), -((b.y0 + b.y1) / 2) * (h / 2), w, h);

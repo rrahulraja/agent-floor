@@ -18,6 +18,7 @@ const { createConfig } = require('./lib/config');
 const C = require('./lib/control');
 const N = require('./lib/notify');
 const Hist = require('./lib/history');
+const HelperLog = require('./lib/helperlog');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -126,11 +127,17 @@ function statuslineArgs() {
 async function startAgent(name, cwd, conversation) {
   let cmd = `'${CLAUDE_BIN}'`;
   let sessionId;
+  // A conversation can only be open in one agent: two Claudes on one transcript show up as twins and
+  // write over each other. Which conversations do other running agents have open?
+  const live = await listSessions(); // tmux session name (without prefix) -> info
+  const openIn = (id) => saved.find((o) => o.name !== name && o.sessionId === id && live.has(o.name));
   if (conversation === 'latest') {
-    const newest = await newestTranscript(cwd);
-    const id = newest && path.basename(newest.path, '.jsonl');
-    if (id && SESSION_RE.test(id)) conversation = id;
-    else conversation = '';
+    const free = (await transcriptsIn(path.join(PROJECTS_DIR, encodeCwd(cwd)))).filter((f) => !openIn(f.id)).sort((x, y) => y.mtimeMs - x.mtimeMs)[0];
+    conversation = free ? free.id : '';
+  }
+  if (conversation && openIn(conversation)) {
+    const o = openIn(conversation);
+    throw new Error(`That conversation is already open in ${o.label || o.name}. Pick another one, or start fresh.`);
   }
   if (conversation) {
     if (!SESSION_RE.test(conversation) || !fs.existsSync(path.join(PROJECTS_DIR, encodeCwd(cwd), `${conversation}.jsonl`))) {
@@ -697,8 +704,18 @@ function readThemes() {
   const pixel = { id: 'pixel', name: 'Pixel office', description: 'The built-in pixel-art office.', builtin: true, ok: true, kind: 'pixel' };
   return [pixel, ...Themes.listThemes(themeFolders()).map((t) => ({ ...t.theme, builtin: t.builtin, ok: t.ok, problems: t.problems }))];
 }
-// The 3D floor's scripts: a fixed list, nothing else under public/ is served.
-const SCRIPTS = { '/floor3d.js': 'floor3d.js', '/vendor/three.module.min.js': 'vendor/three.module.min.js', '/vendor/CSS3DRenderer.js': 'vendor/CSS3DRenderer.js' };
+// The 3D floor's code and assets: /floor3d.js plus whatever is under public/vendor and public/office (and only
+// these file types). Nothing else under public/ is served.
+const STATIC_DIRS = ['vendor', 'office'];
+const STATIC_TYPES = { '.js': 'text/javascript; charset=utf-8', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json' };
+function staticFile(p) {
+  if (p === '/floor3d.js') return path.join(__dirname, 'public', 'floor3d.js');
+  const parts = p.split('/').filter(Boolean);
+  if (parts.length < 2 || !STATIC_DIRS.includes(parts[0]) || parts.some((x) => x === '..' || x.startsWith('.'))) return null;
+  if (!STATIC_TYPES[path.extname(p).toLowerCase()]) return null;
+  const full = path.join(__dirname, 'public', ...parts);
+  return full.startsWith(path.join(__dirname, 'public') + path.sep) ? full : null;
+}
 const THEME_TYPES = { '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
 function serveThemeFile(res, id, file) {
   if (!Themes.ID_RE.test(id) || !Themes.safeFile(file)) { res.writeHead(404); return res.end(); }
@@ -724,7 +741,7 @@ const notifyOnce = N.createDeduper();
 async function deliver(msg) {
   const results = {};
   if (CONFIG.get('notify.desktop')) {
-    const cmd = N.desktopCommand(process.platform, msg.title, msg.detail);
+    const cmd = N.desktopCommand(process.platform, msg.title, msg.detail, CONFIG.get('notify.sound'));
     if (cmd) { const r = await run(cmd[0], cmd[1], { timeout: 10000 }); results.desktop = r.ok ? 'sent' : r.stderr || 'failed'; }
   }
   const slack = CONFIG.get('notify.slackWebhookUrl');
@@ -814,9 +831,12 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return fs.createReadStream(INDEX_FILE).pipe(res);
     }
-    if (req.method === 'GET' && SCRIPTS[p]) {
-      res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
-      return fs.createReadStream(path.join(__dirname, 'public', SCRIPTS[p])).pipe(res);
+    const sf = req.method === 'GET' && staticFile(decodeURIComponent(p));
+    if (sf) {
+      let st; try { st = fs.statSync(sf); } catch {}
+      if (!st || !st.isFile()) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'Content-Type': STATIC_TYPES[path.extname(sf).toLowerCase()], 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+      return fs.createReadStream(sf).pipe(res);
     }
     if (req.method === 'GET' && p === '/api/state') return send(res, 200, snapshot);
     if (req.method === 'GET' && p === '/api/config') return send(res, 200, { schema: CONFIG.schema(), values: CONFIG.all(), problems: CONFIG.problems() });
@@ -834,6 +854,28 @@ const server = http.createServer(async (req, res) => {
       if (!saved.find((a) => a.name === sc[1])) return send(res, 404, { error: `No agent called ${sc[1]}.` });
       const lines = Math.max(200, Math.min(20000, Number(url.searchParams.get('lines')) || 5000));
       return send(res, 200, { screen: await capture(sc[1], lines), lines });
+    }
+    // What one helper (subagent) is doing: its task, recent steps and answer, read from its transcript.
+    const hl = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})\/helpers\/([A-Za-z0-9_-]{1,64})$/);
+    if (req.method === 'GET' && hl) {
+      const item = snapshot.agents.find((a) => a.name === hl[1]);
+      if (!item || !item.sessionId || !SESSION_RE.test(item.sessionId)) return send(res, 404, { error: `No running conversation for ${hl[1]}.` });
+      const file = path.join(PROJECTS_DIR, encodeCwd(item.cwd), item.sessionId, 'subagents', `agent-${hl[2]}.jsonl`);
+      let text;
+      try {
+        const st = await fsp.stat(file), fd = await fsp.open(file, 'r');
+        const len = Math.min(st.size, 1024 * 1024), buf = Buffer.alloc(len);
+        await fd.read(buf, 0, len, st.size - len); await fd.close();
+        text = buf.toString('utf8');
+        if (len < st.size) {
+          // the task is at the very start; read it separately when the file is longer than the tail we keep
+          const head = Buffer.alloc(Math.min(st.size, 64 * 1024)), fh = await fsp.open(file, 'r');
+          await fh.read(head, 0, head.length, 0); await fh.close();
+          text = head.toString('utf8').split('\n').slice(0, 3).join('\n') + '\n' + text.slice(text.indexOf('\n') + 1);
+        }
+      } catch { return send(res, 404, { error: 'That helper has no transcript yet.' }); }
+      const h = (item.helpers || []).find((x) => x.id === hl[2]) || {};
+      return send(res, 200, { id: hl[2], name: h.name || 'helper', description: h.description || '', state: h.state || 'done', kind: h.kind || '', ...HelperLog.parse(text) });
     }
     const tl = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})\/timeline$/);
     if (req.method === 'GET' && tl) {
@@ -868,7 +910,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && p === '/api/visible') {
-      if ((await readBody(req)).visible) lastVisibleAt = Date.now();
+      // visible: the dashboard window has focus. false: you just switched away, so alerts may go out at once.
+      lastVisibleAt = (await readBody(req)).visible ? Date.now() : 0;
       return send(res, 200, { ok: true });
     }
     if (req.method === 'POST' && p === '/api/notify/test') {

@@ -109,6 +109,35 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .v3d-css, .v3d-gl { position: absolute !important; inset: 0; }
 .v3d-css { pointer-events: none; }
 .view-btn { padding: 6px 9px; font-weight: 700; }
+.o3d-bubbles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.o3d-bubble { position: absolute; left: 0; top: 0; max-width: 260px; padding: 7px 10px; border-radius: 10px; background: #fffdf6; color: #1e2235;
+  font: 500 12.5px/1.35 var(--sans); box-shadow: 0 2px 10px rgba(0,0,0,.25); white-space: normal; z-index: 4; }
+.o3d-bubble::after { content: ''; position: absolute; left: 50%; bottom: -6px; border: 6px solid transparent; border-top-color: #fffdf6; border-bottom: 0; transform: translateX(-50%); }
+.o3d-hud { position: absolute; left: 10px; top: 10px; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: auto; }
+.o3d-hud button, .o3d-hud select { font: 600 12px var(--sans); padding: 5px 9px; border-radius: 7px; border: 1px solid rgba(255,255,255,.25); background: rgba(14,18,32,.72); color: #f2f4ff; cursor: pointer; backdrop-filter: blur(4px); }
+.o3d-hud button:hover { background: rgba(14,18,32,.9); }
+.o3d-hud .chip { font: 600 12px var(--sans); padding: 5px 10px; border-radius: 999px; background: #f2b825; color: #1e2235; }
+.o3d-hud .chip:empty { display: none; }
+.o3d-help { position: absolute; right: 10px; bottom: 8px; z-index: 5; font: 11px var(--sans); color: rgba(255,255,255,.75); text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none; }
+.stage.o3d #office { visibility: hidden; pointer-events: none; }
+.stage.o3d .tag { transform: translate(-50%, -100%); padding: 3px 8px; }
+.stage.o3d .tag small { display: none; }
+.stage.o3d .tag:hover small, .stage.o3d .tag.selected small, .stage.o3d .tag.waiting small, .stage.o3d .tag.asking small { display: block; }
+.feed { max-width: 1180px; margin: 18px auto 0; }
+.feed h2 { margin: 0 0 8px; font: 700 15px/1.2 var(--feed-font, var(--sans)); letter-spacing: .02em; }
+.feed-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.feed-list li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 7px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.feed-list li:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.feed-list time { color: var(--muted); font: 12px var(--mono); }
+.feed-list .fx { min-width: 0; overflow-wrap: anywhere; }
+.feed-list .who { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.feed-list .bad { color: var(--danger); }
+.feed-list .good { color: var(--done); }
+.feed-list a { color: inherit; }
+.feed-list li.new { animation: feed-in .5s ease-out; }
+@keyframes feed-in { from { background: color-mix(in srgb, var(--wait-fill) 30%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .feed-list li.new { animation: none; } }
+.feed-empty { color: var(--muted); font-size: 13px; }
 .tags { position: absolute; inset: 0; pointer-events: none; }
 .tag {
   position: absolute; transform: translateX(-50%); pointer-events: auto;
@@ -187,6 +216,23 @@ body.resizing { cursor: col-resize; user-select: none; }
 .helper { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .helper > div { min-width: 0; flex: 1; }
 .helper small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.helper.pick { cursor: pointer; border-radius: 6px; }
+.helper.pick:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.helper.on { background: color-mix(in srgb, var(--work) 14%, transparent); }
+.hview { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin: 8px 0 14px; }
+.hview-head { display: flex; gap: 6px; align-items: center; }
+.hview-head .btn { padding: 4px 9px; }
+.hview-title { flex: 1; min-width: 0; }
+.hview-title b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hview-title small { color: var(--muted); }
+.hview-task { margin: 8px 0; font-size: 13px; }
+.hview-task p { margin: 6px 0 0; white-space: pre-wrap; color: var(--muted); max-height: 160px; overflow: auto; }
+.hview-steps { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow: auto; font-size: 13px; }
+.hview-steps li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 6px; padding: 4px 0; border-top: 1px solid var(--line); }
+.hview-steps li code { font: 12px var(--mono); overflow-wrap: anywhere; }
+.hview-steps li small { display: block; color: var(--muted); }
+.hview-steps li.failed { color: var(--danger); }
+.hview-steps li.say { color: var(--ink); font-style: italic; }
 .helper .chip { font-size: 12px; white-space: nowrap; }
 dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .settings fieldset { margin: 0 0 12px; padding: 8px 14px 4px; border: 1px solid var(--line); border-radius: 8px; }
@@ -312,6 +358,11 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
       <canvas id="office" width="384" height="208" aria-hidden="true"></canvas>
       <div class="tags" id="tags"></div>
     </div>
+    <section class="feed" aria-labelledby="feedTitle">
+      <h2 id="feedTitle">Activity</h2>
+      <ol class="feed-list" id="feedList"></ol>
+      <p class="feed-empty" id="feedEmpty">What your agents do shows up here: tests and builds, pushes and PRs, questions, finishing.</p>
+    </section>
     <p class="empty" id="empty" hidden>No agents yet. Add one and give it a project folder, or start any tmux session named <code>cc-something</code> that runs <code>claude</code>, and it will show up here.</p>
   </section>
 
@@ -343,6 +394,16 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
         <div class="alert health" id="dHealth" hidden></div>
         <dl class="status" id="dStatus" hidden></dl>
         <div class="helpers" id="dHelpers" hidden></div>
+        <section class="hview" id="dHelperView" hidden aria-live="polite">
+          <div class="hview-head">
+            <button class="btn" type="button" id="hPrev" aria-label="Previous helper">←</button>
+            <div class="hview-title"><b id="hName"></b><small id="hState"></small></div>
+            <button class="btn" type="button" id="hNext" aria-label="Next helper">→</button>
+            <button class="btn" type="button" id="hClose" aria-label="Close helper view">✕</button>
+          </div>
+          <details class="hview-task"><summary>Task</summary><p id="hTask"></p></details>
+          <ol class="hview-steps" id="hSteps"></ol>
+        </section>
 
         <div id="dRunning">
           <div class="screen-bar" id="screenBar" hidden><span id="screenNote"></span><button class="btn" type="button" id="screenLatest">Jump to latest</button></div>
@@ -358,7 +419,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
           <div class="row">
             <button class="btn primary" type="submit" id="sendBtn">Send</button>
             <button class="btn" type="button" id="queueBtn">Add to queue</button>
-            <small id="composeHint">⌘ or Ctrl + Enter sends</small>
+            <small id="composeHint">Enter sends · Shift + Enter for a new line</small>
           </div>
         </form>
 
@@ -487,8 +548,11 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 </dialog>
 <div class="cheers" id="cheers" aria-live="polite"></div>
 
-<script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
-<script type="module" src="/floor3d.js"></script>
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js", "three/addons/": "/vendor/addons/" } }</script>
+<script type="module">
+// The 3D office; if it can't load, the simpler 3D floor.
+import('/office/engine.js').catch((err) => { console.warn('3D office unavailable, using the simple 3D floor:', err); return import('/floor3d.js'); });
+</script>
 <script>
 'use strict';
 // ---------- state ----------
@@ -565,6 +629,7 @@ function onSnapshot(list, st) {
     prevStates[a.name] = now;
     for (const c of a.celebrations || []) if (!cheered.has(c.id)) { rememberCheer(c.id); cheer(a, c); }
   }
+  recordFeed(list);
   agents = list;
   if (selected && !agents.find((a) => a.name === selected)) selected = null;
   if (selected) markSeen(selected);
@@ -598,6 +663,7 @@ function cheer(a, c) {
   cheering.set(a.name, { kind: c.kind, until: performance.now() / 1000 + (settings.celebrateSeconds || 5) });
   burst(a.name, pr ? 90 : 55);
   showCheer(pr ? '🎉' : '🚀', title, sub, c.url, pr ? 'Open PR' : 'View branch');
+  addFeed(a, pr ? 'pr' : 'push', 'git', { branch: c.branch, number: c.number, repo: c.repo, url: c.url });
   notify(pr ? `🎉 ${title}` : `🚀 ${title}`, sub);
 }
 function burst(name, n) {
@@ -634,7 +700,7 @@ function showCheer(icon, title, sub, url, linkText) {
 
 function notify(title, body) {
   if (settings.desktopNotify) return; // the server sends desktop notifications itself
-  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+  if ('Notification' in window && Notification.permission === 'granted' && (document.hidden || !document.hasFocus())) {
     new Notification(title, { body: (body || '').slice(0, 140) });
   }
 }
@@ -884,10 +950,14 @@ function renderHelpers(a) {
   const box = $('dHelpers');
   const hs = a.helpers || [];
   box.hidden = !hs.length;
-  if (sameAs(box, hs.map((h) => [h.id, h.state, h.kind, h.detail]))) return;
+  if (sameAs(box, hs.map((h) => [h.id, h.state, h.kind, h.detail, hv && hv.agent === a.name && hv.id]))) return;
   box.replaceChildren(el('h3', '', `Helpers (${hs.length})`));
   for (const h of hs) {
-    const row = el('div', 'helper');
+    const row = el('div', `helper pick ${hv && hv.agent === a.name && hv.id === h.id ? 'on' : ''}`);
+    row.title = 'Watch what this helper is doing';
+    row.tabIndex = 0;
+    row.addEventListener('click', () => openHelper(a.name, h.id));
+    row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHelper(a.name, h.id); } });
     const st = h.state === 'working' ? h.kind : h.state;
     const chip = el('span', `chip ${chipClass(st)}`, LABEL[st] || st);
     const body = el('div');
@@ -896,8 +966,64 @@ function renderHelpers(a) {
     row.append(chip, body);
     box.append(row);
   }
-  box.append(el('p', 'hint', "Helpers can't be typed into; interrupt the agent to stop them."));
+  box.append(el('p', 'hint', "Click a helper to watch what it's doing. Helpers can't be typed into; interrupt the agent to stop them."));
 }
+
+// ---------- watching one helper ----------
+// Its task, then what it did step by step (commands, files, searches, what it said), refreshed while open.
+let hv = null; // { agent, id, timer }
+const STEP_ICON = { command: '▸', read: '📖', edit: '✎', write: '✎', search: '🔍', web: '🌐', plan: '☑', helper: '👥', say: '💬', tool: '•' };
+function openHelper(agent, id) {
+  if (hv) clearInterval(hv.timer);
+  hv = { agent, id, timer: setInterval(loadHelper, 2500) };
+  $('dHelperView').hidden = false;
+  loadHelper();
+  const a = agents.find((x) => x.name === agent); if (a) { $('dHelpers').dataset.key = ''; renderHelpers(a); }
+}
+function closeHelper() {
+  if (hv) clearInterval(hv.timer);
+  hv = null; $('dHelperView').hidden = true;
+  const a = agents.find((x) => x.name === selected); if (a) { $('dHelpers').dataset.key = ''; renderHelpers(a); }
+}
+async function loadHelper() {
+  if (!hv || hv.agent !== selected) return closeHelper();
+  const want = hv;
+  let r;
+  try { r = await api('GET', `/api/agents/${encodeURIComponent(want.agent)}/helpers/${encodeURIComponent(want.id)}`); }
+  catch (err) { if (hv === want) { $('hName').textContent = 'Helper'; $('hState').textContent = err.message; $('hSteps').replaceChildren(); } return; }
+  if (hv !== want) return;
+  const list = (agents.find((x) => x.name === want.agent) || {}).helpers || [];
+  const k = list.findIndex((h) => h.id === want.id);
+  $('hName').textContent = r.description || r.name;
+  $('hState').textContent = [r.name, r.state === 'working' ? LABEL[r.kind] || 'Working' : r.state, list.length > 1 && k >= 0 ? `${k + 1} of ${list.length}` : ''].filter(Boolean).join(' · ');
+  $('hPrev').disabled = $('hNext').disabled = list.length < 2;
+  if ($('hTask').textContent !== r.task) $('hTask').textContent = r.task || '';
+  const box = $('hSteps');
+  const key = `${r.events.length}|${r.lastAt}`;
+  if (box.dataset.key === key) return;
+  const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 8;
+  box.dataset.key = key;
+  box.replaceChildren(...r.events.map((ev) => {
+    const li = el('li', [ev.kind === 'say' ? 'say' : '', ev.failed ? 'failed' : ''].join(' ').trim());
+    const body = el('div');
+    if (ev.kind === 'say') body.textContent = ev.text;
+    else { body.append(el('code', '', ev.text)); if (ev.note || ev.failed) body.append(el('small', '', [ev.note, ev.failed ? 'failed' : ''].filter(Boolean).join(' · '))); }
+    li.append(el('span', '', STEP_ICON[ev.kind] || '•'), body);
+    li.title = ev.at ? new Date(ev.at).toLocaleTimeString() : '';
+    return li;
+  }));
+  if (atEnd) box.scrollTop = box.scrollHeight; // follow along unless you scrolled up to read
+}
+function stepHelper(dir) {
+  if (!hv) return;
+  const list = (agents.find((x) => x.name === hv.agent) || {}).helpers || [];
+  const k = list.findIndex((h) => h.id === hv.id);
+  if (list.length < 2) return;
+  openHelper(hv.agent, list[(k + dir + list.length) % list.length].id);
+}
+$('hPrev').addEventListener('click', () => stepHelper(-1));
+$('hNext').addEventListener('click', () => stepHelper(1));
+$('hClose').addEventListener('click', closeHelper);
 
 // ---------- settings ----------
 let settingsLoaded = null;
@@ -974,19 +1100,18 @@ $('compose').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('sendBtn').disabled = true;
   const a = agents.find((x) => x.name === selected);
-  // The primary button reads "Add to queue" while busy; the secondary one then sends right away.
-  if (await sendOrQueue($('promptText').value, !isBusy(a))) $('promptText').value = '';
+  // Enter and the primary button always send right away; queueing is only the "Add to queue" button.
+  if (await sendOrQueue($('promptText').value, true)) $('promptText').value = '';
   $('sendBtn').disabled = false;
 });
 $('queueBtn').addEventListener('click', async () => {
-  const a = agents.find((x) => x.name === selected);
-  if (await sendOrQueue($('promptText').value, isBusy(a))) $('promptText').value = '';
+  if (await sendOrQueue($('promptText').value, false)) $('promptText').value = '';
 });
 function renderCompose(a) {
   const busy = isBusy(a);
-  $('sendBtn').textContent = busy ? 'Add to queue' : 'Send';
-  $('queueBtn').textContent = busy ? 'Send now' : 'Add to queue';
-  $('composeHint').textContent = busy ? `⌘/Ctrl + Enter queues it. ${labelOf(a.name)} is busy; it goes out when it's idle.` : '⌘ or Ctrl + Enter sends';
+  $('sendBtn').textContent = busy ? 'Send now' : 'Send';
+  $('queueBtn').hidden = !busy; // queueing only means something while the agent is busy
+  $('composeHint').textContent = busy ? `Enter sends now · Shift + Enter for a new line. ${labelOf(a.name)} is busy: "Add to queue" waits until it's idle.` : 'Enter sends · Shift + Enter for a new line';
   const chips = $('chips');
   const prompts = settings.prompts || [];
   if (!sameAs(chips, prompts.map((p) => p.text))) {
@@ -1060,6 +1185,7 @@ $('broadcastForm').addEventListener('submit', async (e) => {
     const sent = Object.values(r.results).filter((v) => v === 'sent').length, queued = Object.values(r.results).filter((v) => v === 'queued').length;
     $('broadcastDialog').close(); $('bText').value = '';
     toast(`Sent to ${sent}, queued for ${queued}`);
+    if (use3d && window.Floor3D.standup) window.Floor3D.standup(names); // everyone it went to gathers for a quick standup
   } catch (err) { $('bError').textContent = err.message; $('bError').hidden = false; }
 });
 
@@ -1195,7 +1321,7 @@ document.addEventListener('keydown', (e) => {
 });
 $('keysClose').addEventListener('click', () => $('keysDialog').close());
 $('promptText').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('compose').requestSubmit(); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.isComposing) { e.preventDefault(); $('compose').requestSubmit(); }
 });
 document.querySelectorAll('[data-key]').forEach((btn) => btn.addEventListener('click', async () => {
   if (!selected) return;
@@ -1747,14 +1873,14 @@ function frame(now) {
   const phase = phaseOf(date);
   const tod = { date, hour: hourOf(date), phase, sky: SKY_FOR[phase] };
   const vec = theme.kind === 'vector';
-  if (!vec) drawRoom(ctx, P, t, counts, tod);
+  if (!vec && !use3d) drawRoom(ctx, P, t, counts, tod);
 
   // selected slot highlight
   const selIdx = agents.findIndex((a) => a.name === selected);
-  if (selIdx >= 0 && !(vec && use3d)) { const s = slot(selIdx); ctx.globalAlpha = 0.18; px(ctx, '#FFFFFF', s.sx + 2, s.sy + 2, 64, 44); ctx.globalAlpha = 1; }
+  if (selIdx >= 0 && !use3d) { const s = slot(selIdx); ctx.globalAlpha = 0.18; px(ctx, '#FFFFFF', s.sx + 2, s.sy + 2, 64, 44); ctx.globalAlpha = 1; }
 
   // chairs (always behind people)
-  if (!vec) agents.forEach((a, i) => { const s = slot(i); px(ctx, P.chair, s.seatX - 6, s.sy + 12, 12, 13); });
+  if (!vec && !use3d) agents.forEach((a, i) => { const s = slot(i); px(ctx, P.chair, s.seatX - 6, s.sy + 12, 12, 13); });
 
   // move characters
   let idleIdx = 0;
@@ -1775,9 +1901,10 @@ function frame(now) {
   for (const k of [...chars.keys()]) if (!live.has(k)) { chars.delete(k); seated.delete(k); }
   if (!firstSnapshot) firstFrameDone = true;
 
-  if (vec && use3d) {
+  if (use3d) {
     const st = { W, H, WALL, DX: DX(), rows, cols: COLS, slot, phase, t, dt, motion: !reducedMotion.matches, agents: floorAgents() };
-    if (window.Floor3D.render(st)) renderTags();
+    try { if (window.Floor3D.render(st)) renderTags(); positionTags3d(); }
+    catch (err) { console.error(err); use3d = false; window.Floor3D.setVisible(false); $('vlayer').hidden = false; canvas.style.height = ''; no3d(`it crashed (${err.message})`); requestAnimationFrame(frame); return; }
     // let the stage take the 3D room's shape instead of the flat floor's
     const r3 = window.Floor3D.ratio();
     if (r3) { const want = Math.round(canvas.clientWidth * r3 * 1.04); if (Math.abs(canvas.clientHeight - want) > 2) canvas.style.height = `${want}px`; }
@@ -1874,6 +2001,7 @@ async function loadThemes() {
   const sel = $('themeSel');
   sel.replaceChildren(...themesAvail.map((t) => { const o = el('option', '', t.name); o.value = t.id; o.title = t.description || ''; return o; }));
   sel.value = theme.id;
+  if (theme.id === 'pixel') setup3d(); // Pixel's 3D view needs the Office theme from this list
 }
 // Stardate: year, then day of the year (e.g. 2026.293).
 function stardate(d) {
@@ -1906,6 +2034,8 @@ function applyHeader(t) {
   }
   for (const [k, v] of Object.entries(vars)) { if (v) bar.style.setProperty(k, v); else bar.style.removeProperty(k); }
   $('appTitle').textContent = (h && h.title) || 'Agent floor';
+  document.documentElement.style.setProperty('--feed-font', h && h.font ? `"${h.font}", var(--sans)` : 'var(--sans)');
+  if (typeof renderFeed === 'function') { feedShown = ''; renderFeed(); }
   lastClock = ''; tickClock(); renderSummary();
 }
 function useTheme(id) {
@@ -1932,24 +2062,138 @@ function useTheme(id) {
   setup3d();
   renderTags();
 }
+// In the 3D office, name tags ride above each agent's head.
+function positionTags3d() {
+  const F = window.Floor3D;
+  for (const [name, b] of tagEls) {
+    let p;
+    if (F.headScreen) p = F.headScreen(name);
+    else { const i = agents.findIndex((a) => a.name === name); const s = i >= 0 && slot(i); p = s && F.project(s.seatX - 2, s.seatY + 18); } // the simple floor: tags under the desks
+    if (!p) { b.style.visibility = 'hidden'; continue; }
+    b.style.visibility = '';
+    b.style.left = `${p.left}px`; b.style.top = `${p.top}px`;
+  }
+}
+
+// Declared before the feed, which draws saved lines while the page is still starting up.
+let use3d = false;
+let theme3d = null; // what the 3D floor is drawing (the theme, or Office standing in for Pixel)
+
+// ---------- activity feed ----------
+// Built here from the live updates: each change worth knowing about becomes a line. Lines keep the raw facts
+// and are worded when shown, by the current theme (theme.feed), so switching theme re-tells the history.
+const FEED_TEXT = {
+  start: '{hero} started on: {detail}', waiting: '{hero} needs your approval: {detail}', asking: '{hero} has a question: {detail}',
+  done: '{hero} finished. {detail}', tests_pass: '{hero}: tests passed ({summary})', tests_fail: '{hero}: tests failed ({summary})',
+  build_pass: '{hero}: build passed', build_fail: '{hero}: build failed ({summary})', push: '{hero} pushed {branch}', pr: '{hero} opened PR #{number}',
+  checks_pass: 'PR #{number}: checks passed', checks_fail: 'PR #{number}: checks failing', helpers: '{hero} handed off to {count} helpers',
+  stuck: '{hero} may be stuck ({detail})', joined: '{agent} joined the floor', left: '{agent} left the floor',
+};
+const FEED_TONE = { tests_pass: 'good', build_pass: 'good', checks_pass: 'good', done: 'good', tests_fail: 'bad', build_fail: 'bad', checks_fail: 'bad', stuck: 'bad' };
+let feed = (() => { try { return JSON.parse(localStorage.getItem('af:feed') || '[]'); } catch { return []; } })();
+const feedSeen = new Map(); // agent name -> what we last saw
+let feedFresh = 0;
+const clip = (t, n = 90) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+function addFeed(a, ev, role, data = {}) {
+  feed.unshift({ at: Date.now(), agent: a.name, label: a.label || a.name, ev, role, data });
+  feed = feed.slice(0, 200); feedFresh++;
+  try { localStorage.setItem('af:feed', JSON.stringify(feed)); } catch {}
+}
+function recordFeed(list) {
+  const names = new Set();
+  for (const a of list) {
+    names.add(a.name);
+    const st = displayState(a);
+    const res = a.lastResult ? `${a.lastResult.kind}|${a.lastResult.outcome}|${a.lastResult.at || a.lastResult.summary}` : '';
+    const pr = a.git && a.git.pr, checks = pr && pr.checks ? pr.checks.state : '';
+    const working = (a.helpers || []).filter((h) => h.state === 'working').length;
+    const now = { st, res, checks, working, stuck: !!a.stuck };
+    const was = feedSeen.get(a.name);
+    feedSeen.set(a.name, now);
+    if (!was) { if (!firstSnapshot) addFeed(a, 'joined', st); continue; }
+    if (was.st !== st) {
+      if (st === 'waiting') addFeed(a, 'waiting', 'waiting', { detail: clip(a.detail) });
+      else if (st === 'asking') addFeed(a, 'asking', 'asking', { detail: clip(isProse(a) ? a.question.text : a.question && (a.question.questions[0] || {}).question) });
+      else if (st === 'done') addFeed(a, 'done', 'done', { detail: clip(a.lastReply, 120) });
+      else if (WORKING.has(st) && !WORKING.has(was.st)) addFeed(a, 'start', st, { detail: clip(a.lastPrompt) });
+    }
+    if (res && res !== was.res) { const r = a.lastResult; addFeed(a, `${r.kind === 'build' ? 'build' : 'tests'}_${r.outcome === 'pass' ? 'pass' : 'fail'}`, r.kind === 'build' ? 'build' : 'tests', { summary: clip(r.summary, 60) }); }
+    if (checks !== was.checks && (checks === 'pass' || checks === 'fail')) addFeed(a, `checks_${checks}`, 'git', { number: pr.number, url: pr.url });
+    if (working > was.working) addFeed(a, 'helpers', 'delegating', { count: working });
+    if (now.stuck && !was.stuck) addFeed(a, 'stuck', 'thinking', { detail: `${a.stuck.minutes} min` });
+  }
+  for (const [n] of feedSeen) if (!names.has(n)) { feedSeen.delete(n); addFeed({ name: n, label: (feed.find((f) => f.agent === n) || {}).label || n }, 'left', 'idle'); }
+  if (feedFresh) renderFeed();
+}
+function feedLine(f) {
+  const names = theme.names || {};
+  const own = use3d && window.Floor3D.characterName ? window.Floor3D.characterName(f.agent) : '';
+  const vars = { ...f.data, agent: f.label, hero: own || names[f.role] || (theme.id === 'pixel' ? f.label : names.default) || f.label };
+  const tpl = (theme.feed && theme.feed[f.ev]) || FEED_TEXT[f.ev] || f.ev;
+  return tpl.replace(/\{(\w+)\}/g, (m, k) => (vars[k] === undefined || vars[k] === null ? '' : String(vars[k])))
+    .replace(/\(\s*\)/g, '').replace(/\s*[:—]\s*$/, '').replace(/\s+\./g, '.').trim();
+}
+let feedShown = '';
+function renderFeed() {
+  const list = $('feedList');
+  const items = feed.slice(0, 60);
+  const key = `${theme.id}|${items.length}|${items[0] ? items[0].at : 0}`;
+  $('feedEmpty').hidden = items.length > 0;
+  if (key === feedShown) return;
+  const fresh = feedShown.split('|')[0] === theme.id ? feedFresh : 0;
+  feedShown = key; feedFresh = 0;
+  list.replaceChildren(...items.map((f, i) => {
+    const li = el('li', [FEED_TONE[f.ev] || '', i < fresh ? 'new' : ''].join(' ').trim());
+    const tm = el('time', '', hhmm(f.at)); tm.dateTime = new Date(f.at).toISOString();
+    const text = el('span', 'fx', feedLine(f));
+    if (f.data && /^https:\/\//.test(f.data.url || '')) { const a = el('a', '', ' ↗'); a.href = f.data.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = 'Open on GitHub'; a.addEventListener('click', (e) => e.stopPropagation()); text.append(a); }
+    li.append(tm, text, el('span', 'who', f.label));
+    li.title = `${f.label} · ${new Date(f.at).toLocaleString()}`;
+    li.addEventListener('click', () => { if (agents.some((a) => a.name === f.agent)) select(f.agent); });
+    return li;
+  }));
+}
+renderFeed();
+
 // ---------- 3D floor (floor3d.js) ----------
 // Vector themes that ship a model.json can be shown in 3D. The flat floor stays as the fallback and as a choice.
-let use3d = false;
+
 const want3d = () => { try { return localStorage.getItem('af:3d') !== 'off'; } catch { return true; } };
+let why3d = '';
+function no3d(reason) {
+  // Say once per reason why the 3D floor isn't on, so a flat floor is never a mystery.
+  if (reason && reason !== why3d) toast(`3D floor off: ${reason}`);
+  why3d = reason; $('viewBtn').title = reason ? `3D floor off: ${reason}` : 'Switch between the 3D and flat floor';
+}
+window.addEventListener('error', (e) => { if (String(e.filename || '').match(/floor3d|vendor/)) no3d(`the 3D code failed to load (${e.message})`); });
+setTimeout(() => { if (!window.Floor3D) no3d('the 3D code did not load (check the browser console)'); }, 4000);
 async function setup3d() {
   const F = window.Floor3D;
-  const can = !!(F && F.supported && theme.kind === 'vector' && theme.model);
+  // The Pixel office has no 3D data of its own; in 3D it borrows the Office theme's cast and room.
+  const office = themesAvail.find((x) => x.id === 'office');
+  const src = theme.kind === 'vector' ? theme : theme.id === 'pixel' && office ? { ...office, id: 'pixel' } : null;
+  const srcUrl = (f) => (src && src.id === 'pixel' ? `/themes/office/${f.split('/').map(encodeURIComponent).join('/')}` : themeUrl(f));
+  if (F && !F.supported) no3d('this browser has WebGL turned off (check hardware acceleration)');
+  if (F && src && !src.model) no3d('this theme has no model.json');
+  const can = !!(F && F.supported && src && src.model);
   $('viewBtn').hidden = !can;
   use3d = false;
   canvas.style.height = '';
-  if (F && F.supported) { F.init(document.querySelector('.stage')); F.setVisible(false); }
+  if (F && F.supported) {
+    F.init(document.querySelector('.stage'), { onSelect: (name) => { const m = /^(.+):h:(.+)$/.exec(name); if (m) { select(m[1]); openHelper(m[1], m[2]); } else select(name); }, onStandup: (text) => { const c = document.querySelector('.o3d-hud .chip'); if (c) c.textContent = text; } });
+    F.setVisible(false);
+  }
+  showHud(false);
   if (!can || !want3d()) { $('viewBtn').textContent = '3D'; $('viewBtn').setAttribute('aria-pressed', 'false'); $('vlayer').hidden = theme.kind !== 'vector'; return; }
   const t = theme;
-  const ok = await F.setTheme(t, themeUrl);
+  theme3d = src;
+  const ok = await F.setTheme(src, srcUrl);
   if (theme !== t) return;
+  no3d(ok ? '' : `could not load ${t.model}`);
   use3d = ok;
   F.setVisible(ok);
-  $('vlayer').hidden = ok;
+  showHud(ok);
+  $('vlayer').hidden = ok || theme.kind !== 'vector';
   $('viewBtn').textContent = ok ? '2D' : '3D';
   $('viewBtn').setAttribute('aria-pressed', String(ok));
   renderTags();
@@ -1959,20 +2203,45 @@ $('viewBtn').addEventListener('click', () => {
   setup3d();
 });
 window.addEventListener('floor3d-ready', setup3d);
+// Camera presets, standup and quality, floating over the 3D office.
+function showHud(on) {
+  const stage = document.querySelector('.stage');
+  stage.classList.toggle('o3d', on && !!(window.Floor3D && window.Floor3D.office));
+  let hud = stage.querySelector('.o3d-hud'), help = stage.querySelector('.o3d-help');
+  if (!on || !(window.Floor3D && window.Floor3D.office)) { if (hud) hud.hidden = true; if (help) help.hidden = true; return; }
+  if (!hud) {
+    hud = el('div', 'o3d-hud');
+    for (const [k, label] of [['overview', 'Overview'], ['desks', 'Desks'], ['meeting', 'Meeting'], ['kitchen', 'Kitchen'], ['lounge', 'Lounge']]) {
+      const b = el('button', '', label); b.type = 'button'; b.addEventListener('click', () => window.Floor3D.preset(k)); hud.append(b);
+    }
+    const su = el('button', '', 'Standup'); su.type = 'button'; su.title = 'Gather everyone at the meeting table; each says what they are on';
+    su.addEventListener('click', () => { if (!window.Floor3D.standup(agents.filter((a) => a.state !== 'stopped').map((a) => a.name))) toast('Nobody to gather yet'); });
+    const q = el('select'); q.title = 'Graphics quality';
+    for (const v of ['low', 'balanced', 'high']) { const o = el('option', '', `${v[0].toUpperCase()}${v.slice(1)} graphics`); o.value = v; q.append(o); }
+    q.value = (() => { try { return localStorage.getItem('af:quality') || window.Floor3D.quality || 'balanced'; } catch { return 'balanced'; } })();
+    window.Floor3D.setQuality(q.value);
+    q.addEventListener('change', () => { window.Floor3D.setQuality(q.value); try { localStorage.setItem('af:quality', q.value); } catch {} });
+    hud.append(su, q, el('span', 'chip'));
+    help = el('div', 'o3d-help', 'Drag to turn · right-drag to move · scroll to zoom · double-click someone to follow · Esc to reset');
+    stage.append(hud, help);
+  }
+  hud.hidden = false; help.hidden = false;
+}
 // What the 3D floor needs to know about each agent this frame.
 function floorAgents() {
   const out = [];
   agents.forEach((a, i) => {
-    const ch = chars.get(a.name);
-    if (!ch) return;
+    const ch = chars.get(a.name) || { x: 0, y: 0, pose: 'sit' };
     const st = displayState(a);
     const party = cheering.get(a.name);
-    const file = party && theme.celebration[party.kind];
+    const file = party && theme3d && theme3d.celebration && theme3d.celebration[party.kind];
     out.push({
-      name: a.name, slot: i, x: ch.x, y: ch.y, pose: ch.pose, selected: a.name === selected, done: st === 'done',
+      name: a.name, label: a.label || a.name, state: st, detail: a.detail, lastPrompt: a.lastPrompt, lastReply: a.lastReply, sessionId: a.sessionId,
+      question: a.question ? (isProse(a) ? a.question.text : (a.question.questions[0] || {}).question) : '', pr: !!(a.git && a.git.pr), stuck: !!a.stuck,
+      slot: i, x: ch.x, y: ch.y, pose: ch.pose, selected: a.name === selected, done: st === 'done',
       role: ch.pose === 'sit' ? st : st === 'done' ? 'done' : 'idle',
       party: file ? { kind: party.kind, file } : null,
-      helpers: helpersShown(a).map((h) => ({ state: h.state })),
+      helpers: helpersShown(a).map((h, k) => ({ id: h.id || String(k), state: h.state })),
     });
   });
   return out;
@@ -2059,8 +2328,7 @@ function renderTags() {
     b.dataset.st = st;
     b.className = `tag ${st === 'waiting' ? 'waiting' : st === 'asking' && needsYou(a) ? 'asking' : st === 'done' ? 'done' : ''} ${a.name === selected ? 'selected' : ''}${bump ? ' bump' : ''}`;
     if (use3d) {
-      const p = window.Floor3D.project(s.seatX - 2, s.seatY + 18), q = window.Floor3D.project(s.seatX - 2 + SLOT_W - 4, s.seatY + 18);
-      b.style.left = `${p.left}px`; b.style.top = `${p.top}px`; b.style.maxWidth = `${Math.max(60, q.left - p.left)}px`;
+      b.style.maxWidth = '200px';
     } else {
       b.style.left = `${s.tagX * scale}px`;
       b.style.top = `${s.tagY * scale}px`;
@@ -2102,9 +2370,13 @@ new ResizeObserver(renderTags).observe(canvas);
 dark.addEventListener('change', renderTags);
 
 // Tell the server when this dashboard is on screen, so it doesn't notify you about what you can already see.
-function reportVisible() { if (!document.hidden) api('POST', '/api/visible', { visible: true }).catch(() => {}); }
+// "On screen" means this window has focus, not just that its tab is open behind other windows.
+const onScreen = () => !document.hidden && document.hasFocus();
+function reportVisible() { api('POST', '/api/visible', { visible: onScreen() }).catch(() => {}); }
 document.addEventListener('visibilitychange', reportVisible);
-setInterval(reportVisible, 10000);
+window.addEventListener('focus', reportVisible);
+window.addEventListener('blur', reportVisible);
+setInterval(() => { if (onScreen()) reportVisible(); }, 10000);
 reportVisible();
 
 loadThemes();

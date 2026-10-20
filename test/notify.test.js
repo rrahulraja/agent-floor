@@ -42,6 +42,11 @@ test('senders: desktop command, Slack and ntfy payloads', () => {
   assert.equal(cmd, 'osascript');
   assert.deepEqual(args.slice(-2), ['T "quoted"', 'D']);
   assert.equal(N.desktopCommand('win32', 't', 'd'), null);
+  const [, withSound] = N.desktopCommand('darwin', 'T', 'D', 'Glass');
+  assert.ok(withSound.some((x) => x.includes('sound name (item 3 of argv)')));
+  assert.equal(withSound[withSound.length - 1], 'Glass');
+  const [, silent] = N.desktopCommand('darwin', 'T', 'D', 'none');
+  assert.ok(!silent.some((x) => x.includes('sound name')));
   const msg = { event: 'pr', title: 'X opened PR #1', detail: 'acme/shop', url: 'https://github.com/acme/shop/pull/1' };
   assert.equal(N.slackPayload(msg).text, '*X opened PR #1*\nacme/shop\n<https://github.com/acme/shop/pull/1>');
   const r = N.ntfyRequest({ server: 'https://ntfy.example/', topic: 'abc', token: 'tk' }, msg);
