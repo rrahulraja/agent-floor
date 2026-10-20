@@ -103,9 +103,21 @@ async function listSessions() {
   return map;
 }
 
-async function capture(name) {
-  const r = await tmux('capture-pane', '-p', '-J', '-t', target(name), '-S', '-120');
+async function capture(name, lines = 120) {
+  const r = await tmux('capture-pane', '-p', '-J', '-t', target(name), '-S', `-${lines}`);
   return r.ok ? r.stdout.replace(/\s+$/, '') : '';
+}
+
+// Agents started here get a status line that records plan usage (5-hour and weekly limits) for the header.
+// It is passed with --settings, so the user's own ~/.claude/settings.json is never touched.
+const STATUSLINE_SETTINGS = path.join(DATA_DIR, 'claude-settings.json');
+function statuslineArgs() {
+  if (!CONFIG.get('usage.statusline')) return '';
+  const script = path.join(__dirname, 'bin', 'statusline.js');
+  const settings = { statusLine: { type: 'command', command: `"${process.execPath}" "${script}"`, padding: 0 } };
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(STATUSLINE_SETTINGS, JSON.stringify(settings, null, 2));
+  return ` --settings '${STATUSLINE_SETTINGS.replace(/'/g, `'\\''`)}'`;
 }
 
 // conversation: '' = start fresh, 'latest' = the newest conversation in the folder, otherwise a session id.
@@ -130,6 +142,7 @@ async function startAgent(name, cwd, conversation) {
     sessionId = crypto.randomUUID();
     cmd += ` --session-id ${sessionId}`;
   }
+  cmd += statuslineArgs();
   const r = await tmux('new-session', '-d', '-s', PREFIX + name, '-c', cwd, '-x', '160', '-y', '48',
     '-e', `PATH=${process.env.PATH}`, cmd);
   if (!r.ok) throw new Error(r.stderr || 'tmux could not start the session');
@@ -450,6 +463,20 @@ function contextFor(a, info) {
   return { used, window, pct, level, model: info.model, source, override: !!a.contextWindow };
 }
 
+// Plan usage saved by bin/statusline.js (account-wide, so one reading covers every agent).
+let usageCache = { mtimeMs: 0, value: null };
+function planUsage() {
+  const file = path.join(DATA_DIR, 'usage.json');
+  try {
+    const st = fs.statSync(file);
+    if (st.mtimeMs !== usageCache.mtimeMs) usageCache = { mtimeMs: st.mtimeMs, value: JSON.parse(fs.readFileSync(file, 'utf8')) };
+  } catch { usageCache = { mtimeMs: 0, value: null }; }
+  const u = usageCache.value;
+  if (!u) return null;
+  const fresh = (l) => (l && (!l.resetsAt || l.resetsAt > Date.now()) ? l : l ? { pct: 0, resetsAt: 0, reset: true } : null); // past its reset: back to 0
+  return { fiveHour: fresh(u.fiveHour), sevenDay: fresh(u.sevenDay), at: u.at || 0 };
+}
+
 function settingsForPage() {
   const c = CONFIG.all();
   return {
@@ -561,7 +588,7 @@ async function poll() {
     const { fileStamp, lastChangeAt, screenAt, lastDispatchAt, ...pub } = item;
     agents.push(pub);
   }
-  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage() };
+  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage() };
   const json = JSON.stringify(snapshot);
   if (json !== snapshotJson) {
     snapshotJson = json;
@@ -795,6 +822,12 @@ const server = http.createServer(async (req, res) => {
       const q = String(url.searchParams.get('q') || '').trim();
       if (q.length < 2) return send(res, 400, { error: 'Search for at least 2 characters.' });
       return send(res, 200, await searchTranscripts(q.slice(0, 200)));
+    }
+    const sc = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})\/screen$/);
+    if (req.method === 'GET' && sc) {
+      if (!saved.find((a) => a.name === sc[1])) return send(res, 404, { error: `No agent called ${sc[1]}.` });
+      const lines = Math.max(200, Math.min(20000, Number(url.searchParams.get('lines')) || 5000));
+      return send(res, 200, { screen: await capture(sc[1], lines), lines });
     }
     const tl = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})\/timeline$/);
     if (req.method === 'GET' && tl) {
