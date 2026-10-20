@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -16 60 96"><title>Jambavan: data</title><style>
+.ink{fill:#1E2235}.line{fill:none;stroke:#1E2235;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:round}
+.bob{animation:bob 2.6s ease-in-out infinite}@keyframes bob{50%{transform:translateY(-.8px)}}
+.tl{animation:tap .45s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:top}
+.tr{animation:tap .45s ease-in-out infinite alternate-reverse;transform-box:fill-box;transform-origin:top}
+@keyframes tap{to{transform:rotate(-7deg)}}
+.wave{animation:wave .9s ease-in-out infinite alternate;transform-origin:44px 44px}@keyframes wave{to{transform:rotate(16deg)}}
+.sway{animation:sway 2.4s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:bottom}@keyframes sway{from{transform:rotate(-6deg)}to{transform:rotate(7deg)}}
+.trunk{animation:trunk 3s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:top}@keyframes trunk{to{transform:rotate(-8deg)}}
+.notes text{animation:note 3s ease-out infinite;opacity:0}.notes text:nth-child(2){animation-delay:1s}.notes text:nth-child(3){animation-delay:2s}
+@keyframes note{15%{opacity:1}100%{opacity:0;transform:translate(8px,-22px)}}
+.pull{animation:pull 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:right}@keyframes pull{50%{transform:translateX(-3px)}}
+.spark{animation:spark 1s steps(2) infinite}@keyframes spark{50%{opacity:.25}}
+.glow{animation:glow 2s ease-in-out infinite}@keyframes glow{50%{opacity:.55}}
+.flicker{animation:flick 2.2s steps(3) infinite}@keyframes flick{40%{opacity:.75}60%{opacity:.95}}
+.pop{animation:pop 1.4s ease-in-out infinite}@keyframes pop{50%{transform:translateY(-2px)}}
+.dots circle{animation:dot 1.2s infinite;opacity:.2}.dots circle:nth-child(2){animation-delay:.2s}.dots circle:nth-child(3){animation-delay:.4s}@keyframes dot{40%{opacity:1}}
+.scribble{stroke-dasharray:18;stroke-dashoffset:18;animation:scr 2.4s linear infinite}@keyframes scr{60%,100%{stroke-dashoffset:0}}
+.zz text{animation:zz 2.6s ease-out infinite;opacity:0}.zz text:nth-child(2){animation-delay:1.3s}@keyframes zz{20%{opacity:1}100%{opacity:0;transform:translate(6px,-14px)}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}.notes text,.zz text{opacity:0}.scribble{stroke-dashoffset:0}}</style><g class="bob"><path d="M11 80 V51 q0 -13 19 -13 q19 0 19 13 V80 Z" fill="#8B5A2B"/><path d="M23 38 L30 52 L37 38 Z" fill="#5E3A1A"/><path d="M30 52 V80" stroke="#5E3A1A" stroke-width="2"/><circle cx="19" cy="11" r="5" fill="#4A3426"/><circle cx="41" cy="11" r="5" fill="#4A3426"/><circle cx="30" cy="22" r="13" fill="#4A3426"/><ellipse cx="30" cy="27" rx="7" ry="5.5" fill="#C9A27A"/><ellipse cx="30" cy="25" rx="2.4" ry="1.6" class="ink"/><circle cx="25" cy="20" r="1.4" class="ink"/><circle cx="35" cy="20" r="1.4" class="ink"/><g class=""><path d="M16 44 q-5 10 8 14" fill="none" stroke="#8B5A2B" stroke-width="6.5" stroke-linecap="round"/></g><g class=""><path d="M44 44 q5 10 -8 14" fill="none" stroke="#8B5A2B" stroke-width="6.5" stroke-linecap="round"/></g><circle cx="24" cy="58" r="3.4" fill="#4A3426"/><circle cx="36" cy="58" r="3.4" fill="#4A3426"/><circle class="glow" cx="30" cy="54" r="7" fill="#9FC8F2"/><circle cx="27" cy="51" r="2" fill="#fff" opacity=".7"/><rect x="24" y="60" width="12" height="3" rx="1" fill="#8B5A2B"/></g></svg>

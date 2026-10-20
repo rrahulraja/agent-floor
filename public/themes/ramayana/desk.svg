@@ -1,0 +1,4 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 40"><style>.fl{animation:f .4s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:bottom}@keyframes f{to{transform:scale(.85,1.15)}}@media (prefers-reduced-motion: reduce){*{animation:none!important}}</style>
+<path d="M6 16 q8 -10 18 0z" fill="#3E8A5A"/><path d="M14 16 v-8" stroke="#2E6B3A"/><path d="M46 13 q5 3 10 0 l-1.5 3 h-7z" fill="#B0603A"/><path class="fl" d="M51 12 q-2.5 -4 0 -7 q2.5 3 0 7z" fill="#FFB347"/>
+<rect x="0" y="16" width="64" height="5" rx="2" fill="#8B6A3E"/><rect x="2" y="21" width="60" height="11" fill="#6B4E2E"/><path d="M4 24 h56 M4 28 h56" stroke="#5A3E22" stroke-width=".8"/>
+<rect x="5" y="32" width="5" height="8" fill="#5A3E22"/><rect x="54" y="32" width="5" height="8" fill="#5A3E22"/></svg>

@@ -13,6 +13,17 @@ A theme only changes how things *look*. Where agents sit, walking between desk, 
 
 The folder name must match the theme's `id`. Built-in themes win if two themes share an id, and `pixel` is reserved.
 
+## How the built-in themes are made
+
+All flat-vector themes except *Example office* are generated from small data files in `tools/themes/specs/` by a character builder (`tools/themes/character.js`): each character is described by skin, hair, beard, crown or hat, clothes, a prop (flute, bow, mace, wand, cauldron, walkie-talkie…), a pose and an animation. Change a spec and run:
+
+```bash
+npm run build:themes
+node tools/themes/sheet.js public/themes/mahabharata /tmp/cast.svg   # a contact sheet of the whole cast
+```
+
+You can use the same builder for your own theme: add a spec file, build, then copy the generated folder to `~/.agent-floor/themes/`.
+
 ## Start from the example
 
 ```bash
@@ -59,6 +70,7 @@ Reload the dashboard and pick it from the theme menu. The choice is saved in `~/
 | `tint` | no | `true` gives each agent its own colour by rotating the image's hue |
 | `size.sit` | no | Character width in floor units (default 30; a desk is 64) |
 | `size.helper` | no | Helper (subagent) width in floor units (default 14) |
+| `size.aspect` | no | Character height ÷ width (default 4/3); the bottom edge sits on the seat |
 
 ### Roles
 

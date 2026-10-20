@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 58"><style>.fl{animation:f 1.2s steps(2) infinite}@keyframes f{50%{transform:translateY(1px)}}@media (prefers-reduced-motion: reduce){*{animation:none!important}}</style>
+<rect width="120" height="58" fill="#A6452E"/><rect y="48" width="120" height="3" fill="#D9A441"/><rect y="51" width="120" height="7" fill="#8C3824"/>
+<path d="M22 46 V22 Q22 6 60 6 Q98 6 98 22 V46 Z" fill="#D9A441"/>
+<clipPath id="a"><path d="M26 44 V23 Q26 10 60 10 Q94 10 94 23 V44 Z"/></clipPath>
+<g clip-path="url(#a)"><rect x="20" y="8" width="80" height="12" fill="#4B4F9A"/><rect x="20" y="20" width="80" height="8" fill="#C9608A"/><rect x="20" y="28" width="80" height="6" fill="#F2945A"/><circle cx="72" cy="30" r="5" fill="#FFB347"/>
+<rect x="20" y="34" width="80" height="12" fill="#C8A06A"/>
+<g fill="#4A3426"><rect x="34" y="35" width="10" height="4" rx="1"/><circle cx="36" cy="40" r="1.6"/><circle cx="42" cy="40" r="1.6"/><rect x="38.5" y="27" width="1" height="8"/></g><path class="fl" d="M39.5 27 h5 l-1.5 2 h-3.5z" fill="#F2B825"/>
+<g fill="#4A3426"><rect x="66" y="36" width="9" height="4" rx="1"/><circle cx="68" cy="41" r="1.5"/><circle cx="73" cy="41" r="1.5"/><rect x="70" y="29" width="1" height="7"/></g><path class="fl" d="M71 29 h5 l-1.5 2 h-3.5z" fill="#C8352E"/>
+<g fill="#5A5A5A"><rect x="80" y="35" width="10" height="5" rx="2"/><rect x="88" y="37" width="2" height="4"/><rect x="81" y="39" width="2" height="3"/><rect x="87" y="39" width="2" height="3"/></g></g>
+<path d="M60 6 V44" stroke="#D9A441" stroke-width="2"/><g fill="#E8B830"><circle cx="8" cy="20" r="2"/><circle cx="112" cy="20" r="2"/></g><path d="M4 30 h12 M104 30 h12" stroke="#D9A441" stroke-width="1"/></svg>

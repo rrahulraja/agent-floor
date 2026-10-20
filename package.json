@@ -4,7 +4,7 @@
   "description": "One local dashboard for all your Claude Code agents, shown as characters in an office.",
   "main": "server.js",
   "bin": { "agent-floor": "server.js" },
-  "scripts": { "start": "node server.js", "test": "node --test test/*.test.js" },
+  "scripts": { "start": "node server.js", "test": "node --test test/*.test.js", "build:themes": "node tools/themes/build.js" },
   "engines": { "node": ">=18" },
   "license": "MIT"
 }

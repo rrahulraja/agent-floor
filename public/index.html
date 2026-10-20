@@ -1820,7 +1820,7 @@ function renderVector(rows) {
   if (wall) wall.style.height = `${(WALL / H) * 100}%`;
   if (t.room.floor) $('vlayer').style.backgroundSize = `${(24 / W) * 100}% auto`;
   if (t.room.lounge) vImg('lounge', themeUrl(t.room.lounge), 296 + DX(), WALL + 18, 88, WALL + 18);
-  const sit = t.size.sit, sitH = sit * 4 / 3;
+  const sit = t.size.sit, aspect = t.size.aspect || 4 / 3;
   for (let i = 0; i < rows * COLS; i++) {
     const s = slot(i);
     vImg(`desk${i}`, themeUrl(t.room.desk), s.sx + 2, s.sy + 6, 64, s.sy + 27.5);
@@ -1831,7 +1831,7 @@ function renderVector(rows) {
     const party = cheering.get(a.name);
     const st = displayState(a);
     const role = ch.pose === 'sit' ? st : st === 'done' ? 'done' : 'idle';
-    const w = ch.pose === 'sit' ? sit : sit * 0.9, h = w * 4 / 3;
+    const w = ch.pose === 'sit' ? sit : sit * 0.9, h = w * aspect;
     const tint = t.tint ? `hue-rotate(${hash(a.name) % 360}deg)` : '';
     vImg(`p:${a.name}`, themeUrl(roleAsset(role)), ch.x - w / 2, ch.y - h, w, ch.y, ch.pose === 'walk' ? 'walk' : party && !reducedMotion.matches ? 'hop' : '', tint);
     if (party) {
@@ -1841,7 +1841,7 @@ function renderVector(rows) {
     const shown = helpersShown(a);
     const s = slot(i);
     const hw = t.size.helper;
-    if (t.roles.helper) shown.forEach((hp, k) => vImg(`h:${a.name}:${k}`, themeUrl(t.roles.helper), s.sx + 46 + k * (hw * 0.7), s.sy + 24 - hw * 4 / 3, hw, s.sy + 24, hp.state === 'working' ? 'walk' : '', tint));
+    if (t.roles.helper) shown.forEach((hp, k) => vImg(`h:${a.name}:${k}`, themeUrl(t.roles.helper), s.sx + 46 + k * (hw * 0.7), s.sy + 24 - hw * aspect, hw, s.sy + 24, hp.state === 'working' ? 'walk' : '', tint));
   });
   for (const [k, img] of vEls) if (!img.dataset.live) { img.remove(); vEls.delete(k); }
 }

@@ -93,7 +93,20 @@ tmux attach -t cc-billing     # detach again with Ctrl-b d
 
 Nothing is sent while a dashboard tab is on screen (you can already see it). Each alert carries the agent name, the project folder, what happened, and one short detail line (the question, the command waiting for approval, the branch), trimmed to 120 characters. That line is the only piece of your work that leaves the machine, and only to the channels you turn on. Settings has a *Send a test notification* button.
 
-**Themes.** Pick a theme from the menu in the header; Agent Floor remembers it. It comes with *Pixel office* (the default) and *Example office*, a flat-vector theme you can copy. Your own themes go in `~/.agent-floor/themes/<id>/`: a `theme.json` plus SVG or PNG images, one character per kind of work. See [docs/themes.md](docs/themes.md).
+**Themes.** Pick a theme from the menu in the header; Agent Floor remembers it. In every theme the character at a desk shows what that agent is doing, and its name tag says who it is (for example *Drona · Testing*).
+
+| Theme | Setting | A few of the cast |
+| --- | --- | --- |
+| Pixel office (default) | Pixel-art office | Your agents as little office workers |
+| [Office](public/themes/office/README.md) | Bright modern office | Product lead plans, developer writes, QA tests, SRE deploys, data analyst queries |
+| [Mahabharata](public/themes/mahabharata/README.md) | Pavilion at Kurukshetra | Krishna plans, Ganesha writes, Arjuna runs commands, Drona tests, Bhima builds, Bhishma waits for you |
+| [Ramayana](public/themes/ramayana/README.md) | Forest ashram by the sea | Valmiki writes, Rama runs commands, Lakshmana tests, Nala builds the bridge, Hanuman deploys, Kumbhakarna sleeps |
+| [Wizard school](public/themes/wizard-school/README.md) | Castle classroom | Headmaster plans, Alchemist tests, Owl courier deploys, the Talking hat asks questions |
+| [Space saga](public/themes/space-saga/README.md) | Starship hangar | Admiral plans, robot clerk writes, mechanic builds, starfighter launches deploys |
+| [Small town, 1980s](public/themes/small-town-80s/README.md) | Basement HQ | Game master plans, science teacher tests, ham-radio kid builds, police chief reviews |
+| [Example office](public/themes/example/README.md) | Minimal office | The smallest theme, to copy when making your own |
+
+The wizard, space and 1980s themes are original characters inspired by those genres, not copies of any film or book. Your own themes go in `~/.agent-floor/themes/<id>/`: a `theme.json` plus SVG or PNG images, one character per kind of work. See [docs/themes.md](docs/themes.md).
 
 **Settings.** Every threshold above (context window size, warning levels, stuck minutes, how loud a "?" reply is, desks per row, refresh rates, celebrations…) is a setting. Open **Settings** in the header, or edit `~/.agent-floor/config.json`, which only stores what you changed. Each agent's context window can also be set from its panel.
 

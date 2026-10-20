@@ -1,0 +1,66 @@
+{
+  "id": "office",
+  "name": "Office",
+  "version": "1.0.0",
+  "author": "agent-floor",
+  "description": "A bright modern office. The product lead plans, the developer writes, QA tests, the SRE deploys, the data analyst queries.",
+  "kind": "vector",
+  "tint": false,
+  "room": {
+    "wall": "wall.svg",
+    "floor": "floor.svg",
+    "desk": "desk.svg",
+    "lounge": "lounge.svg",
+    "wallColor": "#DDE3EF",
+    "floorColor": "#B9C9A7"
+  },
+  "roles": {
+    "default": "thinking.svg",
+    "planning": "planning.svg",
+    "writing": "writing.svg",
+    "reading": "reading.svg",
+    "running": "running.svg",
+    "tests": "tests.svg",
+    "build": "build.svg",
+    "deploy": "deploy.svg",
+    "data": "data.svg",
+    "review": "review.svg",
+    "git": "git.svg",
+    "delegating": "delegating.svg",
+    "browsing": "browsing.svg",
+    "thinking": "thinking.svg",
+    "waiting": "waiting.svg",
+    "asking": "asking.svg",
+    "idle": "idle.svg",
+    "done": "done.svg",
+    "helper": "helper.svg"
+  },
+  "celebration": {
+    "push": "rocket.svg",
+    "pr": "party.svg"
+  },
+  "labels": {
+    "planning": "Product lead · Planning",
+    "writing": "Developer · Writing code",
+    "reading": "Tech lead · Reading the code",
+    "running": "Engineer · Running a command",
+    "tests": "QA · Testing",
+    "build": "Build engineer · Building",
+    "deploy": "SRE · Deploying",
+    "data": "Data analyst · Querying",
+    "review": "Staff engineer · Reviewing",
+    "git": "Release manager · Git work",
+    "delegating": "Manager · Handing off",
+    "browsing": "Researcher · Browsing",
+    "thinking": "Architect · Thinking",
+    "waiting": "Needs your approval",
+    "asking": "Has a question",
+    "idle": "Coffee break",
+    "done": "Shipped it · Done"
+  },
+  "size": {
+    "sit": 30,
+    "helper": 13,
+    "aspect": 1.6
+  }
+}

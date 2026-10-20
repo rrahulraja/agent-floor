@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 58"><style>.l{animation:l 1.6s steps(2) infinite}.l2{animation-delay:.8s}@keyframes l{50%{opacity:.25}}@media (prefers-reduced-motion: reduce){*{animation:none!important}}</style>
+<rect width="120" height="58" fill="#C9B08A"/><g stroke="#B8986A" stroke-width=".8"><path d="M10 0 v50 M30 0 v50 M50 0 v50 M70 0 v50 M90 0 v50 M110 0 v50"/></g>
+<rect x="44" y="4" width="32" height="14" fill="#2A3A2A"/><path d="M44 18 l6 -6 l6 4 l8 -8 l12 10" fill="none" stroke="#6E7A5A" stroke-width="1.2"/>
+<path d="M4 26 Q30 20 60 26 T116 26" fill="none" stroke="#2F3A2E" stroke-width=".6"/>
+<g class="l"><circle cx="10" cy="25" r="1.6" fill="#F2545B"/><circle cx="34" cy="22" r="1.6" fill="#5CC793"/><circle cx="58" cy="26" r="1.6" fill="#F2B825"/><circle cx="82" cy="24" r="1.6" fill="#3B6FD8"/><circle cx="106" cy="26" r="1.6" fill="#F2545B"/></g>
+<g class="l l2"><circle cx="22" cy="23" r="1.6" fill="#F2B825"/><circle cx="46" cy="24" r="1.6" fill="#3B6FD8"/><circle cx="70" cy="25" r="1.6" fill="#F2545B"/><circle cx="94" cy="24" r="1.6" fill="#5CC793"/></g>
+<g font-family="Arial,sans-serif" font-weight="700" font-size="5" fill="#2F3A2E"><text x="8" y="34">A B C D E F G</text><text x="62" y="34">R S T U V W</text></g>
+<rect x="88" y="36" width="20" height="12" fill="#2E5A8E"/><text x="98" y="44" text-anchor="middle" font-size="4" fill="#F2B825" font-family="Arial">ARCADE</text><rect y="50" width="120" height="8" fill="#6B5A4A"/></svg>

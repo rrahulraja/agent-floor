@@ -1,0 +1,66 @@
+{
+  "id": "wizard-school",
+  "name": "Wizard school",
+  "version": "1.0.0",
+  "author": "agent-floor",
+  "description": "A castle classroom. The Headmaster plans, the Alchemist tests, the Owl courier deploys, the Talking hat asks questions. Original characters.",
+  "kind": "vector",
+  "tint": false,
+  "room": {
+    "wall": "wall.svg",
+    "floor": "floor.svg",
+    "desk": "desk.svg",
+    "lounge": "lounge.svg",
+    "wallColor": "#5A5A6E",
+    "floorColor": "#6E5A4A"
+  },
+  "roles": {
+    "default": "thinking.svg",
+    "planning": "planning.svg",
+    "writing": "writing.svg",
+    "reading": "reading.svg",
+    "running": "running.svg",
+    "tests": "tests.svg",
+    "build": "build.svg",
+    "deploy": "deploy.svg",
+    "data": "data.svg",
+    "review": "review.svg",
+    "git": "git.svg",
+    "delegating": "delegating.svg",
+    "browsing": "browsing.svg",
+    "thinking": "thinking.svg",
+    "waiting": "waiting.svg",
+    "asking": "asking.svg",
+    "idle": "idle.svg",
+    "done": "done.svg",
+    "helper": "helper.svg"
+  },
+  "celebration": {
+    "push": "owl.svg",
+    "pr": "fireworks.svg"
+  },
+  "labels": {
+    "planning": "The Headmaster · Planning",
+    "writing": "The Scribe · Writing code",
+    "reading": "The Bookworm · Reading",
+    "running": "The Spellcaster · Running",
+    "tests": "Alchemist · Testing",
+    "build": "The Groundskeeper · Building",
+    "deploy": "Owl courier · Delivering (deploy)",
+    "data": "The Seer · Gazing into data",
+    "review": "The Professor · Reviewing",
+    "git": "Mapkeeper · Tracking every path (git)",
+    "delegating": "Head prefect · Handing out tasks",
+    "browsing": "Broom scout · Looking far",
+    "thinking": "The Daydreamer · Thinking",
+    "waiting": "Eager student · Needs you",
+    "asking": "Talking hat · Has a question",
+    "idle": "Dozing by the fire",
+    "done": "Gold star · Done"
+  },
+  "size": {
+    "sit": 30,
+    "helper": 13,
+    "aspect": 1.6
+  }
+}
