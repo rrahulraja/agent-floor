@@ -19,6 +19,7 @@ const C = require('./lib/control');
 const N = require('./lib/notify');
 const Hist = require('./lib/history');
 const readline = require('readline');
+const Themes = require('./lib/themes');
 
 const PORT = Number(process.env.PORT || 4777);
 const HOST = '127.0.0.1';
@@ -35,6 +36,8 @@ const PROMPTS = C.jsonStore(path.join(DATA_DIR, 'prompts.json'), () => C.cleanPr
 const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
 const { short, textOf } = T;
 const INDEX_FILE = path.join(__dirname, 'public', 'index.html');
+const BUILTIN_THEMES = path.join(__dirname, 'public', 'themes');
+const USER_THEMES = process.env.AGENT_FLOOR_THEMES_DIR || path.join(os.homedir(), '.agent-floor', 'themes');
 
 // ---------- helpers ----------
 function run(cmd, args, opts = {}) {
@@ -450,7 +453,7 @@ function contextFor(a, info) {
 function settingsForPage() {
   const c = CONFIG.all();
   return {
-    theme: c.theme, desksPerRow: c.desksPerRow, proseQuestion: c.proseQuestion, maxHelpersShown: c.maxHelpersShown,
+    theme: themeList().some((t) => t.id === c.theme && t.ok) ? c.theme : 'pixel', desksPerRow: c.desksPerRow, proseQuestion: c.proseQuestion, maxHelpersShown: c.maxHelpersShown,
     celebrateSeconds: c['celebrate.seconds'], contextWarnPct: c.contextWarnPct, contextAlertPct: c.contextAlertPct,
     savedPromptClick: c.savedPromptClick, prompts: PROMPTS.get(), desktopNotify: c['notify.desktop'],
   };
@@ -655,6 +658,37 @@ async function searchTranscripts(q) {
   return { results, partial };
 }
 
+// ---------- themes ----------
+const themeFolders = () => [{ dir: BUILTIN_THEMES, builtin: true }, { dir: USER_THEMES }];
+let themeCache = { at: 0, list: null };
+function themeList() {
+  if (themeCache.list && Date.now() - themeCache.at < 5000) return themeCache.list;
+  themeCache = { at: Date.now(), list: readThemes() };
+  return themeCache.list;
+}
+function readThemes() {
+  const pixel = { id: 'pixel', name: 'Pixel office', description: 'The built-in pixel-art office.', builtin: true, ok: true, kind: 'pixel' };
+  return [pixel, ...Themes.listThemes(themeFolders()).map((t) => ({ ...t.theme, builtin: t.builtin, ok: t.ok, problems: t.problems }))];
+}
+const THEME_TYPES = { '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
+function serveThemeFile(res, id, file) {
+  if (!Themes.ID_RE.test(id) || !Themes.safeFile(file)) { res.writeHead(404); return res.end(); }
+  for (const { dir } of themeFolders()) {
+    const base = path.join(dir, id);
+    const full = path.resolve(base, file);
+    if (!full.startsWith(base + path.sep)) continue;
+    let st; try { st = fs.statSync(full); } catch { continue; }
+    if (!st.isFile()) continue;
+    // A theme file opened directly must not be able to run script in this origin.
+    res.writeHead(200, {
+      'Content-Type': THEME_TYPES[path.extname(full).toLowerCase()] || 'application/octet-stream', 'Cache-Control': 'no-cache',
+      'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:", 'X-Content-Type-Options': 'nosniff',
+    });
+    return fs.createReadStream(full).pipe(res);
+  }
+  res.writeHead(404); return res.end();
+}
+
 // ---------- notifications ----------
 let lastVisibleAt = 0; // last time a dashboard tab said it was on screen
 const notifyOnce = N.createDeduper();
@@ -753,6 +787,9 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/state') return send(res, 200, snapshot);
     if (req.method === 'GET' && p === '/api/config') return send(res, 200, { schema: CONFIG.schema(), values: CONFIG.all(), problems: CONFIG.problems() });
+    if (req.method === 'GET' && p === '/api/themes') return send(res, 200, { themes: themeList(), current: CONFIG.get('theme'), userDir: USER_THEMES });
+    const tf = p.match(/^\/themes\/([^/]+)\/(.+)$/);
+    if (req.method === 'GET' && tf) return serveThemeFile(res, tf[1], decodeURIComponent(tf[2]));
     if (req.method === 'GET' && p === '/api/digest') return send(res, 200, await digestFor(url.searchParams.get('date')));
     if (req.method === 'GET' && p === '/api/search') {
       const q = String(url.searchParams.get('q') || '').trim();
@@ -783,7 +820,9 @@ const server = http.createServer(async (req, res) => {
     if (req.headers['x-agent-floor'] !== '1') return send(res, 403, { error: 'Missing X-Agent-Floor header' });
 
     if (req.method === 'POST' && p === '/api/config') {
-      const r = CONFIG.set((await readBody(req)).patch || {});
+      const patch = (await readBody(req)).patch || {};
+      if (patch.theme && !themeList().some((t) => t.id === patch.theme && t.ok)) return send(res, 400, { error: `There is no usable theme called "${patch.theme}".` });
+      const r = CONFIG.set(patch);
       if (!r.ok) return send(res, 400, { error: Object.values(r.errors).join('. '), errors: r.errors });
       await poll();
       return send(res, 200, { ok: true, values: CONFIG.all() });
@@ -929,6 +968,15 @@ const server = http.createServer(async (req, res) => {
     send(res, 500, { error: e.message || 'Something went wrong' });
   }
 });
+
+// `node server.js --check-theme <folder>`: validate a theme while you build it.
+if (process.argv[2] === '--check-theme') {
+  const dir = path.resolve(process.argv[3] || '.');
+  const r = Themes.loadThemeDir(dir);
+  if (r.ok) console.log(`✓ ${r.theme.name} (${r.theme.id}) looks good. Roles: ${Object.keys(r.theme.roles).join(', ')}`);
+  else { console.error(`✗ ${dir}`); for (const pr of r.problems) console.error(`  - ${pr}`); }
+  process.exit(r.ok ? 0 : 1);
+}
 
 (async () => {
   const v = await tmux('-V');

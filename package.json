@@ -1,7 +1,7 @@
 {
   "name": "agent-floor",
   "version": "0.1.0",
-  "description": "One local dashboard for many Claude Code agents, shown as pixel characters in an office.",
+  "description": "One local dashboard for all your Claude Code agents, shown as characters in an office.",
   "main": "server.js",
   "bin": { "agent-floor": "server.js" },
   "scripts": { "start": "node server.js", "test": "node --test test/*.test.js" },

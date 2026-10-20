@@ -93,6 +93,8 @@ tmux attach -t cc-billing     # detach again with Ctrl-b d
 
 Nothing is sent while a dashboard tab is on screen (you can already see it). Each alert carries the agent name, the project folder, what happened, and one short detail line (the question, the command waiting for approval, the branch), trimmed to 120 characters. That line is the only piece of your work that leaves the machine, and only to the channels you turn on. Settings has a *Send a test notification* button.
 
+**Themes.** Pick a theme from the menu in the header; Agent Floor remembers it. It comes with *Pixel office* (the default) and *Example office*, a flat-vector theme you can copy. Your own themes go in `~/.agent-floor/themes/<id>/`: a `theme.json` plus SVG or PNG images, one character per kind of work. See [docs/themes.md](docs/themes.md).
+
 **Settings.** Every threshold above (context window size, warning levels, stuck minutes, how loud a "?" reply is, desks per row, refresh rates, celebrations…) is a setting. Open **Settings** in the header, or edit `~/.agent-floor/config.json`, which only stores what you changed. Each agent's context window can also be set from its panel.
 
 Agents you add are remembered in `~/.agent-floor/agents.json`, so after a reboot they appear as stopped and you can restart them on their latest conversation with one click.
@@ -128,6 +130,7 @@ Anyone with access to your user account can still type into your agents through 
 - Questions with several parts or multiple choice are shown in the panel but answered in the terminal.
 - The context window is worked out from the model in the transcript (1M for Opus/Sonnet 4.6+ and Fable, 200k for Haiku and older); set it per agent in the panel if a session runs with a smaller window.
 - The office grows as you add agents; desks per row is a setting.
+- Themes are images only; they can't change how the dashboard works or run code.
 
 ## Development
 

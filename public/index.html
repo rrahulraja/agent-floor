@@ -69,7 +69,18 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .layout { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) var(--panel-w, 520px); min-height: 0; }
 .floor { padding: 20px; overflow: auto; }
 .stage { position: relative; width: 100%; max-width: 1180px; margin: 0 auto; }
-#office { display: block; width: 100%; image-rendering: pixelated; border-radius: 4px; cursor: pointer; }
+#office { position: relative; z-index: 1; display: block; width: 100%; image-rendering: pixelated; border-radius: 4px; cursor: pointer; }
+.vlayer { position: absolute; inset: 0; overflow: hidden; border-radius: 4px; background-repeat: repeat; }
+.vlayer img, .vlayer .wall { position: absolute; display: block; pointer-events: none; user-select: none; }
+.vlayer .wall { left: 0; top: 0; width: 100%; background-repeat: repeat-x; background-size: auto 100%; }
+.vlayer img.walk { animation: v-walk .35s ease-in-out infinite alternate; }
+.vlayer img.hop { animation: v-hop .3s ease-in-out infinite alternate; }
+.vlayer img.cel { animation: v-pop 1s ease-in-out infinite; }
+@keyframes v-walk { to { transform: translateY(-4%); } }
+@keyframes v-hop { to { transform: translateY(-12%); } }
+@keyframes v-pop { 50% { transform: scale(1.15) rotate(-6deg); } }
+@media (prefers-reduced-motion: reduce) { .vlayer img { animation: none !important; } }
+.theme-sel { padding: 6px 8px; }
 .tags { position: absolute; inset: 0; pointer-events: none; }
 .tag {
   position: absolute; transform: translateX(-50%); pointer-events: auto;
@@ -257,6 +268,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <button class="btn" id="todayBtn">Today</button>
   <button class="btn" id="searchBtn">Search</button>
   <button class="btn" id="broadcastBtn">Broadcast</button>
+  <select class="btn theme-sel" id="themeSel" aria-label="Theme" title="Theme"><option value="pixel">Pixel office</option></select>
   <button class="btn" id="settingsBtn">Settings</button>
   <button class="btn primary" id="addBtn">Add agent</button>
 </header>
@@ -264,6 +276,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 <main class="layout">
   <section class="floor" aria-label="Office floor">
     <div class="stage">
+      <div class="vlayer" id="vlayer" hidden></div>
       <canvas id="office" width="384" height="208" aria-hidden="true"></canvas>
       <div class="tags" id="tags"></div>
     </div>
@@ -501,6 +514,7 @@ function onSnapshot(list, st) {
   if (st) {
     settings = { ...settings, ...st };
     if (COLS !== settings.desksPerRow) { COLS = settings.desksPerRow; applyLayout(); }
+    if (settings.theme && settings.theme !== theme.id) useTheme(settings.theme);
   }
   for (const a of list) {
     const before = prevStates[a.name];
@@ -1641,14 +1655,15 @@ function frame(now) {
   const date = localNow();
   const phase = phaseOf(date);
   const tod = { date, hour: hourOf(date), phase, sky: SKY_FOR[phase] };
-  drawRoom(ctx, P, t, counts, tod);
+  const vec = theme.kind === 'vector';
+  if (!vec) drawRoom(ctx, P, t, counts, tod);
 
   // selected slot highlight
   const selIdx = agents.findIndex((a) => a.name === selected);
   if (selIdx >= 0) { const s = slot(selIdx); ctx.globalAlpha = 0.18; px(ctx, '#FFFFFF', s.sx + 2, s.sy + 2, 64, 44); ctx.globalAlpha = 1; }
 
   // chairs (always behind people)
-  agents.forEach((a, i) => { const s = slot(i); px(ctx, P.chair, s.seatX - 6, s.sy + 12, 12, 13); });
+  if (!vec) agents.forEach((a, i) => { const s = slot(i); px(ctx, P.chair, s.seatX - 6, s.sy + 12, 12, 13); });
 
   // move characters
   let idleIdx = 0;
@@ -1668,6 +1683,14 @@ function frame(now) {
   });
   for (const k of [...chars.keys()]) if (!live.has(k)) chars.delete(k);
   if (!firstSnapshot) firstFrameDone = true;
+
+  if (vec) {
+    renderVector(rows);
+    drawEvening(phase);
+    drawConfetti(dt, t);
+    requestAnimationFrame(frame);
+    return;
+  }
 
   // depth-sorted drawables
   const items = [];
@@ -1695,18 +1718,7 @@ function frame(now) {
   });
   items.sort((p, q) => p.y - q.y).forEach((it) => it.draw());
 
-  // evening and night: the room dims and desk lamps come on
-  const dim = { evening: 0.08, night: 0.2 }[phase] || 0;
-  if (dim) {
-    ctx.fillStyle = `rgba(14,18,48,${dark.matches ? dim / 2 : dim})`; ctx.fillRect(0, 0, W, H);
-    agents.forEach((a, i) => {
-      if (a.state === 'stopped') return;
-      const s = slot(i);
-      const g = ctx.createRadialGradient(s.sx + 34, s.sy + 22, 2, s.sx + 34, s.sy + 22, 30);
-      g.addColorStop(0, `rgba(255,214,140,${phase === 'night' ? 0.24 : 0.14})`); g.addColorStop(1, 'rgba(255,214,140,0)');
-      ctx.fillStyle = g; ctx.fillRect(s.sx, s.sy - 8, 68, 60);
-    });
-  }
+  drawEvening(phase);
 
   // bubbles on top
   for (const { a, x, hy, ch, party } of heads) {
@@ -1719,7 +1731,26 @@ function frame(now) {
       [[0, 0], [1, 0], [2, 0], [1, 1], [0, 2], [1, 2], [2, 2]].forEach(([u, v]) => px(ctx, P.ink, x + 4 + u, zy + v, 1, 1));
     }
   }
-  // confetti over everything
+  drawConfetti(dt, t);
+  requestAnimationFrame(frame);
+}
+let firstFrameDone = false;
+
+// evening and night: the room dims and desk lamps come on
+function drawEvening(phase) {
+  const dim = { evening: 0.08, night: 0.2 }[phase] || 0;
+  if (!dim) return;
+  ctx.fillStyle = `rgba(14,18,48,${dark.matches ? dim / 2 : dim})`; ctx.fillRect(0, 0, W, H);
+  agents.forEach((a, i) => {
+    if (a.state === 'stopped') return;
+    const s = slot(i);
+    const g = ctx.createRadialGradient(s.sx + 34, s.sy + 22, 2, s.sx + 34, s.sy + 22, 30);
+    g.addColorStop(0, `rgba(255,214,140,${phase === 'night' ? 0.24 : 0.14})`); g.addColorStop(1, 'rgba(255,214,140,0)');
+    ctx.fillStyle = g; ctx.fillRect(s.sx, s.sy - 8, 68, 60);
+  });
+}
+// confetti over everything
+function drawConfetti(dt, t) {
   for (let k = confetti.length - 1; k >= 0; k--) {
     const p = confetti[k];
     p.life -= dt; p.vy += 90 * dt; p.vx *= 1 - 0.8 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
@@ -1727,9 +1758,93 @@ function frame(now) {
     px(ctx, p.col, p.x, p.y, p.w, Math.floor(t * 10 + k) % 2 ? 1 : 2);
   }
   for (const [name, c] of cheering) if (t > c.until) cheering.delete(name);
-  requestAnimationFrame(frame);
 }
-let firstFrameDone = false;
+
+// ---------- themes ----------
+// Pixel is drawn on the canvas. Other themes are images (from the theme's folder) placed over the same
+// floor plan, so walking, seats, tags and clicks work the same; the canvas stays on top for confetti,
+// the selection glow and evening light.
+let theme = { id: 'pixel', kind: 'pixel' };
+let themesAvail = [];
+const vEls = new Map(); // key -> <img>
+const themeUrl = (f) => `/themes/${encodeURIComponent(theme.id)}/${f.split('/').map(encodeURIComponent).join('/')}`;
+async function loadThemes() {
+  try { themesAvail = ((await (await fetch('/api/themes')).json()).themes || []).filter((t) => t.ok); } catch { themesAvail = []; }
+  const sel = $('themeSel');
+  sel.replaceChildren(...themesAvail.map((t) => { const o = el('option', '', t.name); o.value = t.id; o.title = t.description || ''; return o; }));
+  sel.value = theme.id;
+}
+function useTheme(id) {
+  if (theme.id === id) return;
+  const t = id === 'pixel' ? { id: 'pixel', kind: 'pixel' } : themesAvail.find((x) => x.id === id);
+  if (!t) { if (id !== 'pixel') loadThemes().then(() => { if (themesAvail.some((x) => x.id === id)) useTheme(id); }); return; }
+  theme = t;
+  $('themeSel').value = id;
+  const layer = $('vlayer');
+  for (const img of vEls.values()) img.remove();
+  vEls.clear();
+  layer.replaceChildren();
+  layer.hidden = t.kind !== 'vector';
+  canvas.style.imageRendering = t.kind === 'vector' ? 'auto' : '';
+  if (t.kind === 'vector') {
+    const wall = el('div', 'wall'); wall.id = 'vwall';
+    if (t.room.wall) wall.style.backgroundImage = `url("${themeUrl(t.room.wall)}")`;
+    if (t.room.wallColor) wall.style.backgroundColor = t.room.wallColor;
+    layer.append(wall);
+    layer.style.backgroundImage = t.room.floor ? `url("${themeUrl(t.room.floor)}")` : '';
+    layer.style.backgroundColor = t.room.floorColor || '';
+  }
+  renderTags();
+}
+$('themeSel').addEventListener('change', async () => {
+  const id = $('themeSel').value;
+  try { await api('POST', '/api/config', { patch: { theme: id === 'pixel' ? null : id } }); useTheme(id); }
+  catch (err) { toast(err.message); $('themeSel').value = theme.id; }
+});
+// Places an image in floor units (the canvas coordinate system): x, y = top-left, w = width.
+function vImg(key, src, x, y, w, z, cls = '', filter = '') {
+  let img = vEls.get(key);
+  if (!img) { img = document.createElement('img'); img.alt = ''; img.decoding = 'async'; img.draggable = false; $('vlayer').append(img); vEls.set(key, img); }
+  if (img.dataset.src !== src) { img.src = src; img.dataset.src = src; }
+  img.style.left = `${(x / W) * 100}%`; img.style.top = `${(y / H) * 100}%`; img.style.width = `${(w / W) * 100}%`;
+  img.style.zIndex = String(Math.round(z * 10));
+  if (img.className !== cls) img.className = cls;
+  if (img.style.filter !== filter) img.style.filter = filter;
+  img.dataset.live = '1';
+}
+function roleAsset(st) { return theme.roles[st] || theme.roles.default; }
+function renderVector(rows) {
+  const t = theme;
+  for (const img of vEls.values()) img.dataset.live = '';
+  const wall = document.getElementById('vwall');
+  if (wall) wall.style.height = `${(WALL / H) * 100}%`;
+  if (t.room.floor) $('vlayer').style.backgroundSize = `${(24 / W) * 100}% auto`;
+  if (t.room.lounge) vImg('lounge', themeUrl(t.room.lounge), 296 + DX(), WALL + 18, 88, WALL + 18);
+  const sit = t.size.sit, sitH = sit * 4 / 3;
+  for (let i = 0; i < rows * COLS; i++) {
+    const s = slot(i);
+    vImg(`desk${i}`, themeUrl(t.room.desk), s.sx + 2, s.sy + 6, 64, s.sy + 27.5);
+  }
+  agents.forEach((a, i) => {
+    const ch = chars.get(a.name);
+    if (!ch) return;
+    const party = cheering.get(a.name);
+    const st = displayState(a);
+    const role = ch.pose === 'sit' ? st : st === 'done' ? 'done' : 'idle';
+    const w = ch.pose === 'sit' ? sit : sit * 0.9, h = w * 4 / 3;
+    const tint = t.tint ? `hue-rotate(${hash(a.name) % 360}deg)` : '';
+    vImg(`p:${a.name}`, themeUrl(roleAsset(role)), ch.x - w / 2, ch.y - h, w, ch.y, ch.pose === 'walk' ? 'walk' : party && !reducedMotion.matches ? 'hop' : '', tint);
+    if (party) {
+      const cel = t.celebration[party.kind];
+      if (cel) vImg(`c:${a.name}`, themeUrl(cel), ch.x + w * 0.2, ch.y - h - 10, 14, 999, 'cel');
+    }
+    const shown = helpersShown(a);
+    const s = slot(i);
+    const hw = t.size.helper;
+    if (t.roles.helper) shown.forEach((hp, k) => vImg(`h:${a.name}:${k}`, themeUrl(t.roles.helper), s.sx + 46 + k * (hw * 0.7), s.sy + 24 - hw * 4 / 3, hw, s.sy + 24, hp.state === 'working' ? 'walk' : '', tint));
+  });
+  for (const [k, img] of vEls) if (!img.dataset.live) { img.remove(); vEls.delete(k); }
+}
 
 // ---------- name tags + clicks ----------
 const tagEls = new Map();
@@ -1756,7 +1871,7 @@ function renderTags() {
     b.setAttribute('aria-pressed', String(a.name === selected));
     b.title = `${a.label || a.name}: ${a.detail || LABEL[st]}`;
     b.querySelector('.nm').textContent = a.label || a.name;
-    b.querySelector('.st').textContent = LABEL[st] || st;
+    b.querySelector('.st').textContent = (theme.labels && theme.labels[st]) || LABEL[st] || st;
     // Compact badges: last tests/build, PR checks, stuck/looping.
     const badges = [];
     if (a.lastResult) badges.push([a.lastResult.outcome === 'pass' ? 'bd-pass' : 'bd-fail', a.lastResult.outcome === 'pass' ? '✓' : '✗', `${a.lastResult.kind === 'build' ? 'Build' : 'Tests'}: ${a.lastResult.summary}`]);
@@ -1793,6 +1908,7 @@ document.addEventListener('visibilitychange', reportVisible);
 setInterval(reportVisible, 10000);
 reportVisible();
 
+loadThemes();
 connect();
 requestAnimationFrame(frame);
 </script>
