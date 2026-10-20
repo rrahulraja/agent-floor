@@ -17,6 +17,8 @@ const G = require('./lib/git');
 const { createConfig } = require('./lib/config');
 const C = require('./lib/control');
 const N = require('./lib/notify');
+const Hist = require('./lib/history');
+const readline = require('readline');
 
 const PORT = Number(process.env.PORT || 4777);
 const HOST = '127.0.0.1';
@@ -73,10 +75,15 @@ let saved = [];
 try { saved = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8')).filter((a) => NAME_RE.test(a.name)); } catch {}
 // A display name: any text, no control characters. The tmux session keeps the short name.
 const cleanLabel = (s) => String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+// Points an agent at a new conversation, remembering earlier ones for its timeline.
+function bindSession(a, id) {
+  if (a.sessionId && a.sessionId !== id) a.sessions = [a.sessionId, ...(a.sessions || []).filter((x) => x !== a.sessionId && x !== id)].slice(0, 20);
+  a.sessionId = id;
+}
 function persist() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  const keep = ({ name, cwd, label, sessionId, contextWindow, repo, worktree }) =>
-    Object.fromEntries(Object.entries({ name, cwd, label, sessionId, contextWindow, repo, worktree }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  const keep = ({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree }) =>
+    Object.fromEntries(Object.entries({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
   fs.writeFileSync(AGENTS_FILE, JSON.stringify(saved.map(keep), null, 2));
 }
 
@@ -355,7 +362,7 @@ async function resolveTranscript(a, s, sessions) {
     if ((!of || of.mtimeMs <= born + 1000) && screenAt >= born - 3000) rivals.push(o.name);
   }
   if (rivals.length) return { file: bound, unknown: true };
-  a.sessionId = cand.id;
+  bindSession(a, cand.id);
   persist();
   return { file: cand, unknown: false };
 }
@@ -564,6 +571,90 @@ async function loop() {
   setTimeout(loop, CONFIG.get('pollMs'));
 }
 
+// ---------- history: timeline, digest, search ----------
+// Calls onEntry for each parsed line; `filter` (lowercase substring) skips lines cheaply before parsing.
+async function eachEntry(file, onEntry, filter) {
+  const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+  try {
+    for await (const line of rl) {
+      if (!line || (filter && !line.toLowerCase().includes(filter))) continue;
+      let e; try { e = JSON.parse(line); } catch { continue; }
+      if (onEntry(e) === false) break;
+    }
+  } finally { rl.close(); }
+}
+
+async function agentTimeline(a) {
+  const since = Date.now() - CONFIG.get('timelineHours') * 3600000;
+  const dir = path.join(PROJECTS_DIR, encodeCwd(a.cwd));
+  const turns = [];
+  for (const id of [a.sessionId, ...(a.sessions || [])].filter(Boolean)) {
+    const file = path.join(dir, `${id}.jsonl`);
+    let st; try { st = await fsp.stat(file); } catch { continue; }
+    if (st.mtimeMs < since) continue;
+    const entries = [];
+    await eachEntry(file, (e) => { entries.push(e); });
+    turns.push(...Hist.timelineFrom(entries, since));
+  }
+  return turns.sort((x, y) => y.at - x.at).slice(0, 80);
+}
+
+async function allTranscripts(sinceMs = 0) {
+  let dirs = [];
+  try { dirs = await fsp.readdir(PROJECTS_DIR, { withFileTypes: true }); } catch {}
+  const out = [];
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue;
+    for (const f of await transcriptsIn(path.join(PROJECTS_DIR, d.name))) if (f.mtimeMs >= sinceMs) out.push(f);
+  }
+  return out.sort((x, y) => y.mtimeMs - x.mtimeMs);
+}
+
+const digestCache = new Map();
+async function digestFor(dateStr) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr || '');
+  const day = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(new Date().toDateString());
+  const from = day.getTime(), to = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1).getTime();
+  const key = `${from}`;
+  const c = digestCache.get(key);
+  if (c && Date.now() - c.at < 30000) return c.value;
+  const acc = new Map();
+  for (const f of await allTranscripts(from)) {
+    const ctx = { from, to, uses: new Map(), cwd: '' };
+    await eachEntry(f.path, (e) => { Hist.digestAdd(acc, e, ctx); });
+  }
+  const value = { date: `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`, projects: Hist.digestResult(acc) };
+  digestCache.set(key, { at: Date.now(), value });
+  return value;
+}
+
+async function searchTranscripts(q) {
+  const ql = q.toLowerCase();
+  const max = CONFIG.get('search.maxResults');
+  const deadline = Date.now() + 8000;
+  const results = [];
+  let partial = false;
+  for (const f of await allTranscripts()) {
+    if (results.length >= max) break;
+    if (Date.now() > deadline) { partial = true; break; }
+    let perFile = 0, cwd = '';
+    await eachEntry(f.path, (e) => {
+      if (e.cwd) cwd = e.cwd;
+      const hit = Hist.searchEntry(e, ql);
+      if (!hit) return true;
+      results.push({ ...hit, cwd: e.cwd || cwd, sessionId: f.id });
+      perFile++;
+      return perFile < 3 && results.length < max;
+    }, ql);
+  }
+  for (const r of results) {
+    const file = path.join(PROJECTS_DIR, encodeCwd(r.cwd || ''), `${r.sessionId}.jsonl`);
+    try { const st = await fsp.stat(file); r.title = (await sessionMeta(file, st.mtimeMs, st.size)).title || ''; } catch { r.title = ''; }
+    r.project = path.basename(r.cwd || '') || r.cwd;
+  }
+  return { results, partial };
+}
+
 // ---------- notifications ----------
 let lastVisibleAt = 0; // last time a dashboard tab said it was on screen
 const notifyOnce = N.createDeduper();
@@ -662,6 +753,18 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/state') return send(res, 200, snapshot);
     if (req.method === 'GET' && p === '/api/config') return send(res, 200, { schema: CONFIG.schema(), values: CONFIG.all(), problems: CONFIG.problems() });
+    if (req.method === 'GET' && p === '/api/digest') return send(res, 200, await digestFor(url.searchParams.get('date')));
+    if (req.method === 'GET' && p === '/api/search') {
+      const q = String(url.searchParams.get('q') || '').trim();
+      if (q.length < 2) return send(res, 400, { error: 'Search for at least 2 characters.' });
+      return send(res, 200, await searchTranscripts(q.slice(0, 200)));
+    }
+    const tl = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})\/timeline$/);
+    if (req.method === 'GET' && tl) {
+      const agent = saved.find((a) => a.name === tl[1]);
+      if (!agent) return send(res, 404, { error: `No agent called ${tl[1]}.` });
+      return send(res, 200, { hours: CONFIG.get('timelineHours'), turns: await agentTimeline(agent) });
+    }
     if (req.method === 'GET' && p === '/api/projects') return send(res, 200, { projects: await listProjects() });
     if (req.method === 'GET' && p === '/api/conversations') {
       const dir = path.resolve(expandHome(String(url.searchParams.get('cwd') || '').trim()));
@@ -731,7 +834,7 @@ const server = http.createServer(async (req, res) => {
       }
       // Save first: a poll running while tmux starts would otherwise adopt cc-<name> and we'd add it twice.
       saved.push({ name, cwd: agentDir, label: cleanLabel(label) || undefined, repo: repoRoot, worktree: repoRoot ? true : undefined });
-      try { saved.find((a) => a.name === name).sessionId = await startAgent(name, agentDir, repoRoot ? '' : conversation || ''); }
+      try { bindSession(saved.find((a) => a.name === name), await startAgent(name, agentDir, repoRoot ? '' : conversation || '')); }
       catch (e) { saved = saved.filter((a) => a.name !== name); throw e; }
       startedAt.set(name, Date.now());
       persist();
@@ -796,7 +899,7 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'POST' && action === 'start') {
         const { conversation } = await readBody(req);
         if (running) return send(res, 409, { error: `${name} is already running.` });
-        agent.sessionId = await startAgent(name, agent.cwd, conversation || '');
+        bindSession(agent, await startAgent(name, agent.cwd, conversation || ''));
         persist();
         startedAt.set(name, Date.now());
         await poll();

@@ -79,6 +79,12 @@ tmux attach -t cc-billing     # detach again with Ctrl-b d
 - **Git and pull request**: branch, ahead/behind, uncommitted files, and the PR's checks and review state (needs the `gh` CLI, logged in).
 - **Celebrations**: confetti and a banner when an agent pushes or opens a PR.
 
+**Looking back.**
+
+- **Timeline** (panel button): what an agent did over the last 24 hours, turn by turn: your instruction, files edited, commands and test results, pushes, PRs, hand-offs, and its reply. It follows the agent across `/clear`.
+- **Today** (header): every Claude Code conversation on a given day, grouped by project (not only agents on the floor), with PRs, pushes, test runs and your instructions. *Copy as Markdown* gives you standup notes.
+- **Search** (header): search all your Claude Code conversations for a function, file, error or something you asked. Each result can start an agent that continues that conversation.
+
 **Notifications when you're away.** Agent Floor can reach you when an agent needs approval, has a question, opens a PR, pushes, may be stuck, or (optionally) finishes:
 
 - **Desktop**: macOS notifications (or `notify-send` on Linux), on by default.

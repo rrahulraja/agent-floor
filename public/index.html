@@ -183,6 +183,24 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .keys { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
 .keys dt kbd { font: 600 13px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; background: var(--bg); }
 .keys dd { margin: 0; }
+dialog.wide { width: min(760px, 94vw); max-height: 88vh; }
+.turn { padding: 10px 0; border-top: 1px solid var(--line); }
+.turn time { color: var(--muted); font-size: 12px; }
+.turn .prompt { margin: 2px 0 6px; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
+.turn ul { margin: 0; padding-left: 18px; font-size: 14px; }
+.turn li { margin: 2px 0; overflow-wrap: anywhere; }
+.turn .reply { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+.turn code, .digest code { font: 13px var(--mono); }
+.digest h3 { margin: 14px 0 4px; font-size: 16px; }
+.digest ul { margin: 4px 0; padding-left: 18px; font-size: 14px; }
+.digest .meta { color: var(--muted); font-size: 13px; }
+.search-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.search-row input { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--bg); }
+.hit { padding: 10px 0; border-top: 1px solid var(--line); }
+.hit .where { font-size: 13px; color: var(--muted); }
+.hit .snip { margin: 4px 0 6px; font-size: 14px; overflow-wrap: anywhere; }
+.hit .snip b { background: color-mix(in srgb, var(--wait-fill) 35%, transparent); font-weight: 600; }
+.hit .btn { padding: 3px 10px; font-size: 13px; }
 .compose textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; background: var(--bg); }
 .compose .row { margin-top: 8px; align-items: center; }
 .compose small { color: var(--muted); }
@@ -236,6 +254,8 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     </div>
   </div>
   <button class="btn" id="alertsBtn" hidden>Turn on alerts</button>
+  <button class="btn" id="todayBtn">Today</button>
+  <button class="btn" id="searchBtn">Search</button>
   <button class="btn" id="broadcastBtn">Broadcast</button>
   <button class="btn" id="settingsBtn">Settings</button>
   <button class="btn primary" id="addBtn">Add agent</button>
@@ -301,6 +321,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
         <div class="row" id="dTools">
           <button class="btn" data-key="Escape">Interrupt</button>
           <button class="btn" data-key="BTab" title="Cycles Claude Code modes, like accept edits and plan mode">Switch mode</button>
+          <button class="btn" id="timelineBtn">Timeline</button>
           <button class="btn copy" id="copyAttach">Copy attach command</button>
           <button class="btn danger" id="stopBtn">Stop agent</button>
         </div>
@@ -370,6 +391,28 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     <textarea id="pText" style="width:100%;min-height:260px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--bg);font:14px/1.5 var(--mono)"></textarea>
     <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="pCancel">Cancel</button></div>
   </form>
+</dialog>
+<dialog id="timelineDialog" class="wide">
+  <h2 id="tlTitle">Timeline</h2>
+  <div id="tlBody"></div>
+  <div class="row" style="margin-top:14px"><button class="btn" id="tlClose">Close</button></div>
+</dialog>
+<dialog id="digestDialog" class="wide">
+  <h2>Today</h2>
+  <div class="row" style="align-items:center;margin-bottom:8px">
+    <input type="date" id="dgDate" style="border:1px solid var(--line);border-radius:6px;padding:5px 8px;background:var(--bg)" aria-label="Day">
+    <button class="btn" id="dgCopy">Copy as Markdown</button>
+    <span class="hint" id="dgStatus"></span>
+  </div>
+  <div class="digest" id="dgBody"></div>
+  <div class="row" style="margin-top:14px"><button class="btn" id="dgClose">Close</button></div>
+</dialog>
+<dialog id="searchDialog" class="wide">
+  <h2>Search conversations</h2>
+  <form class="search-row" id="srForm"><input type="search" id="srQ" placeholder="A function, file, error message, or something you asked…" aria-label="Search"><button class="btn primary">Search</button></form>
+  <p class="hint" id="srStatus"></p>
+  <div id="srBody"></div>
+  <div class="row" style="margin-top:14px"><button class="btn" id="srClose">Close</button></div>
 </dialog>
 <dialog id="keysDialog">
   <h2>Keyboard shortcuts</h2>
@@ -916,6 +959,112 @@ $('broadcastForm').addEventListener('submit', async (e) => {
   } catch (err) { $('bError').textContent = err.message; $('bError').hidden = false; }
 });
 
+// ---------- timeline ----------
+const hhmm = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+const fileName = (f) => String(f || '').split('/').pop();
+function eventLine(ev) {
+  const li = el('li');
+  if (ev.type === 'edit') li.textContent = `✎ Edited ${fileName(ev.file)}${ev.count > 1 ? ` (${ev.count}×)` : ''}`;
+  else if (ev.type === 'command') {
+    const lbl = { tests: 'Ran tests', build: 'Built', deploy: 'Deploy', data: 'Query', review: 'Review', git: 'Git' }[ev.kind] || 'Ran';
+    li.append(document.createTextNode(`▸ ${lbl}: `), el('code', '', ev.command));
+    if (ev.outcome) li.append(document.createTextNode('  '), el('span', ev.outcome === 'pass' ? 'bd-pass' : 'bd-fail', `${ev.outcome === 'pass' ? '✓' : '✗'} ${ev.summary}`));
+    else if (ev.failed) li.append(document.createTextNode('  '), el('span', 'bd-fail', '✗ failed'));
+  } else if (ev.type === 'push') li.textContent = `🚀 Pushed ${ev.branch}${ev.repo ? ` to ${ev.repo}` : ''}`;
+  else if (ev.type === 'pr') { const a = el('a', '', `🎉 Opened PR #${ev.number}${ev.repo ? ` in ${ev.repo}` : ''}`); if (/^https:\/\//.test(ev.url)) { a.href = ev.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; } li.append(a); }
+  else if (ev.type === 'helper') li.textContent = `👥 Handed off: ${ev.text}`;
+  else if (ev.type === 'question') li.textContent = `? Asked you: ${ev.text}`;
+  return li;
+}
+$('timelineBtn').addEventListener('click', async () => {
+  const a = agents.find((x) => x.name === selected); if (!a) return;
+  $('tlTitle').textContent = `Timeline · ${a.label || a.name}`;
+  $('tlBody').replaceChildren(el('p', 'hint', 'Loading…'));
+  $('timelineDialog').showModal();
+  try {
+    const r = await (await fetch(`/api/agents/${a.name}/timeline`)).json();
+    if (!r.turns || !r.turns.length) { $('tlBody').replaceChildren(el('p', 'hint', `Nothing in the last ${r.hours} hours.`)); return; }
+    $('tlBody').replaceChildren(el('p', 'hint', `Last ${r.hours} hours, newest first.`), ...r.turns.map((t) => {
+      const d = el('div', 'turn');
+      d.append(el('time', '', new Date(t.at).toLocaleString([], { weekday: 'short', hour: '2-digit', minute: '2-digit' })));
+      if (t.prompt) d.append(el('p', 'prompt', t.prompt));
+      if (t.events.length) { const ul = el('ul'); ul.append(...t.events.map(eventLine)); d.append(ul); }
+      if (t.reply) d.append(el('p', 'reply', t.reply));
+      return d;
+    }));
+  } catch (err) { $('tlBody').replaceChildren(el('p', 'error', err.message)); }
+});
+$('tlClose').addEventListener('click', () => $('timelineDialog').close());
+
+// ---------- daily digest ----------
+let digest = null;
+const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+async function loadDigest() {
+  $('dgStatus').textContent = 'Reading today’s conversations…';
+  $('dgBody').replaceChildren();
+  try {
+    digest = await (await fetch(`/api/digest?date=${encodeURIComponent($('dgDate').value)}`)).json();
+    $('dgStatus').textContent = digest.projects.length ? '' : 'No Claude Code work on this day.';
+    $('dgBody').replaceChildren(...digest.projects.flatMap((p) => {
+      const h = el('h3', '', p.name);
+      const meta = el('p', 'meta', [`${p.prompts.length} instruction${p.prompts.length === 1 ? '' : 's'}`, `${p.files} file${p.files === 1 ? '' : 's'} edited`,
+        p.tests.pass + p.tests.fail ? `tests ${p.tests.pass}✓ ${p.tests.fail}✗` : '', p.builds.pass + p.builds.fail ? `builds ${p.builds.pass}✓ ${p.builds.fail}✗` : '',
+        `${p.sessions} conversation${p.sessions === 1 ? '' : 's'}`].filter(Boolean).join(' · '));
+      const ul = el('ul');
+      for (const pr of p.prs) { const li = el('li'); const a = el('a', '', `PR #${pr.number}${pr.repo ? ` (${pr.repo})` : ''}`); if (/^https:\/\//.test(pr.url)) { a.href = pr.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; } li.append('Opened ', a); ul.append(li); }
+      for (const ps of p.pushes) ul.append(el('li', '', `Pushed ${ps.branch}${ps.repo ? ` to ${ps.repo}` : ''}`));
+      for (const t of p.prompts.slice(0, 8)) ul.append(el('li', '', t));
+      if (p.prompts.length > 8) ul.append(el('li', 'meta', `…and ${p.prompts.length - 8} more instructions`));
+      return [h, meta, ul];
+    }));
+  } catch (err) { $('dgStatus').textContent = err.message; }
+}
+function digestMarkdown() {
+  if (!digest) return '';
+  const lines = [`## ${digest.date}`, ''];
+  for (const p of digest.projects) {
+    lines.push(`**${p.name}**`);
+    for (const pr of p.prs) lines.push(`- Opened PR #${pr.number}${pr.url ? ` (${pr.url})` : ''}`);
+    for (const ps of p.pushes) lines.push(`- Pushed \`${ps.branch}\``);
+    if (p.tests.pass + p.tests.fail) lines.push(`- Tests: ${p.tests.pass} passing runs, ${p.tests.fail} failing`);
+    for (const t of p.prompts.slice(0, 8)) lines.push(`- ${t}`);
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+$('todayBtn').addEventListener('click', () => { $('dgDate').value = isoDay(localNow()); $('digestDialog').showModal(); loadDigest(); });
+$('dgDate').addEventListener('change', loadDigest);
+$('dgCopy').addEventListener('click', async () => { try { await navigator.clipboard.writeText(digestMarkdown()); toast('Copied the digest as Markdown'); } catch { toast('Could not copy'); } });
+$('dgClose').addEventListener('click', () => $('digestDialog').close());
+
+// ---------- search ----------
+$('searchBtn').addEventListener('click', () => { $('searchDialog').showModal(); $('srQ').focus(); });
+$('srClose').addEventListener('click', () => $('searchDialog').close());
+$('srForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const q = $('srQ').value.trim();
+  if (q.length < 2) return;
+  $('srStatus').textContent = 'Searching…'; $('srBody').replaceChildren();
+  try {
+    const r = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error);
+    $('srStatus').textContent = j.results.length ? `${j.results.length} result${j.results.length === 1 ? '' : 's'}${j.partial ? ' (stopped early; refine the search for more)' : ''}` : 'Nothing found.';
+    $('srBody').replaceChildren(...j.results.map((h) => {
+      const d = el('div', 'hit');
+      d.append(el('div', 'where', `${h.project} · ${h.title || h.sessionId.slice(0, 8)} · ${fmtWhen(h.at)} · ${h.role}`));
+      const snip = el('div', 'snip');
+      const k = h.snippet.toLowerCase().indexOf(q.toLowerCase());
+      if (k >= 0) snip.append(h.snippet.slice(0, k), el('b', '', h.snippet.slice(k, k + q.length)), h.snippet.slice(k + q.length));
+      else snip.textContent = h.snippet;
+      const go = el('button', 'btn', 'Start an agent on this conversation'); go.type = 'button';
+      go.addEventListener('click', () => { $('searchDialog').close(); openAdd({ cwd: h.cwd, conversation: h.sessionId, label: h.project }); });
+      d.append(snip, go);
+      return d;
+    }));
+  } catch (err) { $('srStatus').textContent = err.message; }
+});
+
 // ---------- keyboard shortcuts ----------
 document.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1074,13 +1223,20 @@ function updateNameHint() {
   const v = $('fName').value.trim();
   $('fNameHint').textContent = v ? `Session: cc-${slugFor(v)}` : 'Any name you like.';
 }
-function openAdd() {
-  $('fError').hidden = true; $('addForm').reset(); nameTouched = false; $('fWtFields').hidden = true;
+async function openAdd(prefill) {
+  $('fError').hidden = true; $('addForm').reset(); nameTouched = false; $('fWtFields').hidden = true; $('fConv').disabled = false;
   $('fConv').replaceChildren(new Option('Start fresh', ''));
   $('fConvHint').textContent = 'Pick a project to see its past conversations.';
   updateNameHint();
   $('addDialog').showModal(); $('fCwd').focus();
   loadProjects();
+  if (prefill && prefill.cwd) {
+    $('fCwd').value = prefill.cwd;
+    if (prefill.label) { $('fName').value = prefill.label; updateNameHint(); }
+    await fillConversations($('fConv'), prefill.cwd, $('fConvHint'), false);
+    if (prefill.conversation && [...$('fConv').options].some((o) => o.value === prefill.conversation)) $('fConv').value = prefill.conversation;
+    $('fName').focus();
+  }
 }
 let cwdTimer;
 $('fCwd').addEventListener('input', () => {
@@ -1092,7 +1248,7 @@ $('fCwd').addEventListener('input', () => {
 });
 $('fName').addEventListener('input', () => { nameTouched = true; updateNameHint(); });
 $('fWt').addEventListener('change', () => { $('fWtFields').hidden = !$('fWt').checked; $('fConv').disabled = $('fWt').checked; if ($('fWt').checked) $('fBranch').focus(); });
-$('addBtn').addEventListener('click', openAdd);
+$('addBtn').addEventListener('click', () => openAdd());
 $('cancelAdd').addEventListener('click', () => $('addDialog').close());
 $('addForm').addEventListener('submit', async (e) => {
   e.preventDefault();
