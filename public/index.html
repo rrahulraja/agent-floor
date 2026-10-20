@@ -77,6 +77,16 @@ button, input, textarea, select { font: inherit; color: inherit; }
   background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-radius: 3px; padding: 3px 7px; cursor: pointer;
 }
 .tag small { display: block; font: 400 11px/1.2 var(--sans); color: var(--muted); }
+.tag .meta { display: flex; gap: 5px; justify-content: center; align-items: center; font: 700 10px/1.1 var(--sans); }
+.tag .meta:empty { display: none; }
+.tag .tm { display: block; height: 3px; margin-top: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.tag .tm[hidden] { display: none; }
+.tag .tm b { display: block; height: 100%; background: var(--done); }
+.tag .tm.warn b, .meter.warn b { background: var(--wait-fill); }
+.tag .tm.alert b, .meter.alert b { background: var(--danger); }
+.bd-pass { color: var(--done); } .bd-fail { color: var(--danger); } .bd-warn { color: var(--wait); } .bd-info { color: var(--work); }
+.tag.asking { border-color: var(--work); box-shadow: 0 0 0 1px var(--work); }
+.tag.asking small { color: var(--work); font-weight: 600; }
 .tag.waiting { border-color: var(--wait-fill); box-shadow: 0 0 0 1px var(--wait-fill); }
 .tag.waiting small { color: var(--wait); font-weight: 600; }
 .tag.done small { color: var(--done); }
@@ -92,6 +102,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .chip { font-size: 13px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
 .chip.working { color: var(--work); } .chip.waiting { color: var(--wait); } .chip.done { color: var(--done); }
 .chip.idle, .chip.stopped { color: var(--idle); }
+.chip.asking { color: var(--work); }
 .path { margin: -8px 0 0; color: var(--muted); font: 13px/1.4 var(--mono); word-break: break-all; }
 .activity { margin: 0; font-size: 16px; }
 .panel-inner { font-size: 15px; line-height: 1.6; }
@@ -115,6 +126,39 @@ body.resizing { cursor: col-resize; user-select: none; }
 @keyframes cheer-in { from { transform: translateY(-16px) scale(.96); opacity: 0; } }
 .alert { background: color-mix(in srgb, var(--wait-fill) 16%, transparent); border: 1px solid var(--wait-fill); border-radius: 6px; padding: 10px 12px; }
 .alert p { margin: 0 0 8px; }
+.alert.ask { background: color-mix(in srgb, var(--work) 10%, transparent); border-color: var(--work); }
+.alert.health { background: color-mix(in srgb, var(--danger) 8%, transparent); border-color: color-mix(in srgb, var(--danger) 60%, transparent); }
+.alert.health p:last-child, .alert.ask > :last-child { margin-bottom: 0; }
+.q { margin-bottom: 12px; }
+.q h4 { margin: 0 0 2px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.q > p { margin: 0 0 8px; font-weight: 600; }
+.opts { display: flex; flex-direction: column; gap: 6px; }
+.opt { text-align: left; }
+.opt small, .opt-row small { display: block; color: var(--muted); font-size: 13px; }
+.opt-row { padding: 4px 0; }
+.ask blockquote { margin: 0 0 8px; padding-left: 10px; border-left: 3px solid var(--work); font-weight: 600; }
+.status { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 0; font-size: 14px; }
+.status dt { color: var(--muted); }
+.status dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.status a { color: inherit; }
+.meter { display: inline-block; vertical-align: middle; width: 96px; height: 7px; margin-right: 8px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.meter b { display: block; height: 100%; background: var(--done); }
+.ctx-select { margin-left: 6px; padding: 1px 4px; font-size: 13px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); }
+.helpers h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.helper { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.helper > div { min-width: 0; flex: 1; }
+.helper small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.helper .chip { font-size: 12px; white-space: nowrap; }
+dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
+.settings fieldset { margin: 0 0 12px; padding: 8px 14px 4px; border: 1px solid var(--line); border-radius: 8px; }
+.settings legend { padding: 0 6px; font-weight: 600; }
+.set { display: grid; grid-template-columns: 1fr 160px; gap: 2px 12px; align-items: center; padding: 6px 0; }
+.set label { font-size: 14px; }
+.set input[type=number], .set select { width: 100%; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.set input[type=checkbox] { justify-self: start; width: 18px; height: 18px; }
+.set small { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.set .reset { background: none; border: 0; padding: 0; color: var(--work); cursor: pointer; font-size: 12px; text-decoration: underline; }
+.set.problem small { color: var(--danger); }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .error { color: var(--danger); margin: 0; }
 .screen {
@@ -176,6 +220,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     </div>
   </div>
   <button class="btn" id="alertsBtn" hidden>Turn on alerts</button>
+  <button class="btn" id="settingsBtn">Settings</button>
   <button class="btn primary" id="addBtn">Add agent</button>
 </header>
 
@@ -211,6 +256,11 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
             <button class="btn" data-key="Escape">Decline</button>
           </div>
         </div>
+
+        <div class="alert ask" id="dQuestion" hidden></div>
+        <div class="alert health" id="dHealth" hidden></div>
+        <dl class="status" id="dStatus" hidden></dl>
+        <div class="helpers" id="dHelpers" hidden></div>
 
         <div id="dRunning">
           <pre class="screen" id="dScreen" tabindex="0" aria-label="Agent terminal"></pre>
@@ -273,6 +323,18 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     </div>
   </form>
 </dialog>
+<dialog id="settingsDialog" class="settings">
+  <form id="settingsForm" method="dialog">
+    <h2>Settings</h2>
+    <p class="hint" style="margin:-6px 0 14px">Saved to <code>~/.agent-floor/config.json</code>. Only values you change are stored.</p>
+    <div id="settingsBody"></div>
+    <p class="error" id="sError" hidden></p>
+    <div class="row">
+      <button class="btn primary" type="submit">Save</button>
+      <button class="btn" type="button" id="sCancel">Cancel</button>
+    </div>
+  </form>
+</dialog>
 <div class="cheers" id="cheers" aria-live="polite"></div>
 
 <script>
@@ -285,15 +347,22 @@ try { seen = JSON.parse(localStorage.getItem('af:seen') || '{}') || {}; } catch 
 const prevStates = {};
 let firstSnapshot = true;
 
-const WORKING = new Set(['thinking', 'reading', 'writing', 'running', 'delegating', 'browsing', 'planning']);
+const WORKING = new Set(['thinking', 'reading', 'writing', 'running', 'delegating', 'browsing', 'planning', 'tests', 'build', 'deploy', 'data', 'review', 'git']);
 const LABEL = {
   thinking: 'Thinking', reading: 'Reading', writing: 'Writing code', running: 'Running a command',
   delegating: 'Handing off', browsing: 'Using tools', planning: 'Planning',
-  waiting: 'Needs you', idle: 'Idle', done: 'Done', stopped: 'Stopped',
+  tests: 'Running tests', build: 'Building', deploy: 'Deploying', data: 'Querying data', review: 'Reviewing', git: 'Git work',
+  waiting: 'Needs you', asking: 'Has a question', idle: 'Idle', done: 'Done', stopped: 'Stopped',
 };
+let settings = { desksPerRow: 4, proseQuestion: 'floor+pause', maxHelpersShown: 3, celebrateSeconds: 5 };
+const isProse = (a) => !!(a.question && a.question.kind === 'prose');
+// Counts toward "needs you": approvals, real questions, and prose questions unless set to floor-only.
+const needsYou = (a) => a.state === 'waiting' || (a.state === 'asking' && !(isProse(a) && a.question.mode === 'floor'));
 const isDone = (a) => a.state === 'idle' && a.finishedAt && a.finishedAt > (seen[a.name] || 0);
 const displayState = (a) => (isDone(a) ? 'done' : a.state);
 const chipClass = (s) => (WORKING.has(s) ? 'working' : s);
+const fmtK = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(n % 1e6 ? 1 : 0)}M` : `${Math.round(n / 1000)}k`);
+const ago = (ms) => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; };
 
 const $ = (id) => document.getElementById(id);
 const labelOf = (name) => { const a = agents.find((x) => x.name === name); return (a && a.label) || name; };
@@ -320,16 +389,23 @@ function toast(msg) {
 // ---------- live updates ----------
 function connect() {
   const es = new EventSource('/events');
-  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || []); };
+  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || [], s.settings); };
   es.onerror = () => { $('summary').textContent = 'Lost connection to the Agent Floor server. Retrying…'; };
 }
 
-function onSnapshot(list) {
+function onSnapshot(list, st) {
+  if (st) {
+    settings = { ...settings, ...st };
+    if (COLS !== settings.desksPerRow) { COLS = settings.desksPerRow; applyLayout(); }
+  }
   for (const a of list) {
     const before = prevStates[a.name];
     const now = displayState(a);
     if (!firstSnapshot && before !== now) {
       if (now === 'waiting') notify(`${a.label || a.name} needs you`, a.detail);
+      if (now === 'asking' && (!isProse(a) || a.question.mode === 'full')) {
+        notify(`${a.label || a.name} has a question`, isProse(a) ? a.question.text : (a.question.questions[0] || {}).question);
+      }
       if (now === 'done') notify(`${a.label || a.name} finished`, a.lastReply || 'Ready for the next instruction');
     }
     prevStates[a.name] = now;
@@ -365,7 +441,7 @@ function cheer(a, c) {
   const pr = c.kind === 'pr';
   const title = pr ? `${label} opened PR #${c.number}` : `${label} pushed ${c.branch}`;
   const sub = pr ? c.repo : c.repo ? `to ${c.repo}` : 'Pushed to the remote';
-  cheering.set(a.name, { kind: c.kind, until: performance.now() / 1000 + 5 });
+  cheering.set(a.name, { kind: c.kind, until: performance.now() / 1000 + (settings.celebrateSeconds || 5) });
   burst(a.name, pr ? 90 : 55);
   showCheer(pr ? '🎉' : '🚀', title, sub, c.url, pr ? 'Open PR' : 'View branch');
   notify(pr ? `🎉 ${title}` : `🚀 ${title}`, sub);
@@ -410,7 +486,7 @@ function notify(title, body) {
 
 function renderSummary() {
   const working = agents.filter((a) => WORKING.has(a.state)).length;
-  const waiting = agents.filter((a) => a.state === 'waiting').length;
+  const waiting = agents.filter(needsYou).length;
   const done = agents.filter(isDone).length;
   const parts = [];
   if (!agents.length) parts.push('No agents yet');
@@ -418,7 +494,8 @@ function renderSummary() {
     parts.push(`<b>${working}</b> working`);
     if (waiting) parts.push(`<span class="needs"><b>${waiting}</b> ${waiting === 1 ? 'needs' : 'need'} you</span>`);
     if (done) parts.push(`<b>${done}</b> finished`);
-    const idle = agents.length - working - waiting - done;
+    const floorOnly = agents.filter((a) => a.state === 'asking' && !needsYou(a)).length;
+    const idle = agents.length - working - waiting - done - floorOnly;
     if (idle) parts.push(`${idle} idle or stopped`);
   }
   $('summary').innerHTML = parts.join(', ');
@@ -451,6 +528,7 @@ function renderPanel() {
   $('dActivity').textContent = a.detail || '';
   $('dError').hidden = !a.error; $('dError').textContent = a.error || '';
   $('dNeeds').hidden = a.state !== 'waiting';
+  renderQuestion(a); renderHealth(a); renderStatus(a); renderHelpers(a);
 
   const running = a.state !== 'stopped';
   $('dRunning').hidden = !running;
@@ -480,6 +558,180 @@ function renderPanel() {
     lastScreenFor = a.name;
   }
 }
+
+// ---------- panel: question, health, status, helpers ----------
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const sameAs = (node, value) => { const k = JSON.stringify(value); if (node.dataset.key === k) return true; node.dataset.key = k; return false; };
+
+function renderQuestion(a) {
+  const box = $('dQuestion');
+  const q = a.state === 'asking' ? a.question : null;
+  box.hidden = !q;
+  if (!q || sameAs(box, [a.name, q])) return;
+  box.replaceChildren();
+  if (q.kind === 'prose') {
+    box.append(el('p', '', 'This agent may be asking you something:'), el('blockquote', '', q.text), el('p', 'hint', 'Answer in the instruction box below.'));
+    return;
+  }
+  const single = q.questions.length === 1 && !q.questions[0].multiSelect;
+  for (const qq of q.questions) {
+    const wrap = el('div', 'q');
+    if (qq.header) wrap.append(el('h4', '', qq.header));
+    wrap.append(el('p', '', qq.question));
+    const opts = el('div', 'opts');
+    qq.options.forEach((o, i) => {
+      if (single && i < 9) {
+        const b = el('button', 'btn opt');
+        b.type = 'button';
+        b.append(el('span', '', `${i + 1}. ${o.label}`));
+        if (o.description) b.append(el('small', '', o.description));
+        b.addEventListener('click', async () => {
+          try { await api('POST', `/api/agents/${a.name}/key`, { key: String(i + 1) }); toast(`Answered: ${o.label}`); }
+          catch (err) { toast(err.message); }
+        });
+        opts.append(b);
+      } else {
+        const r = el('div', 'opt-row', `${i + 1}. ${o.label}`);
+        if (o.description) r.append(el('small', '', o.description));
+        opts.append(r);
+      }
+    });
+    wrap.append(opts);
+    box.append(wrap);
+  }
+  box.append(el('p', 'hint', single
+    ? 'Pick one here. To write your own answer, use "Other" in the terminal.'
+    : 'This question has several parts or allows more than one answer, so answer it in the terminal (Copy attach command below).'));
+}
+
+function renderHealth(a) {
+  const box = $('dHealth');
+  const msgs = [];
+  if (a.stuck) msgs.push(`No change for ${a.stuck.minutes} minutes while working. It may be stuck; check the screen below.`);
+  if (a.looping) msgs.push(`The same command has failed ${a.looping.count} times in a row: ${a.looping.command}`);
+  if (a.sessionUnknown) msgs.push("Can't tell which conversation is this agent's: another agent in this folder started a new one at the same time. Details here may be out of date until it does something.");
+  box.hidden = !msgs.length;
+  if (sameAs(box, msgs)) return;
+  box.replaceChildren(...msgs.map((m) => el('p', '', m)));
+}
+
+function renderStatus(a) {
+  const box = $('dStatus');
+  const rows = [];
+  const c = a.context;
+  if (c) {
+    const dd = el('dd');
+    const m = el('span', `meter ${c.level}`); const fill = el('b'); fill.style.width = `${c.pct}%`; m.append(fill);
+    dd.append(m, document.createTextNode(`${fmtK(c.used)} of ${fmtK(c.window)} (${c.pct}%)`));
+    const sel = el('select', 'ctx-select');
+    sel.setAttribute('aria-label', 'Context window size');
+    for (const [v, t] of [['', 'Auto'], ['200000', '200k'], ['1000000', '1M']]) { const o = el('option', '', t); o.value = v; sel.append(o); }
+    sel.value = c.override ? String(c.window) : '';
+    sel.addEventListener('change', async () => {
+      try { await api('POST', `/api/agents/${a.name}/context`, { contextWindow: sel.value ? Number(sel.value) : null }); }
+      catch (err) { toast(err.message); }
+    });
+    dd.append(sel);
+    rows.push(['Context', dd]);
+  }
+  const r = a.lastResult;
+  if (r) {
+    const dd = el('dd');
+    dd.append(el('span', r.outcome === 'pass' ? 'bd-pass' : 'bd-fail', `${r.outcome === 'pass' ? '✓' : '✗'} ${r.summary}`), document.createTextNode(`  ·  ${r.kind === 'build' ? 'build' : 'tests'}, ${ago(r.at)}`));
+    dd.title = r.command;
+    rows.push([r.kind === 'build' ? 'Last build' : 'Last tests', dd]);
+  }
+  const g = a.git;
+  if (g && g.branch) {
+    const parts = [g.branch];
+    if (g.ahead) parts.push(`↑${g.ahead}`);
+    if (g.behind) parts.push(`↓${g.behind}`);
+    parts.push(g.dirty ? `${g.dirty} uncommitted` : 'clean');
+    rows.push(['Git', el('dd', '', parts.join('  ·  '))]);
+    if (g.pr) {
+      const dd = el('dd');
+      const link = el('a', '', `#${g.pr.number} ${g.pr.title || ''}`.trim());
+      if (g.pr.url) { link.href = g.pr.url; link.target = '_blank'; link.rel = 'noopener noreferrer'; }
+      const ck = g.pr.checks;
+      const ckText = ck.state === 'none' ? 'no checks' : ck.state === 'pass' ? `checks pass (${ck.passed})` : ck.state === 'fail' ? `${ck.failed} check${ck.failed > 1 ? 's' : ''} failing` : `${ck.pending} check${ck.pending > 1 ? 's' : ''} running`;
+      const review = { APPROVED: 'approved', CHANGES_REQUESTED: 'changes requested', REVIEW_REQUIRED: 'review needed' }[g.pr.review] || '';
+      dd.append(link, document.createTextNode('  ·  '), el('span', ck.state === 'pass' ? 'bd-pass' : ck.state === 'fail' ? 'bd-fail' : ck.state === 'pending' ? 'bd-warn' : '', ckText));
+      if (g.pr.draft) dd.append(document.createTextNode('  ·  draft'));
+      if (review) dd.append(document.createTextNode(`  ·  ${review}`));
+      if (g.pr.state && g.pr.state !== 'OPEN') dd.append(document.createTextNode(`  ·  ${g.pr.state.toLowerCase()}`));
+      rows.push(['Pull request', dd]);
+    }
+  }
+  box.hidden = !rows.length;
+  if (document.activeElement && box.contains(document.activeElement)) return; // don't rebuild under an open select
+  if (sameAs(box, [a.name, c, r, g])) return;
+  box.replaceChildren(...rows.flatMap(([k, dd]) => [el('dt', '', k), dd]));
+}
+
+function renderHelpers(a) {
+  const box = $('dHelpers');
+  const hs = a.helpers || [];
+  box.hidden = !hs.length;
+  if (sameAs(box, hs.map((h) => [h.id, h.state, h.kind, h.detail]))) return;
+  box.replaceChildren(el('h3', '', `Helpers (${hs.length})`));
+  for (const h of hs) {
+    const row = el('div', 'helper');
+    const st = h.state === 'working' ? h.kind : h.state;
+    const chip = el('span', `chip ${chipClass(st)}`, LABEL[st] || st);
+    const body = el('div');
+    body.append(el('span', '', h.description || h.name));
+    body.append(el('small', '', [h.type, h.background ? 'background' : '', h.state === 'working' ? h.detail : ''].filter(Boolean).join('  ·  ')));
+    row.append(chip, body);
+    box.append(row);
+  }
+  box.append(el('p', 'hint', "Helpers can't be typed into; interrupt the agent to stop them."));
+}
+
+// ---------- settings ----------
+let settingsLoaded = null;
+async function openSettings() {
+  $('sError').hidden = true;
+  try { settingsLoaded = await (await fetch('/api/config')).json(); } catch { toast('Could not load settings'); return; }
+  const body = $('settingsBody');
+  body.replaceChildren();
+  const groups = new Map();
+  for (const f of settingsLoaded.schema) {
+    if (!groups.has(f.group)) { const fs = el('fieldset'); fs.append(el('legend', '', f.group)); groups.set(f.group, fs); body.append(fs); }
+    const row = el('div', 'set');
+    const id = `set-${f.key.replace(/\W/g, '-')}`;
+    const label = el('label', '', f.label); label.htmlFor = id;
+    let input;
+    if (f.type === 'bool') { input = el('input'); input.type = 'checkbox'; input.checked = !!settingsLoaded.values[f.key]; }
+    else if (f.type === 'enum') { input = el('select'); for (const v of f.values) { const o = el('option', '', v); o.value = v; input.append(o); } input.value = settingsLoaded.values[f.key]; }
+    else { input = el('input'); input.type = 'number'; input.min = f.min; input.max = f.max; input.step = 1; input.value = settingsLoaded.values[f.key]; }
+    input.id = id; input.dataset.key = f.key;
+    const note = el('small');
+    const problem = settingsLoaded.problems && settingsLoaded.problems[f.key];
+    if (problem) row.classList.add('problem');
+    note.append(document.createTextNode(problem || `${f.help ? f.help + ' · ' : ''}Default: ${f.default} `));
+    const reset = el('button', 'reset', 'reset'); reset.type = 'button';
+    reset.addEventListener('click', () => { if (f.type === 'bool') input.checked = f.default; else input.value = f.default; });
+    note.append(reset);
+    row.append(label, input, note);
+    groups.get(f.group).append(row);
+  }
+  $('settingsDialog').showModal();
+}
+$('settingsBtn').addEventListener('click', openSettings);
+$('sCancel').addEventListener('click', () => $('settingsDialog').close());
+$('settingsForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const patch = {};
+  for (const input of $('settingsBody').querySelectorAll('[data-key]')) {
+    const f = settingsLoaded.schema.find((x) => x.key === input.dataset.key);
+    const v = f.type === 'bool' ? input.checked : f.type === 'int' ? Number(input.value) : input.value;
+    if (v === settingsLoaded.values[f.key]) continue;
+    patch[f.key] = v === f.default ? null : v;
+  }
+  if (!Object.keys(patch).length) { $('settingsDialog').close(); return; }
+  try { await api('POST', '/api/config', { patch }); $('settingsDialog').close(); toast('Settings saved'); }
+  catch (err) { $('sError').textContent = err.message; $('sError').hidden = false; }
+});
 
 $('compose').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -740,9 +992,13 @@ tickClock();
 setInterval(tickClock, 1000);
 
 // ---------- office drawing ----------
-const W = 384, WALL = 58, ROW_H = 64, COLS = 4, SLOT_W = 68, X0 = 10;
+const WALL = 58, ROW_H = 64, SLOT_W = 68, X0 = 10;
+let COLS = 4, W = 384;
+// Extra width when there are more than 4 desks per row; the lounge and right-hand wall shift right by this much.
+const DX = () => Math.max(0, (COLS - 4) * SLOT_W);
 const canvas = $('office');
 const ctx = canvas.getContext('2d');
+function applyLayout() { W = 384 + DX(); canvas.width = W; renderTags(); }
 const dark = matchMedia('(prefers-color-scheme: dark)');
 let H = 208;
 
@@ -775,10 +1031,17 @@ const ICONS = {
   planning: ['#.###', '.....', '#.###', '.....', '#.###'],
   done: ['....#', '...#.', '#.#..', '.#...', '.....'],
   waiting: ['..#..', '..#..', '..#..', '.....', '..#..'],
+  asking: ['.###.', '#...#', '..##.', '.....', '..#..'],
+  tests: ['..#..', '.#.#.', '.#.#.', '#...#', '#####'],
+  build: ['###..', '#####', '###..', '.#...', '.#...'],
+  deploy: ['..#..', '.###.', '#.#.#', '..#..', '..#..'],
+  data: ['.###.', '#...#', '.###.', '#...#', '.###.'],
+  review: ['.....', '.###.', '#.#.#', '.###.', '.....'],
+  git: ['#....', '#..#.', '#.#..', '##...', '#....'],
   push: ['..#..', '.###.', '.###.', '#####', '.#.#.'],
   pr: ['..#..', '#####', '.###.', '.#.#.', '#...#'],
 };
-const ICON_COLOR = { reading: '#2F5FC4', writing: '#2F5FC4', running: '#2F5FC4', delegating: '#2F5FC4', browsing: '#2F5FC4', planning: '#2F5FC4', done: '#23845A', push: '#D8572A', pr: '#C2417A' };
+const ICON_COLOR = { reading: '#2F5FC4', writing: '#2F5FC4', running: '#2F5FC4', delegating: '#2F5FC4', browsing: '#2F5FC4', planning: '#2F5FC4', done: '#23845A', push: '#D8572A', pr: '#C2417A', tests: '#2F5FC4', build: '#2F5FC4', deploy: '#2F5FC4', data: '#2F5FC4', review: '#2F5FC4', git: '#2F5FC4' };
 
 function slot(i) {
   const col = i % COLS, row = Math.floor(i / COLS);
@@ -787,11 +1050,12 @@ function slot(i) {
 }
 function rowsFor(n) { return Math.max(2, Math.ceil((n + 1) / COLS)); }
 function idleSpot(k) {
+  const d = DX();
   const couch = [[314, WALL + 50, 'couch'], [336, WALL + 50, 'couch'], [358, WALL + 50, 'couch']];
   const stand = [[350, WALL + 14, 'stand'], [322, WALL + 16, 'stand'], [306, WALL + 96, 'stand'], [334, WALL + 100, 'stand'], [362, WALL + 96, 'stand']];
   const all = couch.concat(stand);
-  if (k < all.length) return all[k];
-  return [300 + ((k * 13) % 70), WALL + 112 + ((k * 7) % 30), 'stand'];
+  const [x, y, pose] = k < all.length ? all[k] : [300 + ((k * 13) % 70), WALL + 112 + ((k * 7) % 30), 'stand'];
+  return [x + d, y, pose];
 }
 const DOOR = [205, WALL + 3];
 
@@ -822,7 +1086,7 @@ function person(c, fx, fy, look, pose, t, mood, P) {
     const wave = Math.floor(t * 8) % 2;
     px(c, look.shirt, fx - 6, ty - 4 + wave, 2, 5); px(c, look.skin, fx - 6, ty - 5 + wave, 2, 1);
     px(c, look.shirt, fx + 4, ty - 4 + (1 - wave), 2, 5); px(c, look.skin, fx + 4, ty - 5 + (1 - wave), 2, 1);
-  } else if (mood === 'waiting') {
+  } else if (mood === 'waiting' || mood === 'asking') {
     const wave = Math.floor(t * 4) % 2;
     px(c, look.shirt, fx + 4, ty - 4 + wave, 2, 5); px(c, look.skin, fx + 4, ty - 5 + wave, 2, 1);
   } else { px(c, look.shirt, fx + 4, ty + ra, 2, 4); px(c, look.skin, fx + 4, ty + 4 + ra, 2, 1); }
@@ -838,9 +1102,10 @@ function person(c, fx, fy, look, pose, t, mood, P) {
 
 function bubble(c, x, top, kind, t, P) {
   x = Math.round(x);
-  const bounce = kind === 'waiting' ? Math.round(Math.abs(Math.sin(t * 5)) * -2) : 0;
+  const loud = kind === 'waiting' || kind === 'asking';
+  const bounce = loud ? Math.round(Math.abs(Math.sin(t * 5)) * -2) : 0;
   const y = top - 10 + bounce;
-  const fill = kind === 'waiting' ? '#F29E1F' : P.bubble;
+  const fill = kind === 'waiting' ? '#F29E1F' : kind === 'asking' ? '#3B6FD8' : P.bubble;
   px(c, P.ink, x - 6, y - 1, 13, 10); px(c, fill, x - 5, y, 11, 8);
   px(c, P.ink, x - 1, y + 9, 3, 1); px(c, fill, x, y + 8, 1, 1);
   if (kind === 'thinking') {
@@ -849,7 +1114,7 @@ function bubble(c, x, top, kind, t, P) {
     return;
   }
   const icon = ICONS[kind]; if (!icon) return;
-  const col = kind === 'waiting' ? '#FFFFFF' : ICON_COLOR[kind];
+  const col = loud ? '#FFFFFF' : ICON_COLOR[kind];
   icon.forEach((row, r) => [...row].forEach((ch, k) => { if (ch === '#') px(c, col, x - 2 + k, y + 1 + r, 1, 1); }));
 }
 
@@ -930,10 +1195,11 @@ function drawRoom(c, P, t, counts, tod) {
     c.restore();
     px(c, P.frame, wx + 29, 10, 2, 28);
   }
-  drawWallCalendar(c, P, tod.date);
-  drawWallClock(c, P, tod.date);
   // door
   px(c, P.door, 196, 24, 18, WALL - 26); px(c, '#D4B04A', 210, 40, 2, 2);
+  c.save(); c.translate(DX(), 0);
+  drawWallCalendar(c, P, tod.date);
+  drawWallClock(c, P, tod.date);
   // whiteboard with live tally
   px(c, P.ink, 230, 10, 54, 34); px(c, P.board, 231, 11, 52, 32);
   const bars = [[counts.working, '#3B6FD8'], [counts.waiting, '#F29E1F'], [counts.done, '#2E9E6A'], [counts.idle, '#8A90A6']];
@@ -947,12 +1213,15 @@ function drawRoom(c, P, t, counts, tod) {
   px(c, P.pot, 368, 44, 10, 10); px(c, P.plant, 365, 30, 6, 14); px(c, P.plant, 372, 26, 6, 18); px(c, P.plant, 377, 33, 5, 11);
   // rug
   px(c, P.rug, 296, WALL + 26, 84, 44);
+  c.restore();
 }
 
 function drawCouch(c, P) {
+  c.save(); c.translate(DX(), 0);
   px(c, P.couchDark, 302, WALL + 28, 68, 12);
   px(c, P.couch, 302, WALL + 40, 68, 7);
   px(c, P.couchDark, 298, WALL + 32, 5, 18); px(c, P.couchDark, 369, WALL + 32, 5, 18);
+  c.restore();
 }
 
 function drawDesk(c, P, s, a, t) {
@@ -966,14 +1235,32 @@ function drawDesk(c, P, s, a, t) {
     px(c, P.lid, sx + 12, sy + 14, 16, 10);
     px(c, '#FFFFFF', sx + 19, sy + 18, 2, 2);
     const st = displayState(a);
-    const glow = st === 'waiting' ? '#F29E1F' : WORKING.has(st) ? '#6FA0FF' : st === 'done' ? '#5CC793' : '#9AA0B5';
+    const glow = st === 'waiting' ? '#F29E1F' : st === 'asking' ? '#3B6FD8' : WORKING.has(st) ? '#6FA0FF' : st === 'done' ? '#5CC793' : '#9AA0B5';
     px(c, glow, sx + 12, sy + 13, 16, 1);
     if (a.state === 'running' && Math.floor(t * 6) % 2) px(c, '#5CC793', sx + 26, sy + 22, 1, 1);
   } else {
     px(c, P.lid, sx + 12, sy + 22, 16, 2);
   }
+  if (helpersShown(a).length) return; // helpers stand where the mug is
   px(c, '#EDEFF5', sx + 48, sy + 19, 5, 5); px(c, '#EDEFF5', sx + 53, sy + 20, 2, 2);
   if (on && WORKING.has(a.state) && Math.floor(t * 2) % 2) px(c, '#C9CFDF', sx + 50, sy + 16, 1, 2);
+}
+
+// Helpers (subagents): small figures standing behind the right end of the parent's desk.
+// A lighter version of a colour, for helpers in their parent's team colour.
+function shade(hex) { const n = parseInt(hex.slice(1), 16); const m = (v) => Math.min(255, Math.round(v + (255 - v) * 0.35)); return `#${[(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => m(v).toString(16).padStart(2, '0')).join('')}`; }
+const helpersShown = (a) => (a && a.state !== 'stopped' ? (a.helpers || []).slice(0, settings.maxHelpersShown) : []);
+function helperFigure(c, x, y, h, look, t, P) {
+  x = Math.round(x); y = Math.round(y);
+  const working = h.state === 'working';
+  const bob = working && Math.floor(t * 5 + x) % 2 ? 1 : 0;
+  const top = y - 11 + bob;
+  px(c, look.shirt, x - 2, top + 5, 5, 6); // body
+  px(c, look.skin, x - 2, top + 1, 5, 4); // head
+  px(c, look.hair, x - 2, top, 5, 2);
+  px(c, P.ink, x - 1, top + 3, 1, 1); px(c, P.ink, x + 1, top + 3, 1, 1);
+  const dot = h.state === 'working' ? (Math.floor(t * 3) % 2 ? '#3B6FD8' : '#6FA0FF') : h.state === 'done' ? '#2E9E6A' : '#8A90A6';
+  px(c, P.ink, x - 1, top - 5, 3, 3); px(c, dot, x, top - 4, 1, 1);
 }
 
 let lastT = performance.now();
@@ -1027,6 +1314,16 @@ function frame(now) {
   const slots = rows * COLS;
   for (let i = 0; i < slots; i++) { const s = slot(i); items.push({ y: s.sy + 27.5, draw: () => drawDesk(ctx, P, s, agents[i], t) }); }
   items.push({ y: WALL + 41, draw: () => drawCouch(ctx, P) });
+  agents.forEach((a, i) => {
+    const shown = helpersShown(a);
+    if (!shown.length) return;
+    const s = slot(i);
+    const look = lookFor(a.name, i);
+    const helperLook = { ...look, shirt: shade(look.shirt), hair: look.hair, skin: look.skin };
+    shown.forEach((h, k) => items.push({ y: s.sy + 24, draw: () => helperFigure(ctx, s.sx + 49 + k * 6, s.sy + 26, h, helperLook, t, P) }));
+    const more = (a.helpers || []).length - shown.length;
+    if (more > 0) items.push({ y: s.sy + 24, draw: () => { px(ctx, P.ink, s.sx + 50, s.sy + 2, 3, 1); px(ctx, P.ink, s.sx + 51, s.sy + 1, 1, 3); drawDigits(ctx, P.ink, String(Math.min(more, 9)), s.sx + 54, s.sy); } });
+  });
   const heads = [];
   agents.forEach((a, i) => {
     const ch = chars.get(a.name); if (!ch) return;
@@ -1056,7 +1353,7 @@ function frame(now) {
     const s = displayState(a);
     if (party) { bubble(ctx, x, hy, party.kind, t, P); continue; }
     if (ch.pose === 'walk') continue;
-    if (s === 'waiting' || s === 'done' || WORKING.has(s)) bubble(ctx, x, hy, s, t, P);
+    if (s === 'waiting' || s === 'asking' || s === 'done' || WORKING.has(s)) bubble(ctx, x, hy, s, t, P);
     else if (ch.pose === 'couch' && Math.floor(t / 2 + (hash(a.name) % 5)) % 3 === 0) {
       const zy = Math.round(hy - 4 - (t * 4) % 6);
       [[0, 0], [1, 0], [2, 0], [1, 1], [0, 2], [1, 2], [2, 2]].forEach(([u, v]) => px(ctx, P.ink, x + 4 + u, zy + v, 1, 1));
@@ -1085,20 +1382,36 @@ function renderTags() {
     let b = tagEls.get(a.name);
     if (!b) {
       b = document.createElement('button');
-      b.append(document.createElement('span'), document.createElement('small'));
+      const meter = el('i', 'tm'); meter.append(el('b'));
+      b.append(el('span', 'nm'), el('small', 'st'), el('span', 'meta'), meter);
       b.addEventListener('click', () => select(a.name));
       box.append(b); tagEls.set(a.name, b);
     }
     const s = slot(i);
     const st = displayState(a);
-    b.className = `tag ${st === 'waiting' ? 'waiting' : st === 'done' ? 'done' : ''} ${a.name === selected ? 'selected' : ''}`;
+    b.className = `tag ${st === 'waiting' ? 'waiting' : st === 'asking' && needsYou(a) ? 'asking' : st === 'done' ? 'done' : ''} ${a.name === selected ? 'selected' : ''}`;
     b.style.left = `${s.tagX * scale}px`;
     b.style.top = `${s.tagY * scale}px`;
     b.style.maxWidth = `${(SLOT_W - 4) * scale}px`;
     b.setAttribute('aria-pressed', String(a.name === selected));
     b.title = `${a.label || a.name}: ${a.detail || LABEL[st]}`;
-    b.firstChild.textContent = a.label || a.name;
-    b.lastChild.textContent = LABEL[st] || st;
+    b.querySelector('.nm').textContent = a.label || a.name;
+    b.querySelector('.st').textContent = LABEL[st] || st;
+    // Compact badges: last tests/build, PR checks, stuck/looping.
+    const badges = [];
+    if (a.lastResult) badges.push([a.lastResult.outcome === 'pass' ? 'bd-pass' : 'bd-fail', a.lastResult.outcome === 'pass' ? '✓' : '✗', `${a.lastResult.kind === 'build' ? 'Build' : 'Tests'}: ${a.lastResult.summary}`]);
+    const ck = a.git && a.git.pr && a.git.pr.checks;
+    if (ck && ck.state !== 'none') badges.push([ck.state === 'pass' ? 'bd-pass' : ck.state === 'fail' ? 'bd-fail' : 'bd-warn', `PR●`, `PR #${a.git.pr.number}: checks ${ck.state}`]);
+    if (a.stuck) badges.push(['bd-warn', '⏳', `No change for ${a.stuck.minutes} min`]);
+    if (a.looping) badges.push(['bd-fail', '↻', `Same command failed ${a.looping.count}× in a row`]);
+    if ((a.helpers || []).some((h) => h.state === 'working')) badges.push(['bd-info', `+${a.helpers.filter((h) => h.state === 'working').length}`, 'Helpers working']);
+    const meta = b.querySelector('.meta');
+    const key = JSON.stringify(badges);
+    if (meta.dataset.key !== key) { meta.dataset.key = key; meta.replaceChildren(...badges.map(([cls, txt, tip]) => { const sp = el('span', cls, txt); sp.title = tip; return sp; })); }
+    const tm = b.querySelector('.tm');
+    tm.hidden = !a.context;
+    if (a.context) { tm.className = `tm ${a.context.level}`; tm.firstChild.style.width = `${a.context.pct}%`; tm.title = `Context ${a.context.pct}% used`; }
+    if (a.context) b.title += ` · context ${a.context.pct}%`;
   });
 }
 canvas.addEventListener('click', (e) => {

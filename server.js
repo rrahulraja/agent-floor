@@ -10,7 +10,11 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { execFile } = require('child_process');
+const T = require('./lib/transcript');
+const G = require('./lib/git');
+const { createConfig } = require('./lib/config');
 
 const PORT = Number(process.env.PORT || 4777);
 const HOST = '127.0.0.1';
@@ -19,16 +23,17 @@ const HOME = os.homedir();
 const PROJECTS_DIR = process.env.CLAUDE_PROJECTS_DIR || path.join(HOME, '.claude', 'projects');
 const DATA_DIR = path.join(HOME, '.agent-floor');
 const AGENTS_FILE = path.join(DATA_DIR, 'agents.json');
-const POLL_MS = 1000;
 const NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const SESSION_RE = /^[A-Za-z0-9-]{8,64}$/;
-const KEYS = new Set(['Enter', 'Escape', '1', '2', '3', 'BTab', 'Up', 'Down']);
+const KEYS = new Set(['Enter', 'Escape', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'BTab', 'Up', 'Down']);
+const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
+const { short, textOf } = T;
 const INDEX_FILE = path.join(__dirname, 'public', 'index.html');
 
 // ---------- helpers ----------
-function run(cmd, args) {
+function run(cmd, args, opts = {}) {
   return new Promise((resolve) => {
-    execFile(cmd, args, { maxBuffer: 8 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile(cmd, args, { maxBuffer: 8 * 1024 * 1024, ...opts }, (err, stdout, stderr) => {
       resolve({ ok: !err, stdout: stdout || '', stderr: (stderr || (err && err.message) || '').trim() });
     });
   });
@@ -57,11 +62,7 @@ function which(bin) {
   return null;
 }
 const CLAUDE_BIN = process.env.CLAUDE_CMD || which('claude') || 'claude';
-
-function short(s, n = 70) {
-  s = String(s || '').replace(/\s+/g, ' ').trim();
-  return s.length > n ? s.slice(0, n - 1) + '…' : s;
-}
+const GH_BIN = which('gh');
 
 // ---------- saved agents ----------
 let saved = [];
@@ -70,7 +71,9 @@ try { saved = JSON.parse(fs.readFileSync(AGENTS_FILE, 'utf8')).filter((a) => NAM
 const cleanLabel = (s) => String(s || '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
 function persist() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(AGENTS_FILE, JSON.stringify(saved.map(({ name, cwd, label }) => (label ? { name, cwd, label } : { name, cwd })), null, 2));
+  const keep = ({ name, cwd, label, sessionId, contextWindow }) =>
+    Object.fromEntries(Object.entries({ name, cwd, label, sessionId, contextWindow }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  fs.writeFileSync(AGENTS_FILE, JSON.stringify(saved.map(keep), null, 2));
 }
 
 // ---------- tmux ----------
@@ -91,20 +94,33 @@ async function capture(name) {
   return r.ok ? r.stdout.replace(/\s+$/, '') : '';
 }
 
-// conversation: '' = start fresh, 'latest' = claude --continue, otherwise a session id for claude --resume
+// conversation: '' = start fresh, 'latest' = the newest conversation in the folder, otherwise a session id.
+// Every start pins a known session id, so each agent reads its own transcript even when agents share a folder.
+// Returns that session id.
 async function startAgent(name, cwd, conversation) {
   let cmd = `'${CLAUDE_BIN}'`;
-  if (conversation === 'latest') cmd += ' --continue';
-  else if (conversation) {
+  let sessionId;
+  if (conversation === 'latest') {
+    const newest = await newestTranscript(cwd);
+    const id = newest && path.basename(newest.path, '.jsonl');
+    if (id && SESSION_RE.test(id)) conversation = id;
+    else conversation = '';
+  }
+  if (conversation) {
     if (!SESSION_RE.test(conversation) || !fs.existsSync(path.join(PROJECTS_DIR, encodeCwd(cwd), `${conversation}.jsonl`))) {
       throw new Error('That conversation was not found in this folder.');
     }
     cmd += ` --resume ${conversation}`;
+    sessionId = conversation;
+  } else {
+    sessionId = crypto.randomUUID();
+    cmd += ` --session-id ${sessionId}`;
   }
   const r = await tmux('new-session', '-d', '-s', PREFIX + name, '-c', cwd, '-x', '160', '-y', '48',
     '-e', `PATH=${process.env.PATH}`, cmd);
   if (!r.ok) throw new Error(r.stderr || 'tmux could not start the session');
   await tmux('set-option', '-t', `=${PREFIX}${name}`, '@cwd', cwd);
+  return sessionId;
 }
 
 async function sendPrompt(name, text) {
@@ -250,105 +266,9 @@ async function listConversations(cwd) {
   return items.sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 40);
 }
 
-const TOOL_KIND = {
-  Read: 'reading', Grep: 'reading', Glob: 'reading', LS: 'reading', NotebookRead: 'reading',
-  Edit: 'writing', MultiEdit: 'writing', Write: 'writing', NotebookEdit: 'writing',
-  Bash: 'running', BashOutput: 'running', KillShell: 'running', KillBash: 'running',
-  Task: 'delegating', Agent: 'delegating',
-  WebFetch: 'browsing', WebSearch: 'browsing',
-  TodoWrite: 'planning', ExitPlanMode: 'planning',
-};
-const kindForTool = (n) => TOOL_KIND[n] || (n.startsWith('mcp__') ? 'browsing' : 'thinking');
-
-function describeTool(name, input) {
-  switch (name) {
-    case 'Read': case 'Write': case 'Edit': case 'MultiEdit': case 'NotebookEdit':
-      return `${name} ${path.basename(input.file_path || input.notebook_path || '')}`;
-    case 'Bash': return `$ ${short(input.command, 60)}`;
-    case 'Grep': return `Search for “${short(input.pattern, 40)}”`;
-    case 'Glob': return `Find ${short(input.pattern, 40)}`;
-    case 'Task': case 'Agent': return `Hand off: ${short(input.description || input.prompt, 50)}`;
-    case 'WebFetch': return `Open ${short(input.url, 50)}`;
-    case 'WebSearch': return `Search the web for “${short(input.query, 40)}”`;
-    case 'TodoWrite': return 'Update the to-do list';
-    default: return short(name.replace(/^mcp__/, '').replace(/__/g, ' › '), 50);
-  }
-}
-
-function textOf(content) {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.filter((b) => b && b.type === 'text').map((b) => b.text).join(' ');
-  return '';
-}
-
-function analyze(entries) {
-  const out = { kind: 'thinking', detail: '', lastPrompt: '', lastReply: '', ended: false };
-  let gotActivity = false;
-  for (let i = entries.length - 1; i >= 0; i--) {
-    const e = entries[i];
-    if (!e || (e.type !== 'user' && e.type !== 'assistant') || e.isSidechain || !e.message) continue;
-    const content = e.message.content;
-    if (e.type === 'assistant') {
-      const blocks = Array.isArray(content) ? content : [];
-      const tool = [...blocks].reverse().find((b) => b && b.type === 'tool_use');
-      const text = textOf(blocks).trim();
-      if (!gotActivity) {
-        gotActivity = true;
-        if (tool) { out.kind = kindForTool(tool.name); out.detail = describeTool(tool.name, tool.input || {}); }
-        else if (text) out.detail = short(text, 80);
-        if (!tool && e.message.stop_reason === 'end_turn') out.ended = true;
-      }
-      if (!out.lastReply && text) out.lastReply = short(text, 400);
-    } else {
-      const isToolResult = Array.isArray(content) && content.some((b) => b && b.type === 'tool_result');
-      if (!gotActivity) {
-        gotActivity = true;
-        out.detail = isToolResult ? 'Looking at the results' : 'Reading your instruction';
-        if (textOf(content).startsWith('[Request interrupted')) out.ended = true;
-      }
-      if (!isToolResult && !e.isMeta && !out.lastPrompt) {
-        const t = textOf(content).trim();
-        if (t && !t.startsWith('<') && !t.startsWith('[Request interrupted')) out.lastPrompt = short(t, 400);
-      }
-    }
-    if (gotActivity && out.lastPrompt && out.lastReply) break;
-  }
-  return out;
-}
-
 // ---------- celebrations: a successful git push, a new pull request ----------
 const SERVER_START = Date.now();
-const PUSH_CMD = /(^|[\s;&|(])git\s+(-C\s+\S+\s+)?push\b/;
-const resultText = (c) => (typeof c === 'string' ? c : Array.isArray(c) ? c.map((b) => (b && b.text) || '').join('\n') : '');
-function findCelebrations(entries) {
-  const pushes = new Map();
-  const out = [];
-  for (const e of entries) {
-    if (!e) continue;
-    const at = Date.parse(e.timestamp) || 0;
-    if (e.type === 'pr-link' && /^https:\/\/[^\s"<>]+$/.test(e.prUrl || '')) {
-      out.push({ id: `pr:${e.prUrl}`, kind: 'pr', at, number: e.prNumber, url: e.prUrl, repo: e.prRepository || '' });
-      continue;
-    }
-    if (!e.message || e.isSidechain || !Array.isArray(e.message.content)) continue;
-    for (const b of e.message.content) {
-      if (!b) continue;
-      if (b.type === 'tool_use' && b.name === 'Bash' && PUSH_CMD.test((b.input && b.input.command) || '')) pushes.set(b.id, true);
-      else if (b.type === 'tool_result' && pushes.has(b.tool_use_id) && !b.is_error) {
-        const text = resultText(b.content);
-        const to = text.match(/^To\s+(\S+)/m);
-        const branch = text.match(/->\s*(\S+)/);
-        if (!to || !branch || /\[rejected\]|failed to push/i.test(text)) continue;
-        const gh = to[1].match(/github\.com[:/]([\w.-]+\/[\w.-]+?)(\.git)?$/);
-        out.push({
-          id: `push:${b.tool_use_id}`, kind: 'push', at, branch: branch[1], repo: gh ? gh[1] : '',
-          url: gh ? `https://github.com/${gh[1]}/tree/${encodeURIComponent(branch[1]).replace(/%2F/g, '/')}` : '',
-        });
-      }
-    }
-  }
-  return out;
-}
+const findCelebrations = T.findCelebrations;
 const celebrations = new Map(); // agent -> { seen:Set, recent:[] }
 function celebrate(name, entries, since) {
   let cs = celebrations.get(name);
@@ -370,12 +290,160 @@ function paneSignals(text) {
   return { waiting, busy };
 }
 
+// ---------- which transcript belongs to which agent ----------
+// First entries of a transcript (cached; the head of a file never changes).
+const headCache = new Map();
+async function readHead(file) {
+  if (headCache.has(file)) return headCache.get(file);
+  const entries = [];
+  const fh = await fsp.open(file, 'r');
+  try {
+    const buf = Buffer.alloc(32 * 1024);
+    const { bytesRead } = await fh.read(buf, 0, buf.length, 0);
+    for (const l of buf.toString('utf8', 0, bytesRead).split('\n').slice(0, 25)) {
+      try { entries.push(JSON.parse(l)); } catch {}
+    }
+  } finally { await fh.close(); }
+  const born = entries.map((e) => Date.parse(e && e.timestamp)).find((t) => t > 0) || 0;
+  const head = { entries, born, clear: T.startedByClear(entries) };
+  if (entries.length >= 3) headCache.set(file, head); // a brand-new file may still be growing
+  return head;
+}
+
+async function transcriptsIn(dir) {
+  let names;
+  try { names = await fsp.readdir(dir); } catch { return []; }
+  const out = [];
+  for (const n of names) {
+    if (!n.endsWith('.jsonl') || !SESSION_RE.test(n.slice(0, -6))) continue;
+    try { const st = await fsp.stat(path.join(dir, n)); out.push({ id: n.slice(0, -6), path: path.join(dir, n), mtimeMs: st.mtimeMs, size: st.size }); } catch {}
+  }
+  return out;
+}
+
+// Returns { file, unknown } for an agent. Follows /clear (and resumes that fork to a new id) onto the new
+// transcript, but only when exactly one floor agent in that folder could have started it.
+async function resolveTranscript(a, s, sessions) {
+  const files = await transcriptsIn(path.join(PROJECTS_DIR, encodeCwd(a.cwd)));
+  const ownedByOthers = new Set(saved.filter((o) => o !== a && o.sessionId && o.cwd === a.cwd).map((o) => o.sessionId));
+  const bound = a.sessionId ? files.find((f) => f.id === a.sessionId) || null : null;
+  const since = s.created - 2000;
+  const candidates = files.filter((f) => !ownedByOthers.has(f.id) && f !== bound && f.mtimeMs >= since && (!bound || f.mtimeMs > bound.mtimeMs));
+  if (!a.sessionId) {
+    // Not started by us (adopted tmux session): newest transcript nobody else owns.
+    const newest = candidates.sort((x, y) => y.mtimeMs - x.mtimeMs)[0] || null;
+    return { file: newest, unknown: false };
+  }
+  if (!candidates.length) return { file: bound, unknown: false };
+  const cand = candidates.sort((x, y) => y.mtimeMs - x.mtimeMs)[0];
+  const head = await readHead(cand.path);
+  const born = head.born || cand.mtimeMs;
+  if (born < since) return { file: bound, unknown: false };
+  const boundQuiet = !bound || bound.mtimeMs <= born + 1000;
+  if (!head.clear && !boundQuiet) return { file: bound, unknown: false }; // someone else's session, e.g. a plain terminal
+  // Which other running floor agents in this folder could have started it? Ones whose own transcript went
+  // quiet and whose screen changed around the time the new transcript began (an idle agent's screen doesn't).
+  const rivals = [];
+  for (const o of saved) {
+    if (o === a || o.cwd !== a.cwd || !sessions.has(o.name)) continue;
+    const of = o.sessionId ? files.find((f) => f.id === o.sessionId) : null;
+    const screenAt = (memory.get(o.name) || {}).screenAt || 0;
+    if ((!of || of.mtimeMs <= born + 1000) && screenAt >= born - 3000) rivals.push(o.name);
+  }
+  if (rivals.length) return { file: bound, unknown: true };
+  a.sessionId = cand.id;
+  persist();
+  return { file: cand, unknown: false };
+}
+
+// ---------- helpers (subagents) ----------
+const metaCache = new Map();
+async function readMeta(file) {
+  try {
+    const st = await fsp.stat(file);
+    const c = metaCache.get(file);
+    if (c && c.mtimeMs === st.mtimeMs) return c.meta;
+    const meta = JSON.parse(await fsp.readFile(file, 'utf8'));
+    metaCache.set(file, { mtimeMs: st.mtimeMs, meta });
+    return meta;
+  } catch { return {}; }
+}
+async function listHelpers(file, since) {
+  const dir = path.join(file.path.slice(0, -6), 'subagents');
+  let names;
+  try { names = await fsp.readdir(dir); } catch { return []; }
+  const now = Date.now();
+  const out = [];
+  for (const n of names) {
+    if (!/^agent-[\w-]+\.jsonl$/.test(n)) continue;
+    const jsonl = path.join(dir, n);
+    let st; try { st = await fsp.stat(jsonl); } catch { continue; }
+    if (st.mtimeMs < since) continue;
+    const meta = await readMeta(jsonl.replace(/\.jsonl$/, '.meta.json'));
+    const info = T.analyze(await readTail({ path: jsonl, mtimeMs: st.mtimeMs, size: st.size }), { sidechain: true });
+    const state = T.helperState(info, meta, st.mtimeMs, now, CONFIG.get('helperActiveSeconds'));
+    if (state !== 'working' && now - st.mtimeMs > 120000) continue; // finished helpers linger two minutes
+    out.push({
+      id: n.slice(6, -6), name: short(meta.name || meta.agentType || 'helper', 40), description: short(meta.description, 120),
+      type: meta.agentType || '', background: meta.requestShape === 'background', state,
+      kind: state === 'working' ? info.kind : state, detail: info.detail, updatedAt: st.mtimeMs,
+    });
+  }
+  return out.sort((x, y) => y.updatedAt - x.updatedAt).slice(0, 12);
+}
+
+// ---------- git and pull requests (slow, cached, never blocks the poll) ----------
+const gitCache = new Map(); // cwd -> { status, pr, at, ghAt, busy }
+function gitInfo(cwd) {
+  let c = gitCache.get(cwd);
+  if (!c) gitCache.set(cwd, (c = { status: null, pr: null, at: 0, ghAt: 0, busy: false }));
+  if (!c.busy && Date.now() - c.at > CONFIG.get('gitPollMs')) refreshGit(cwd, c);
+  return c.status ? { ...c.status, pr: c.pr } : null;
+}
+async function refreshGit(cwd, c) {
+  c.busy = true;
+  try {
+    const r = await run('git', ['-C', cwd, 'status', '--porcelain=v2', '--branch'], { timeout: 5000 });
+    c.status = r.ok ? G.parseStatus(r.stdout) : null;
+    c.at = Date.now();
+    const branch = c.status && c.status.branch;
+    if (!branch || branch === 'detached HEAD' || !GH_BIN) c.pr = null;
+    else if (Date.now() - c.ghAt > CONFIG.get('ghPollMs') || c.prBranch !== branch) {
+      const g = await run(GH_BIN, ['pr', 'view', '--json', 'number,url,title,state,isDraft,reviewDecision,statusCheckRollup'], { cwd, timeout: 15000 });
+      c.ghAt = Date.now(); c.prBranch = branch;
+      try { c.pr = g.ok ? G.parsePr(JSON.parse(g.stdout)) : null; } catch { c.pr = null; }
+    }
+  } finally { c.busy = false; }
+}
+
 // ---------- polling ----------
 const memory = new Map();
 const startedAt = new Map();
-let snapshot = { agents: [], tmux: true, claude: CLAUDE_BIN };
+const maxContextSeen = new Map(); // session id -> largest context seen (to spot 1M windows)
+let snapshot = { agents: [], tmux: true, claude: CLAUDE_BIN, settings: {} };
 let snapshotJson = '';
 const clients = new Set();
+const WORKING_KINDS = new Set(['thinking', 'reading', 'writing', 'running', 'delegating', 'browsing', 'planning', 'tests', 'build', 'deploy', 'data', 'review', 'git']);
+
+function contextFor(a, info) {
+  const used = T.contextTokens(info.usage);
+  if (!used) return null;
+  const key = a.sessionId || a.name;
+  const max = Math.max(used, maxContextSeen.get(key) || 0);
+  maxContextSeen.set(key, max);
+  const window = a.contextWindow || (CONFIG.get('contextInfer1M') && max > 200000 ? 1000000 : CONFIG.get('contextWindow'));
+  const pct = Math.min(100, Math.round((used / window) * 100));
+  const level = pct >= CONFIG.get('contextAlertPct') ? 'alert' : pct >= CONFIG.get('contextWarnPct') ? 'warn' : 'ok';
+  return { used, window, pct, level, model: info.model, override: !!a.contextWindow };
+}
+
+function settingsForPage() {
+  const c = CONFIG.all();
+  return {
+    theme: c.theme, desksPerRow: c.desksPerRow, proseQuestion: c.proseQuestion, maxHelpersShown: c.maxHelpersShown,
+    celebrateSeconds: c['celebrate.seconds'], contextWarnPct: c.contextWarnPct, contextAlertPct: c.contextAlertPct,
+  };
+}
 
 async function poll() {
   const sessions = await listSessions();
@@ -385,6 +453,7 @@ async function poll() {
   }
   if (changed) persist();
 
+  const now = Date.now();
   const agents = [];
   for (const a of saved) {
     const s = sessions.get(a.name);
@@ -394,37 +463,74 @@ async function poll() {
       item.state = 'stopped';
       item.detail = 'Not running';
       const st = startedAt.get(a.name);
-      if (st && Date.now() - st < 10000) {
+      if (st && now - st < 10000) {
         item.error = 'Claude exited right after starting. If you picked a conversation to continue, try another one or start fresh.';
       }
     } else {
       const screen = await capture(a.name);
       const sig = paneSignals(screen);
-      const file = await newestTranscript(a.cwd);
-      let info = { kind: 'thinking', detail: '', lastPrompt: '', lastReply: '', ended: false };
+      const { file, unknown } = await resolveTranscript(a, s, sessions);
+      let info = { kind: 'thinking', detail: '', lastPrompt: '', lastReply: '', ended: false, question: null, usage: null, lastResult: null, looping: null };
+      let entries = [];
       if (file && file.mtimeMs >= s.created - 2000) {
-        const entries = await readTail(file);
-        info = analyze(entries);
-        item.celebrations = celebrate(a.name, entries, Math.max(SERVER_START, s.created));
+        entries = await readTail(file);
+        info = T.analyze(entries);
+        const keep = (c) => (c.kind === 'push' ? CONFIG.get('celebrate.push') : CONFIG.get('celebrate.pr'));
+        item.celebrations = celebrate(a.name, entries, Math.max(SERVER_START, s.created)).filter(keep);
       }
-      const recentWrite = file && Date.now() - file.mtimeMs < 4000 && file.mtimeMs >= s.created;
-      const waiting = sig.waiting && !info.ended;
+      const recentWrite = file && now - file.mtimeMs < 4000 && file.mtimeMs >= s.created;
       const busy = (sig.busy || recentWrite) && !info.ended;
-      item.state = waiting ? 'waiting' : busy ? info.kind : 'idle';
-      item.detail = waiting ? 'Needs your approval'
-        : busy ? (info.detail || 'Working')
-        : info.lastReply ? 'Finished, ready for more' : 'Ready for instructions';
+      const proseMode = CONFIG.get('proseQuestion');
+      const toolQuestion = info.question && info.question.kind === 'tool';
+      const proseQuestion = info.question && info.question.kind === 'prose' && proseMode !== 'off' && !busy;
+      const waiting = !toolQuestion && sig.waiting && !info.ended;
+
+      item.helpers = file ? await listHelpers(file, s.created - 2000) : [];
+      const helpersWorking = item.helpers.filter((h) => h.state === 'working').length;
+
+      if (toolQuestion || proseQuestion) {
+        item.state = 'asking';
+        item.question = toolQuestion ? { kind: 'tool', questions: info.question.questions } : { kind: 'prose', text: info.question.text, mode: proseMode };
+        item.detail = toolQuestion ? 'Has a question for you' : 'May have a question';
+      } else if (waiting) {
+        item.state = 'waiting'; item.detail = 'Needs your approval';
+      } else if (busy) {
+        item.state = info.kind === 'asking' ? 'thinking' : info.kind; item.detail = info.detail || 'Working';
+      } else if (helpersWorking) {
+        item.state = 'delegating'; item.detail = `Waiting on ${helpersWorking} helper${helpersWorking > 1 ? 's' : ''}`;
+      } else {
+        item.state = 'idle'; item.detail = info.lastReply ? 'Finished, ready for more' : 'Ready for instructions';
+      }
       item.lastPrompt = info.lastPrompt;
       item.lastReply = info.lastReply;
       item.screen = screen;
+      item.sessionId = a.sessionId || (file ? path.basename(file.path, '.jsonl') : '');
+      if (unknown) item.sessionUnknown = true;
+      item.context = contextFor(a, info);
+
+      // Last test/build result survives the transcript tail scrolling past it.
+      item.lastResult = info.lastResult || (prev.sessionId === item.sessionId ? prev.lastResult : null) || null;
+
+      // Stuck: working, but neither the transcript nor the screen has changed for a while.
+      const fileStamp = file ? `${file.path}:${file.size}` : '';
+      const changedNow = !prev.screen || prev.screen !== screen || prev.fileStamp !== fileStamp;
+      item.fileStamp = fileStamp;
+      item.screenAt = !prev.screen || prev.screen !== screen ? now : prev.screenAt || now;
+      item.lastChangeAt = changedNow ? now : prev.lastChangeAt || now;
+      const quietMin = (now - item.lastChangeAt) / 60000;
+      if (WORKING_KINDS.has(item.state) && item.state !== 'delegating' && quietMin >= CONFIG.get('stuckMinutes')) item.stuck = { minutes: Math.floor(quietMin) };
+      if (info.looping && info.looping.count >= CONFIG.get('loopingFailures')) item.looping = info.looping;
+
+      item.git = gitInfo(a.cwd);
     }
-    const wasWorking = prev.state && !['idle', 'stopped', 'waiting'].includes(prev.state);
-    item.finishedAt = item.state === 'idle' ? (wasWorking ? Date.now() : prev.finishedAt || 0) : 0;
-    item.since = prev.state === item.state ? prev.since : Date.now();
+    const wasWorking = prev.state && WORKING_KINDS.has(prev.state);
+    item.finishedAt = item.state === 'idle' ? (wasWorking ? now : prev.finishedAt || 0) : 0;
+    item.since = prev.state === item.state ? prev.since : now;
     memory.set(a.name, item);
-    agents.push(item);
+    const { fileStamp, lastChangeAt, screenAt, ...pub } = item;
+    agents.push(pub);
   }
-  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN };
+  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage() };
   const json = JSON.stringify(snapshot);
   if (json !== snapshotJson) {
     snapshotJson = json;
@@ -434,7 +540,7 @@ async function poll() {
 
 async function loop() {
   try { await poll(); } catch (e) { console.error('poll failed:', e.message); }
-  setTimeout(loop, POLL_MS);
+  setTimeout(loop, CONFIG.get('pollMs'));
 }
 
 // ---------- http ----------
@@ -470,6 +576,7 @@ const server = http.createServer(async (req, res) => {
       return fs.createReadStream(INDEX_FILE).pipe(res);
     }
     if (req.method === 'GET' && p === '/api/state') return send(res, 200, snapshot);
+    if (req.method === 'GET' && p === '/api/config') return send(res, 200, { schema: CONFIG.schema(), values: CONFIG.all(), problems: CONFIG.problems() });
     if (req.method === 'GET' && p === '/api/projects') return send(res, 200, { projects: await listProjects() });
     if (req.method === 'GET' && p === '/api/conversations') {
       const dir = path.resolve(expandHome(String(url.searchParams.get('cwd') || '').trim()));
@@ -487,6 +594,13 @@ const server = http.createServer(async (req, res) => {
     // Everything below changes something: require our custom header (blocks cross-site requests).
     if (req.headers['x-agent-floor'] !== '1') return send(res, 403, { error: 'Missing X-Agent-Floor header' });
 
+    if (req.method === 'POST' && p === '/api/config') {
+      const r = CONFIG.set((await readBody(req)).patch || {});
+      if (!r.ok) return send(res, 400, { error: Object.values(r.errors).join('. '), errors: r.errors });
+      await poll();
+      return send(res, 200, { ok: true, values: CONFIG.all() });
+    }
+
     if (req.method === 'POST' && p === '/api/agents') {
       const { name, cwd, conversation, label } = await readBody(req);
       if (!NAME_RE.test(name || '')) return send(res, 400, { error: 'Use 1–32 letters, numbers, dashes or underscores for the name.' });
@@ -496,7 +610,7 @@ const server = http.createServer(async (req, res) => {
       if (!st || !st.isDirectory()) return send(res, 400, { error: `Folder not found: ${dir}` });
       // Save first: a poll running while tmux starts would otherwise adopt cc-<name> and we'd add it twice.
       saved.push({ name, cwd: dir, label: cleanLabel(label) || undefined });
-      try { await startAgent(name, dir, conversation || ''); }
+      try { saved.find((a) => a.name === name).sessionId = await startAgent(name, dir, conversation || ''); }
       catch (e) { saved = saved.filter((a) => a.name !== name); throw e; }
       startedAt.set(name, Date.now());
       persist();
@@ -504,7 +618,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 201, { ok: true });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context))?$/);
     if (m) {
       const [, name, action] = m;
       const agent = saved.find((a) => a.name === name);
@@ -532,10 +646,23 @@ const server = http.createServer(async (req, res) => {
         await poll();
         return send(res, 200, { ok: true });
       }
+      if (req.method === 'POST' && action === 'context') {
+        const { contextWindow } = await readBody(req);
+        if (contextWindow === null || contextWindow === '' || contextWindow === undefined) delete agent.contextWindow;
+        else {
+          const n = Number(contextWindow);
+          if (!Number.isInteger(n) || n < 10000 || n > 10000000) return send(res, 400, { error: 'Context window must be a whole number between 10,000 and 10,000,000.' });
+          agent.contextWindow = n;
+        }
+        persist();
+        await poll();
+        return send(res, 200, { ok: true });
+      }
       if (req.method === 'POST' && action === 'start') {
         const { conversation } = await readBody(req);
         if (running) return send(res, 409, { error: `${name} is already running.` });
-        await startAgent(name, agent.cwd, conversation || '');
+        agent.sessionId = await startAgent(name, agent.cwd, conversation || '');
+        persist();
         startedAt.set(name, Date.now());
         await poll();
         return send(res, 200, { ok: true });
