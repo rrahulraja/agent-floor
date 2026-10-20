@@ -74,6 +74,7 @@ function prop(p) {
     case 'flute': return `<line x1="20" y1="31" x2="56" y2="27" stroke="${c || '#9A5B2A'}" stroke-width="3" stroke-linecap="round"/><g fill="#3E2412"><circle cx="46" cy="28" r=".8"/><circle cx="50" cy="27.6" r=".8"/></g><g class="notes" fill="#3B5FAF" font-size="7" font-family="serif"><text x="52" y="22">♪</text><text x="55" y="25">♫</text><text x="50" y="24">♪</text></g>`;
     case 'bow': return `<path d="M6 14 Q-2 36 6 58" fill="none" stroke="${c || '#7A4A26'}" stroke-width="2.2"/><line x1="6" y1="14" x2="6" y2="58" stroke="#E8DCC0" stroke-width=".8"/><line x1="6" y1="36" x2="30" y2="32" stroke="#5A3A20" stroke-width="1.2"/>`;
     case 'mace': return `<line x1="50" y1="58" x2="56" y2="26" stroke="#8B5A2B" stroke-width="2.5"/><circle cx="56" cy="22" r="6" fill="${c || '#E8B830'}"/><circle cx="56" cy="22" r="2" fill="${shade(c || '#E8B830', -0.3)}"/>`;
+    case 'spear': return `<line x1="50" y1="80" x2="52" y2="4" stroke="#8B5A2B" stroke-width="2.2" stroke-linecap="round"/><path d="M52 -6 l3.5 9 h-7z" fill="#C7CCD8" stroke="#8A90A6" stroke-width=".6"/><path d="M49 5 h6" stroke="#E8B830" stroke-width="1.6"/>`;
     case 'staff': return `<line x1="50" y1="80" x2="52" y2="8" stroke="${c || '#7A4A26'}" stroke-width="2.4" stroke-linecap="round"/>${p.top === 'orb' ? '<circle class="glow" cx="52" cy="7" r="4" fill="#9FD3F2"/>' : ''}`;
     case 'scroll': return `<rect x="18" y="55" width="24" height="7" rx="2" fill="#EAD7A2"/><line class="scribble" x1="21" y1="58.5" x2="39" y2="58.5" stroke="#6B4A2A" stroke-width=".9"/>`;
     case 'book': return `<path d="M18 54 h12 v9 h-12z M30 54 h12 v9 h-12z" fill="${c || '#C8352E'}"/><path d="M19 55 h10 v7 h-10z M31 55 h10 v7 h-10z" fill="#F4F1E8"/>`;
@@ -252,7 +253,7 @@ function character(c) {
   }
   const front = c.head === 'dome' || c.head === 'hat-only' ? '' : arms(c.pose || 'down', o, c.head && c.head !== 'human' ? (c.handSkin || c.fur || skin) : skin);
   const p = prop(c.prop);
-  const behindProps = c.prop && ['bow', 'staff', 'arrows', 'lights', 'bike'].includes(c.prop.type);
+  const behindProps = c.prop && ['bow', 'staff', 'spear', 'arrows', 'lights', 'bike'].includes(c.prop.type);
   const sleep = c.sleep ? '<g class="zz" fill="#3B5FAF" font-family="Arial,sans-serif" font-weight="700"><text x="44" y="10" font-size="8">z</text><text x="48" y="6" font-size="6">z</text></g>' : '';
   const think = c.think ? '<g class="dots"><circle cx="44" cy="6" r="1.6" fill="#3B5FAF"/><circle cx="49" cy="4" r="1.9" fill="#3B5FAF"/><circle cx="54" cy="2" r="2.2" fill="#3B5FAF"/></g>' : '';
   const inner = `${behindProps ? p : ''}<g class="bob">${body}${head(c)}${front}${behindProps ? '' : p}</g>${sleep}${think}${bubble(c.bubble)}`;

@@ -6,7 +6,7 @@ const BLUE = '#4F79D9', GOLD = '#E8B830', SAFFRON = '#E07B2A', WHITE = '#F4F1E8'
 module.exports = {
   id: 'mahabharata',
   name: 'Mahabharata',
-  description: 'A pavilion at Kurukshetra. Krishna plans, Ganesha writes, Arjuna runs commands, Drona tests, Bhishma waits for you.',
+  description: 'A pavilion at Kurukshetra. Krishna plans, Ganesha writes, Arjuna runs commands, Drona tests, Bhishma waits for you. Pandava foot soldiers are the helpers.',
   defaultRole: 'thinking',
   header: { title: 'Kurukshetra', font: 'cinzel', clockFont: 'cinzel', colors: { bar: '#5A1E14', ink: '#F7E7C4', accent: '#E8B830', muted: '#D9B98A' }, phases: { dawn: 'Brahma muhurta', morning: 'Pratah', afternoon: 'Madhyahna', evening: 'Sandhya', night: 'Ratri' } },
   tint: false,
@@ -45,7 +45,8 @@ module.exports = {
       face: { eyes: 'closed' }, outfit: { style: 'shawl', color: '#2F4F9E', accent: '#1E3570' }, pose: 'down', prop: { type: 'staff', color: '#8B5A2B' }, sleep: true },
     done: { name: 'Balarama', label: 'Balarama · Done', skin: '#F1D2B0', hair: { style: 'long', color: '#1B1B1B' }, wear: { type: 'mukut', color: GOLD, gem: '#3B6FD8' },
       face: { eyes: 'smile' }, outfit: { style: 'shawl', color: '#2F4F9E', accent: '#1E3570' }, pose: 'hold', prop: { type: 'garland' }, bubble: 'done' },
-    helper: { name: 'Hanuman', head: 'monkey', fur: '#C46A2A', muzzle: '#F4C99A', handSkin: '#C46A2A', outfit: { style: 'bare', color: RED, accent: GOLD } },
+    helper: { name: 'Pandava foot soldier', skin: '#C98F62', hair: { style: 'short', color: '#1B1B1B' }, beard: { style: 'mustache', color: '#1B1B1B' },
+      wear: { type: 'helmet', color: '#8A90A6', gem: GOLD }, face: { eyes: 'focus' }, outfit: { style: 'armor', color: '#8E2F2F', accent: GOLD }, pose: 'staff', prop: { type: 'spear' } },
   },
   room: { wall: 'wall.svg', floor: 'floor.svg', desk: 'desk.svg', lounge: 'lounge.svg', wallColor: '#A6452E', floorColor: '#D9B98A' },
   celebration: { push: 'conch.svg', pr: 'flag.svg' },
@@ -70,6 +71,6 @@ module.exports = {
 <rect x="8" y="10" width="72" height="14" rx="7" fill="#C8352E"/><rect x="8" y="10" width="72" height="3" rx="1.5" fill="#E8B830"/><circle cx="14" cy="17" r="7" fill="#B02A25"/><circle cx="74" cy="17" r="7" fill="#B02A25"/>
 <g transform="translate(70 40)"><rect x="-5" y="0" width="10" height="12" rx="2" fill="#B07650"/><path d="M0 0 q-8 -12 0 -18 q8 6 0 18z" fill="#3E8A5A"/><path d="M0 -4 q-5 -6 -2 -12" stroke="#2E6B3A" fill="none"/></g></svg>`,
     'conch.svg': `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M6 20 q6 -14 18 -10 q4 8 -6 14 q-9 3 -12 -4z" fill="#F7F2E4" stroke="#C9BFA8" stroke-width="1"/><path d="M11 18 q5 -5 11 -4 M13 21 q4 -3 8 -3" stroke="#D8A27A" fill="none" stroke-width=".9"/><path d="M24 6 q3 3 0 6 M27 3 q5 6 0 12" stroke="#E8B830" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg>`,
-    'flag.svg': `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><line x1="8" y1="2" x2="8" y2="30" stroke="#6B4426" stroke-width="2"/><path d="M9 3 h18 l-5 6 l5 6 h-18z" fill="#F29E1F"/><circle cx="16" cy="9" r="3" fill="#C46A2A"/><circle cx="16" cy="9.5" r="1.8" fill="#F4C99A"/></svg>`,
+    'flag.svg': `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><line x1="8" y1="2" x2="8" y2="30" stroke="#6B4426" stroke-width="2"/><path d="M9 3 h18 l-5 6 l5 6 h-18z" fill="#F29E1F"/><circle cx="16" cy="9" r="3.2" fill="#E8B830"/><g stroke="#E8B830" stroke-width="1"><path d="M16 3.6 v1.6 M16 12.8 v1.6 M10.6 9 h1.6 M19.8 9 h1.6"/></g></svg>`,
   },
 };
