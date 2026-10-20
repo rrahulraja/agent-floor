@@ -128,6 +128,18 @@ test('startedByClear spots a session that /clear started', () => {
   assert.equal(T.startedByClear([user('hello')]), false);
 });
 
+test('contextWindowFor sizes windows from the model id', () => {
+  for (const m of ['claude-opus-5', 'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-sonnet-5', 'claude-opus-4-8', 'claude-opus-4-6', 'claude-sonnet-4-6', 'claude-fable-5-1', 'claude-mythos-5-1', 'opus', 'sonnet', 'claude-opus-5-5[1m]']) {
+    assert.equal(T.contextWindowFor(m), 1000000, m);
+  }
+  for (const m of ['claude-haiku-4-5', 'claude-haiku-4-5-20251001', 'claude-opus-4-5-20251101', 'claude-sonnet-4-5', 'claude-opus-4-1', 'claude-sonnet-4-20250514', 'claude-3-7-sonnet-20250219']) {
+    assert.equal(T.contextWindowFor(m), 200000, m);
+  }
+  assert.equal(T.contextWindowFor('<synthetic>'), null);
+  assert.equal(T.contextWindowFor(''), null);
+  assert.equal(T.contextWindowFor('some-other-model'), null);
+});
+
 test('helperState', () => {
   const now = 1_000_000;
   assert.equal(T.helperState({ ended: false }, { stoppedByUser: true }, now, now, 10), 'stopped');

@@ -623,6 +623,7 @@ function renderStatus(a) {
     const dd = el('dd');
     const m = el('span', `meter ${c.level}`); const fill = el('b'); fill.style.width = `${c.pct}%`; m.append(fill);
     dd.append(m, document.createTextNode(`${fmtK(c.used)} of ${fmtK(c.window)} (${c.pct}%)`));
+    dd.title = c.source === 'model' ? `Window from the model (${c.model})` : c.source === 'override' ? 'Window set for this agent' : 'Window from Settings (model not recognised)';
     const sel = el('select', 'ctx-select');
     sel.setAttribute('aria-label', 'Context window size');
     for (const [v, t] of [['', 'Auto'], ['200000', '200k'], ['1000000', '1M']]) { const o = el('option', '', t); o.value = v; sel.append(o); }

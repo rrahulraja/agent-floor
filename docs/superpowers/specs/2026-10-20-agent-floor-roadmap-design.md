@@ -189,7 +189,7 @@ Every threshold, interval and behaviour choice in this document is a setting, no
   | `theme` | `pixel` |
   | `pollMs` | 1000 |
   | `gitPollMs` / `ghPollMs` | 15000 / 60000 |
-  | `contextWindow` (default size) and per-agent override | 200000 (1 M inferred when exceeded) |
+  | `contextWindow` (fallback for unrecognised models; known models are sized from the transcript's model id) and per-agent override | 1000000 |
   | `contextWarnPct` / `contextAlertPct` | 80 / 90 |
   | `stuckMinutes` | 10 |
   | `loopingFailures` | 3 |

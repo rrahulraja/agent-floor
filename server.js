@@ -419,7 +419,6 @@ async function refreshGit(cwd, c) {
 // ---------- polling ----------
 const memory = new Map();
 const startedAt = new Map();
-const maxContextSeen = new Map(); // session id -> largest context seen (to spot 1M windows)
 let snapshot = { agents: [], tmux: true, claude: CLAUDE_BIN, settings: {} };
 let snapshotJson = '';
 const clients = new Set();
@@ -428,13 +427,13 @@ const WORKING_KINDS = new Set(['thinking', 'reading', 'writing', 'running', 'del
 function contextFor(a, info) {
   const used = T.contextTokens(info.usage);
   if (!used) return null;
-  const key = a.sessionId || a.name;
-  const max = Math.max(used, maxContextSeen.get(key) || 0);
-  maxContextSeen.set(key, max);
-  const window = a.contextWindow || (CONFIG.get('contextInfer1M') && max > 200000 ? 1000000 : CONFIG.get('contextWindow'));
+  const fromModel = T.contextWindowFor(info.model);
+  let window = a.contextWindow || fromModel || CONFIG.get('contextWindow');
+  const source = a.contextWindow ? 'override' : fromModel ? 'model' : 'setting';
+  if (!a.contextWindow && used > window) window = 1000000; // already past it, so it must be the larger window
   const pct = Math.min(100, Math.round((used / window) * 100));
   const level = pct >= CONFIG.get('contextAlertPct') ? 'alert' : pct >= CONFIG.get('contextWarnPct') ? 'warn' : 'ok';
-  return { used, window, pct, level, model: info.model, override: !!a.contextWindow };
+  return { used, window, pct, level, model: info.model, source, override: !!a.contextWindow };
 }
 
 function settingsForPage() {

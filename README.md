@@ -107,7 +107,7 @@ Anyone with access to your user account can still type into your agents through 
 - Status comes from screen text and transcripts. If a Claude Code update changes the "esc to interrupt" or permission wording, adjust `paneSignals()` in `server.js`.
 - Agents you started outside Agent Floor (your own `cc-*` tmux sessions) aren't pinned to a session id, so if two of them share a folder their status can mix. Agents started from the dashboard don't have this problem.
 - Questions with several parts or multiple choice are shown in the panel but answered in the terminal.
-- The context window size isn't recorded in transcripts. It's assumed to be 200k until an agent goes past that (then 1M); set it per agent in the panel if needed.
+- The context window is worked out from the model in the transcript (1M for Opus/Sonnet 4.6+ and Fable, 200k for Haiku and older); set it per agent in the panel if a session runs with a smaller window.
 - The office grows as you add agents; desks per row is a setting.
 
 ## Development
