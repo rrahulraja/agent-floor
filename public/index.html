@@ -2951,6 +2951,7 @@ function floorAgents() {
       party: file ? { kind: party.kind, file } : null,
       helpers: helpersShown(a).map((h, k) => ({ id: h.id || String(k), state: h.state })),
       hero: a.hero, // the server's pick (undefined from an older server)
+      screen: a.screen, // plain screen text, shown on its desk monitor
     });
   });
   return out;

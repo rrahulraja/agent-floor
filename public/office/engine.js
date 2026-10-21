@@ -80,7 +80,7 @@ class Office {
     this.scene.add(this.hemi, this.sun, this.sun.target, this.fill, this.spot, this.spot.target);
 
     this.controls = new OrbitControls(this.camera, this.gl.domElement);
-    Object.assign(this.controls, { enableDamping: true, dampingFactor: 0.08, rotateSpeed: 0.6, zoomSpeed: 0.8, panSpeed: 0.6, minDistance: 4, maxDistance: 65, maxPolarAngle: Math.PI / 2.2, screenSpacePanning: false });
+    Object.assign(this.controls, { enableDamping: true, dampingFactor: 0.08, rotateSpeed: 0.6, zoomSpeed: 0.8, panSpeed: 0.6, minDistance: 1, maxDistance: 65, maxPolarAngle: Math.PI / 2.2, screenSpacePanning: false });
     this.controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
     this.controls.addEventListener('start', () => { this.fly = null; });
 
@@ -513,6 +513,7 @@ class Office {
     for (const x of this.extras) if (x.gone) { this.dropActor(x); const o = this.actors.get(x.owner); if (o && o.helpers) for (const [k, v] of o.helpers) if (v === x) o.helpers.delete(k); }
     this.extras = this.extras.filter((x) => !x.gone);
     this.tickStandup(t, L.agents);
+    if (L.draw !== false) this.syncMonitors(L.agents, t);
     this.pairPingPong(t);
     this.tickSpeech(t);
     this.tickCards(t);
@@ -624,7 +625,15 @@ class Office {
     const a = this.actors.get(name);
     if (!a) return;
     this.follow = null;
-    this.flyTo([a.pos[0], 0.6, a.pos[1]], new THREE.Vector3(3.2, 4.2, 5.2), false);
+    const m = /^desk:(\d+)$/.exec(a.goalKey || '');
+    const desk = m && this.world.anchors.desks[Number(m[1])];
+    if (desk && desk.monitor) {
+      // at its desk: look over its shoulder at the monitor, which shows its real terminal
+      const mon = desk.monitor.getWorldPosition(new THREE.Vector3());
+      const back = new THREE.Vector3(desk.seat[0] - mon.x, 0, desk.seat[1] - mon.z).normalize();
+      const side = new THREE.Vector3(-back.z, 0, back.x).multiplyScalar(0.6); // beside the head, not through it
+      this.flyTo([mon.x, mon.y, mon.z], back.multiplyScalar(1.3).add(side).add(new THREE.Vector3(0, 0.8, 0)), false);
+    } else this.flyTo([a.pos[0], 0.6, a.pos[1]], new THREE.Vector3(3.2, 4.2, 5.2), false);
     this.spotOn = { name, until: (this.now || 0) + 2 };
   }
   tickSpot(t) {
@@ -633,6 +642,46 @@ class Office {
     const k = 1 - Math.abs(((s.until - t) / 2) * 2 - 1);
     this.spot.intensity = 6 * k * 3;
     this.spot.position.set(a.pos[0], 5, a.pos[1]); this.spot.target.position.set(a.pos[0], 0, a.pos[1]);
+  }
+
+  // ---------- monitors: an agent at its desk shows its real terminal on the screen ----------
+  showOnMonitor(i, text, t) {
+    const desk = this.world.anchors.desks[i];
+    if (!desk || !desk.monitor) return;
+    const mat = desk.monitor.material, u = desk.monitor.userData;
+    if (!u.term) {
+      const c = document.createElement('canvas'); c.width = 640; c.height = 400;
+      const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+      u.term = { c, tex, text: null, at: 0, orig: mat.emissiveMap };
+    }
+    const term = u.term;
+    if (mat.emissiveMap !== term.tex) { mat.emissiveMap = term.tex; mat.needsUpdate = true; }
+    if (text === term.text || t - term.at < 0.5) return; // redraw at most twice a second
+    term.text = text; term.at = t;
+    const g = term.c.getContext('2d');
+    g.fillStyle = '#070a10'; g.fillRect(0, 0, 640, 400);
+    g.font = '17px Menlo, Monaco, monospace'; g.textBaseline = 'top';
+    const lines = String(text || '').replace(/\s+$/, '').split('\n').slice(-19);
+    lines.forEach((l, k) => {
+      g.fillStyle = /^\s*[❯>]/.test(l) ? '#9ecbff' : /^\s*[●⏺]/.test(l) ? '#e6edf3' : (/\berror\b|\b[1-9]\d* failed|✗/i.test(l) || /\bFAILED\b/.test(l)) ? '#ff9b9b' : '#b8c4d6';
+      g.fillText(l.slice(0, 62), 10, 8 + k * 20.5);
+    });
+    term.tex.needsUpdate = true;
+  }
+  clearMonitor(i) {
+    const desk = this.world.anchors.desks[i], term = desk && desk.monitor && desk.monitor.userData.term;
+    if (!term || desk.monitor.material.emissiveMap === term.orig) return;
+    desk.monitor.material.emissiveMap = term.orig; desk.monitor.material.needsUpdate = true; term.text = null;
+  }
+  syncMonitors(list, t) {
+    const showing = new Set();
+    for (const ag of list) {
+      const a = this.actors.get(ag.name), m = a && /^desk:(\d+)$/.exec(a.goalKey || '');
+      if (!m || !ag.screen) continue;
+      showing.add(Number(m[1]));
+      this.showOnMonitor(Number(m[1]), ag.screen, t);
+    }
+    this.world.anchors.desks.forEach((d, i) => { if (!showing.has(i)) this.clearMonitor(i); });
   }
 
   // ---------- celebration ----------
