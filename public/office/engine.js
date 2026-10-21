@@ -425,6 +425,9 @@ class Office {
       live.add(ag.name);
       let a = this.actors.get(ag.name);
       if (!a) {
+        // A stopped agent isn't in the office: don't place it only to walk it out (on page load), or
+        // rebuild it at the door every frame after it has left.
+        if (ag.state === 'stopped') return;
         // people already on the floor when the page opens start at their desks; new ones walk in
         const first = !this.seenAny;
         a = this.makeActor(ag.name, this.profileFor(ag.name), first ? { at: this.world.anchors.desks[i % this.world.anchors.desks.length].seat } : {});
