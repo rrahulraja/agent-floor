@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#151826">
+<title>Agent Floor</title>
+<style>
+:root { color-scheme: light; --bg: #eef1f7; --surface: #fff; --ink: #1e2235; --muted: #5d637a; --line: #d3d8e6; --work: #2f5fc4; --wait: #a86400; --wait-fill: #f29e1f; --done: #23845a; --danger: #b3261e;
+  --mono: "MesloLGS NF", ui-monospace, Menlo, monospace; --sans: system-ui, -apple-system, "Segoe UI", sans-serif; }
+@media (prefers-color-scheme: dark) { :root { color-scheme: dark; --bg: #151826; --surface: #1f2336; --ink: #e6e8f2; --muted: #9ba1b8; --line: #33395a; --work: #8aaaf2; --wait: #f5b544; --done: #5cc793; --danger: #ff8a80; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.45 var(--sans); padding: 12px 16px calc(24px + env(safe-area-inset-bottom)); }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 12px; }
+html, body { overflow-x: hidden; } .card, pre, .reply, .detail { min-width: 0; max-width: 100%; }
+header h1 { font-size: 20px; margin: 0; } header span { color: var(--muted); font-size: 14px; } header a { margin-left: auto; color: var(--work); font-size: 14px; }
+h2 { font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); margin: 18px 0 8px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+.card.need { border-color: var(--wait-fill); }
+.row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+.top { display: flex; align-items: baseline; gap: 8px; } .top b { font-size: 17px; } .top small { color: var(--muted); margin-left: auto; }
+.chip { font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; }
+.working { color: var(--work); } .waiting, .asking { color: var(--wait); } .idle, .stopped { color: var(--muted); } .done { color: var(--done); }
+.detail { color: var(--muted); font-size: 14px; margin-top: 4px; overflow-wrap: anywhere; }
+.reply { font-size: 14px; margin-top: 6px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+pre { background: #0f1218; color: #d7dce5; font: 12px/1.45 var(--mono); padding: 10px; border-radius: 8px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 40vh; overflow: auto; margin: 8px 0 0; }
+button { font: 600 15px var(--sans); min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+button.go { background: var(--wait-fill); border-color: var(--wait-fill); color: #1e2235; } button.primary { background: var(--work); border-color: var(--work); color: #fff; }
+textarea { width: 100%; min-height: 64px; margin-top: 10px; font: 15px/1.4 var(--sans); padding: 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.empty { color: var(--muted); font-size: 14px; } .toast { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom)); background: var(--ink); color: var(--bg); padding: 12px 14px; border-radius: 10px; font-size: 15px; }
+</style>
+</head>
+<body>
+<header><h1>Agent Floor</h1><span id="sum">connecting…</span><a href="/">Full dashboard</a></header>
+<h2>Needs you</h2><div id="needs"><p class="empty">Nothing is waiting on you.</p></div>
+<h2>Agents</h2><div id="agents"></div>
+<script>
+'use strict';
+// The phone page: what needs you first, then every agent; answer, approve and send instructions.
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const WORKING = new Set(['thinking', 'reading', 'writing', 'running', 'delegating', 'browsing', 'planning', 'tests', 'build', 'deploy', 'data', 'review', 'git']);
+const chipOf = (s) => (WORKING.has(s) ? 'working' : s);
+const ago = (ms) => { const m = Math.round((Date.now() - ms) / 60000); return m < 1 ? 'just now' : m < 60 ? `${m} min ago` : `${Math.round(m / 60)} h ago`; };
+let toastTimer = 0;
+function toast(t) { let d = document.querySelector('.toast'); if (!d) { d = el('div', 'toast'); document.body.append(d); } d.textContent = t; clearTimeout(toastTimer); toastTimer = setTimeout(() => d.remove(), 2500); }
+async function api(method, url, body) {
+  const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json', 'X-Agent-Floor': '1' }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || `Request failed (${r.status})`);
+  return j;
+}
+const act = (fn, done) => async () => { try { await fn(); if (done) toast(done); } catch (e) { toast(e.message); } };
+const key = (a, k) => api('POST', `/api/agents/${a.name}/key`, { key: k });
+const btn = (text, cls, fn) => { const b = el('button', cls, text); b.type = 'button'; b.addEventListener('click', fn); return b; };
+const open = new Set(); // agents whose screen is shown
+let agents = [];
+
+function needCard(a) {
+  const c = el('div', 'card need'), top = el('div', 'top');
+  top.append(el('b', '', a.label || a.name), el('span', `chip ${a.state}`, a.trust ? 'trust folder?' : a.state === 'waiting' ? 'approval' : 'question'));
+  if (a.needSince) top.append(el('small', '', ago(a.needSince)));
+  c.append(top);
+  const row = el('div', 'row');
+  if (a.state === 'waiting' && a.trust) {
+    c.append(el('div', 'detail', `Trust ${a.cwd}? Claude Code will be able to read, edit and run files there.`));
+    row.append(btn('Trust folder', 'go', act(async () => { await key(a, 'Down'); await key(a, 'Enter'); }, 'Trusted')), btn('Exit', '', act(() => key(a, 'Escape'))));
+  } else if (a.state === 'waiting') {
+    if (a.approval) c.append(el('pre', '', a.approval)); else if (a.diff) c.append(el('pre', '', `${a.diff.file}  +${a.diff.added} −${a.diff.removed}`));
+    row.append(btn('Approve', 'go', act(() => key(a, 'Enter'), 'Approved')), btn('Option 2', '', act(() => key(a, '2'))), btn('Decline', '', act(() => key(a, 'Escape'), 'Declined')));
+  } else if (a.question && a.question.kind === 'tool') {
+    const q = a.question.questions[0] || {};
+    c.append(el('div', 'reply', q.question || ''));
+    (q.options || []).slice(0, 9).forEach((o, i) => row.append(btn(`${i + 1}. ${o.label}`, '', act(() => key(a, String(i + 1)), `Answered: ${o.label}`))));
+  } else if (a.question) {
+    c.append(el('div', 'reply', a.question.text || ''));
+  }
+  c.append(row);
+  if (a.state === 'asking') c.append(compose(a, 'Reply'));
+  return c;
+}
+function compose(a, label = 'Send') {
+  const wrap = el('div'), ta = el('textarea'); ta.placeholder = `Tell ${a.label || a.name} what to do next`;
+  const send = btn(label, 'primary', act(async () => { if (!ta.value.trim()) return; await api('POST', `/api/agents/${a.name}/prompt`, { text: ta.value }); ta.value = ''; }, 'Sent'));
+  const row = el('div', 'row'); row.append(send);
+  if (a.state !== 'idle') row.append(btn('Add to queue', '', act(async () => { if (!ta.value.trim()) return; await api('POST', `/api/agents/${a.name}/queue`, { text: ta.value }); ta.value = ''; }, 'Queued')));
+  wrap.append(ta, row); return wrap;
+}
+function agentCard(a) {
+  const c = el('div', 'card'), top = el('div', 'top');
+  top.append(el('b', '', a.label || a.name), el('span', `chip ${chipOf(a.state)}`, a.state));
+  if (a.tokens && a.tokens.total) top.append(el('small', '', `${(a.tokens.total / 1e6).toFixed(1)}M today`));
+  c.append(top, el('div', 'detail', [a.detail, a.cwd && a.cwd.split('/').pop()].filter(Boolean).join(' · ')));
+  if (a.lastReply) c.append(el('div', 'reply', a.lastReply));
+  const row = el('div', 'row');
+  if (a.state === 'stopped') row.append(btn('Start', 'primary', act(() => api('POST', `/api/agents/${a.name}/start`, { conversation: a.sessionId || 'latest' }), 'Started')));
+  else {
+    row.append(btn(open.has(a.name) ? 'Hide screen' : 'Screen', '', () => { open.has(a.name) ? open.delete(a.name) : open.add(a.name); render(); }));
+    if (WORKING.has(a.state)) row.append(btn('Interrupt', '', act(() => key(a, 'Escape'), 'Interrupted')));
+  }
+  c.append(row);
+  if (open.has(a.name) && a.screen) { const pre = el('pre', '', a.screen.split('\n').slice(-40).join('\n')); c.append(pre); requestAnimationFrame(() => { pre.scrollTop = pre.scrollHeight; }); }
+  if (a.state !== 'stopped' && a.state !== 'waiting' && a.state !== 'asking') c.append(compose(a)); // the ones waiting on you are answered above
+  return c;
+}
+// Re-render only when something visible changed, so a half-typed reply isn't wiped.
+let lastKey = '';
+function render() {
+  const typing = document.activeElement && document.activeElement.tagName === 'TEXTAREA';
+  const needs = agents.filter((a) => a.state === 'waiting' || (a.state === 'asking' && a.question));
+  const k = JSON.stringify([agents.map((a) => [a.name, a.state, a.detail, a.lastReply, a.question, a.approval, open.has(a.name) && a.screen]), [...open]]);
+  $('sum').textContent = `${agents.filter((a) => WORKING.has(a.state)).length} working · ${needs.length} need you`;
+  if (k === lastKey || typing) return;
+  lastKey = k;
+  $('needs').replaceChildren(...(needs.length ? needs.map(needCard) : [el('p', 'empty', 'Nothing is waiting on you.')]));
+  $('agents').replaceChildren(...agents.map(agentCard));
+}
+const es = new EventSource('/events');
+es.onmessage = (ev) => { agents = JSON.parse(ev.data).agents || []; render(); };
+es.onerror = () => { $('sum').textContent = 'reconnecting…'; };
+document.addEventListener('focusout', () => setTimeout(render, 50)); // catch up once you stop typing
+</script>
+</body>
+</html>

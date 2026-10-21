@@ -82,3 +82,16 @@ test('cleanSize: terminal size from the page, whole numbers inside sane bounds, 
   assert.equal(C.cleanSize(null), null);
   assert.equal(C.cleanSize({}), null);
 });
+
+test('allowedHost: localhost always; extra host names only when listed, exactly', () => {
+  assert.equal(C.allowedHost('localhost:4777', undefined, []), true);
+  assert.equal(C.allowedHost('127.0.0.1:4777', 'http://127.0.0.1:4777', []), true);
+  assert.equal(C.allowedHost('evil.com', undefined, []), false);
+  assert.equal(C.allowedHost('localhost:4777', 'https://evil.com', []), false);
+  const extra = C.parseHosts('mac.tail1234.ts.net, other.local');
+  assert.deepEqual(extra, ['mac.tail1234.ts.net', 'other.local']);
+  assert.equal(C.allowedHost('mac.tail1234.ts.net', 'https://mac.tail1234.ts.net', extra), true);
+  assert.equal(C.allowedHost('mac.tail1234.ts.net.evil.com', undefined, extra), false);
+  assert.equal(C.allowedHost('mac.tail1234.ts.net', 'https://evil.com', extra), false);
+  assert.deepEqual(C.parseHosts('bad host!, ok.local'), ['ok.local']);
+});

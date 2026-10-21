@@ -104,6 +104,8 @@ In 3D: drag to turn, right-drag to move, scroll to zoom, double-click someone to
 
 Your own themes go in `~/.agent-floor/themes/<id>/`: a `theme.json` plus SVG or PNG images for the flat floor, and a `model.json` cast to dress people in the 3D office. See [docs/themes.md](docs/themes.md).
 
+**On your phone.** `http://localhost:4777/m` is a slim page for small screens: what needs you first (approve, decline, answer, trust a folder), then every agent with its last reply, a Screen button and an instruction box. To reach it from your phone, use [Tailscale](https://tailscale.com) on both devices and run `tailscale serve --bg 4777` on the Mac. That gives an HTTPS address only your own devices can open (like `https://your-mac.your-tailnet.ts.net`). Put that host name in **Settings → Access → Also allow these host names**, then open `https://your-mac.your-tailnet.ts.net/m` on the phone. The dashboard has no login, so never list a name the public internet can reach.
+
 **Settings.** Every threshold above (context window size, warning levels, stuck minutes, how loud a "?" reply is, desks per row, refresh rates, celebrations…) is a setting. Open **Settings** in the header, or edit `~/.agent-floor/config.json`, which only stores what you changed. Each agent's context window can also be set from its panel.
 
 Agents you add are remembered in `~/.agent-floor/agents.json`, so after a reboot they appear as stopped and you can restart them on their latest conversation with one click.

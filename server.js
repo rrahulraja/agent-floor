@@ -1022,12 +1022,8 @@ async function removeWorktree(agent) {
 }
 
 // ---------- http ----------
-function allowedHost(req) {
-  const host = req.headers.host || '';
-  if (!/^(localhost|127\.0\.0\.1)(:\d+)?$/.test(host)) return false;
-  const origin = req.headers.origin;
-  return !origin || /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-}
+// localhost, plus host names listed in Settings (e.g. a Tailscale name for `tailscale serve`)
+const allowedHost = (req) => C.allowedHost(req.headers.host, req.headers.origin, C.parseHosts(CONFIG.get('access.extraHosts')));
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -1049,6 +1045,10 @@ const server = http.createServer(async (req, res) => {
   const p = url.pathname;
 
   try {
+    if (req.method === 'GET' && (p === '/m' || p === '/m/')) { // the phone page
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return fs.createReadStream(path.join(__dirname, 'public', 'mobile.html')).pipe(res);
+    }
     if (req.method === 'GET' && (p === '/' || p === '/index.html')) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return fs.createReadStream(INDEX_FILE).pipe(res);
