@@ -477,6 +477,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
           <div class="screen-bar" id="screenBar" hidden><span id="screenNote"></span><button class="btn" type="button" id="screenLatest">Jump to latest</button></div>
           <div class="term">
             <div class="term-bar"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i><span id="termTitle">claude</span>
+              <button type="button" class="term-btn" id="termFit" title="Fit this agent to the panel at full text size (clears its scroll history)">⇔</button>
               <button type="button" class="term-btn" id="termWide" title="Terminal view: widen the terminal (t)" aria-pressed="false">⤢</button></div>
             <pre class="screen" id="dScreen" tabindex="0" aria-label="Agent terminal"></pre>
             <form class="compose" id="compose">
@@ -876,6 +877,23 @@ function fitTerm() {
   scr.style.fontSize = `${px.toFixed(2)}px`;
 }
 new ResizeObserver(() => fitTerm()).observe($('dScreen'));
+// The terminal size the panel shows at a comfortable 13px. New and restarted agents start at this size, so
+// their text is full size without ever resizing them (which would wipe their scrollback).
+function panelTermSize() {
+  if (!charW) {
+    const probe = document.createElement('span'); probe.textContent = 'M'.repeat(100);
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-size:100px;font-family:var(--mono)';
+    document.body.append(probe); charW = probe.getBoundingClientRect().width / 10000; probe.remove();
+  }
+  const scr = $('dScreen');
+  const width = scr.clientWidth ? scr.clientWidth - 32 : $('panel').clientWidth - 72;
+  const height = scr.clientHeight || window.innerHeight - 320;
+  return { cols: Math.max(60, Math.floor(width / (13 * charW))), rows: Math.max(20, Math.floor(height / (13 * 1.45))) };
+}
+$('termFit').addEventListener('click', async () => {
+  if (!selected || !confirm(`Fit ${labelOf(selected)} to this panel at full text size?\n\nClaude Code redraws its screen and the scroll history in its terminal is lost (the conversation itself is kept).`)) return;
+  try { await api('POST', `/api/agents/${selected}/fit`, panelTermSize()); toast(`Fitted ${labelOf(selected)} to the panel`); } catch (err) { toast(err.message); }
+});
 document.fonts && document.fonts.ready.then(() => { charW = 0; fitTerm(); });
 try { if (localStorage.getItem('af:termview')) setTimeout(() => setTermView(true), 0); } catch {}
 
@@ -1683,7 +1701,7 @@ $('stopBtn').addEventListener('click', async () => {
 });
 $('startBtn').addEventListener('click', async () => {
   const name = selected;
-  try { await api('POST', `/api/agents/${name}/start`, { conversation: $('dConv').value }); toast(`Started ${labelOf(name)}`); }
+  try { await api('POST', `/api/agents/${name}/start`, { conversation: $('dConv').value, size: panelTermSize() }); toast(`Started ${labelOf(name)}`); }
   catch (err) { toast(err.message); }
 });
 
@@ -1831,7 +1849,7 @@ $('addForm').addEventListener('submit', async (e) => {
   try {
     const worktree = $('fWt').checked ? { branch: $('fBranch').value.trim(), base: $('fBase').value.trim() } : undefined;
     if (worktree && !worktree.branch) throw new Error('Give the new branch a name.');
-    await api('POST', '/api/agents', { name, label, cwd: $('fCwd').value, conversation: worktree ? '' : $('fConv').value, worktree });
+    await api('POST', '/api/agents', { name, label, cwd: $('fCwd').value, conversation: worktree ? '' : $('fConv').value, worktree, size: panelTermSize() });
     $('addDialog').close(); select(name); toast(`Started ${label}`);
   } catch (err) { $('fError').textContent = err.message; $('fError').hidden = false; }
 });

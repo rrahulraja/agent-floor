@@ -129,7 +129,9 @@ function statuslineArgs() {
 // conversation: '' = start fresh, 'latest' = the newest conversation in the folder, otherwise a session id.
 // Every start pins a known session id, so each agent reads its own transcript even when agents share a folder.
 // Returns that session id.
-async function startAgent(name, cwd, conversation) {
+// size: { cols, rows } to start at (the page's panel width), so the agent never needs resizing later:
+// resizing a running Claude Code makes it redraw and wipe its scrollback.
+async function startAgent(name, cwd, conversation, size) {
   let cmd = `'${CLAUDE_BIN}'`;
   let sessionId;
   // A conversation can only be open in one agent: two Claudes on one transcript show up as twins and
@@ -155,7 +157,7 @@ async function startAgent(name, cwd, conversation) {
     cmd += ` --session-id ${sessionId}`;
   }
   cmd += statuslineArgs();
-  const r = await tmux('new-session', '-d', '-s', PREFIX + name, '-c', cwd, '-x', '160', '-y', '48',
+  const r = await tmux('new-session', '-d', '-s', PREFIX + name, '-c', cwd, '-x', String((size && size.cols) || 160), '-y', String((size && size.rows) || 48),
     '-e', `PATH=${process.env.PATH}`, cmd);
   if (!r.ok) throw new Error(r.stderr || 'tmux could not start the session');
   await tmux('set-option', '-t', `=${PREFIX}${name}`, '@cwd', cwd);
@@ -1057,7 +1059,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && p === '/api/agents') {
-      const { name, cwd, conversation, label, worktree } = await readBody(req);
+      const { name, cwd, conversation, label, worktree, size } = await readBody(req);
       if (!NAME_RE.test(name || '')) return send(res, 400, { error: 'Use 1–32 letters, numbers, dashes or underscores for the name.' });
       if (saved.find((a) => a.name === name)) return send(res, 409, { error: `There is already an agent called ${name}.` });
       const dir = path.resolve(expandHome(String(cwd || '').trim()));
@@ -1071,7 +1073,7 @@ const server = http.createServer(async (req, res) => {
       }
       // Save first: a poll running while tmux starts would otherwise adopt cc-<name> and we'd add it twice.
       saved.push({ name, cwd: agentDir, label: cleanLabel(label) || undefined, repo: repoRoot, worktree: repoRoot ? true : undefined });
-      try { bindSession(saved.find((a) => a.name === name), await startAgent(name, agentDir, repoRoot ? '' : conversation || '')); }
+      try { bindSession(saved.find((a) => a.name === name), await startAgent(name, agentDir, repoRoot ? '' : conversation || '', C.cleanSize(size))); }
       catch (e) { saved = saved.filter((a) => a.name !== name); throw e; }
       startedAt.set(name, Date.now());
       persist();
@@ -1079,7 +1081,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 201, { ok: true });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
       const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
@@ -1123,6 +1125,17 @@ const server = http.createServer(async (req, res) => {
           return send(res, 200, { ok: true, sent: idle ? 'sent' : 'queued' });
         }
       }
+      // Fit a running agent to the panel, on request only: Claude Code redraws and its scroll history is lost.
+      // Afterwards tmux follows whichever terminal attaches next, as usual.
+      if (req.method === 'POST' && action === 'fit') {
+        const size = C.cleanSize(await readBody(req));
+        if (!size) return send(res, 400, { error: 'Give the size in columns and rows.' });
+        if (!running) return send(res, 409, { error: `${name} is stopped.` });
+        await tmux('resize-window', '-t', target(name), '-x', String(size.cols), '-y', String(size.rows));
+        await tmux('set-option', '-w', '-t', target(name), 'window-size', 'latest');
+        await poll();
+        return send(res, 200, { ok: true });
+      }
       if (req.method === 'POST' && action === 'label') {
         const label = cleanLabel((await readBody(req)).label);
         if (!label) return send(res, 400, { error: 'Give the agent a name.' });
@@ -1157,9 +1170,9 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true });
       }
       if (req.method === 'POST' && action === 'start') {
-        const { conversation } = await readBody(req);
+        const { conversation, size } = await readBody(req);
         if (running) return send(res, 409, { error: `${name} is already running.` });
-        bindSession(agent, await startAgent(name, agent.cwd, conversation || ''));
+        bindSession(agent, await startAgent(name, agent.cwd, conversation || '', C.cleanSize(size)));
         persist();
         startedAt.set(name, Date.now());
         await poll();

@@ -74,3 +74,11 @@ test('approvalText: what the permission prompt is about, without the box drawing
   assert.equal(C.approvalText(screen), 'Bash command\nkubectl -n prod rollout restart deploy/api\nRestart the API pods');
   assert.equal(C.approvalText('nothing to approve'), '');
 });
+
+test('cleanSize: terminal size from the page, whole numbers inside sane bounds, or nothing', () => {
+  assert.deepEqual(C.cleanSize({ cols: 132.7, rows: 41 }), { cols: 132, rows: 41 });
+  assert.deepEqual(C.cleanSize({ cols: 5, rows: 9000 }), { cols: 60, rows: 200 });
+  assert.equal(C.cleanSize({ cols: 'wide', rows: 40 }), null);
+  assert.equal(C.cleanSize(null), null);
+  assert.equal(C.cleanSize({}), null);
+});
