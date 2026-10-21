@@ -22,6 +22,7 @@ const HelperLog = require('./lib/helperlog');
 const Usage = require('./lib/usage');
 const Diff = require('./lib/diffpreview');
 const Perms = require('./lib/permissions');
+const Tasks = require('./lib/tasks');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -36,6 +37,7 @@ const NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const SESSION_RE = /^[A-Za-z0-9-]{8,64}$/;
 const KEYS = new Set(['Enter', 'Escape', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'BTab', 'Up', 'Down']);
 const QUEUE = C.jsonStore(path.join(DATA_DIR, 'queue.json'), () => ({}));
+const TASKS = C.jsonStore(path.join(DATA_DIR, 'tasks.json'), () => []);
 const PROMPTS = C.jsonStore(path.join(DATA_DIR, 'prompts.json'), () => C.cleanPrompts(C.DEFAULT_PROMPTS));
 const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
 const { short, textOf } = T;
@@ -750,7 +752,12 @@ async function poll() {
     if (!needs) needSince.delete(it.name);
     else { if (!needSince.has(it.name)) needSince.set(it.name, now); it.needSince = needSince.get(it.name); }
   }
-  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage(), tokens: tokensToday.all };
+  // Task board: move each task along from what its agent is doing.
+  const byName = new Map(agents.map((it) => [it.name, it]));
+  let tasksChanged = false;
+  const tasks = TASKS.get().map((t) => { const n = Tasks.progress(t, byName.get(t.agent)); if (n !== t) tasksChanged = true; return n; });
+  if (tasksChanged) TASKS.set(tasks);
+  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage(), tokens: tokensToday.all, tasks };
   const json = JSON.stringify(snapshot);
   if (json !== snapshotJson) {
     snapshotJson = json;
@@ -925,6 +932,29 @@ function notifyFor(prev, item, now) {
   }
 }
 
+// Add an agent and start it (also used by the task board). Returns { error, status } on a problem.
+async function addAgent({ name, cwd, conversation, label, worktree, size }) {
+  if (!NAME_RE.test(name || '')) return { status: 400, error: 'Use 1–32 letters, numbers, dashes or underscores for the name.' };
+  if (saved.find((a) => a.name === name)) return { status: 409, error: `There is already an agent called ${name}.` };
+  const dir = path.resolve(expandHome(String(cwd || '').trim()));
+  let st; try { st = await fsp.stat(dir); } catch {}
+  if (!st || !st.isDirectory()) return { status: 400, error: `Folder not found: ${dir}` };
+  let agentDir = dir, repoRoot;
+  if (worktree && worktree.branch) {
+    const wt = await createWorktree(dir, String(worktree.branch).trim(), String(worktree.base || '').trim());
+    if (wt.error) return { status: 400, error: wt.error };
+    agentDir = wt.path; repoRoot = wt.repo;
+  }
+  // Save first: a poll running while tmux starts would otherwise adopt cc-<name> and we'd add it twice.
+  saved.push({ name, cwd: agentDir, label: cleanLabel(label) || undefined, repo: repoRoot, worktree: repoRoot ? true : undefined });
+  try { bindSession(saved.find((a) => a.name === name), await startAgent(name, agentDir, repoRoot ? '' : conversation || '', C.cleanSize(size))); }
+  catch (e) { saved = saved.filter((a) => a.name !== name); throw e; }
+  startedAt.set(name, Date.now());
+  persist();
+  await poll();
+  return { name, cwd: agentDir };
+}
+
 // ---------- worktrees ----------
 async function createWorktree(dir, branch, base) {
   const top = await run('git', ['-C', dir, 'rev-parse', '--show-toplevel'], { timeout: 5000 });
@@ -1097,26 +1127,60 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && p === '/api/agents') {
-      const { name, cwd, conversation, label, worktree, size } = await readBody(req);
-      if (!NAME_RE.test(name || '')) return send(res, 400, { error: 'Use 1–32 letters, numbers, dashes or underscores for the name.' });
-      if (saved.find((a) => a.name === name)) return send(res, 409, { error: `There is already an agent called ${name}.` });
-      const dir = path.resolve(expandHome(String(cwd || '').trim()));
+      const r = await addAgent(await readBody(req));
+      if (r.error) return send(res, r.status, { error: r.error });
+      return send(res, 201, { ok: true });
+    }
+
+    // ---------- task board ----------
+    if (req.method === 'POST' && p === '/api/tasks') {
+      const b = await readBody(req);
+      const dir = path.resolve(expandHome(String(b.cwd || '').trim()));
       let st; try { st = await fsp.stat(dir); } catch {}
       if (!st || !st.isDirectory()) return send(res, 400, { error: `Folder not found: ${dir}` });
-      let agentDir = dir, repoRoot;
-      if (worktree && worktree.branch) {
-        const wt = await createWorktree(dir, String(worktree.branch).trim(), String(worktree.base || '').trim());
-        if (wt.error) return send(res, 400, { error: wt.error });
-        agentDir = wt.path; repoRoot = wt.repo;
-      }
-      // Save first: a poll running while tmux starts would otherwise adopt cc-<name> and we'd add it twice.
-      saved.push({ name, cwd: agentDir, label: cleanLabel(label) || undefined, repo: repoRoot, worktree: repoRoot ? true : undefined });
-      try { bindSession(saved.find((a) => a.name === name), await startAgent(name, agentDir, repoRoot ? '' : conversation || '', C.cleanSize(size))); }
-      catch (e) { saved = saved.filter((a) => a.name !== name); throw e; }
-      startedAt.set(name, Date.now());
-      persist();
+      let task; try { task = Tasks.newTask({ title: b.title, text: b.text, cwd: dir }); } catch (e) { return send(res, 400, { error: e.message }); }
+      TASKS.set([...TASKS.get(), task]);
       await poll();
-      return send(res, 201, { ok: true });
+      return send(res, 201, { ok: true, task });
+    }
+    const tm = p.match(/^\/api\/tasks\/([a-f0-9]{8})(?:\/(assign))?$/);
+    if (tm) {
+      const [, id, act] = tm;
+      const task = TASKS.get().find((t) => t.id === id);
+      if (!task) return send(res, 404, { error: 'No such task.' });
+      const save = (patch) => TASKS.set(TASKS.get().map((t) => (t.id === id ? { ...t, ...patch } : t)));
+      if (req.method === 'DELETE' && !act) { TASKS.set(TASKS.get().filter((t) => t.id !== id)); await poll(); return send(res, 200, { ok: true }); }
+      if (req.method === 'POST' && !act) {
+        const b = await readBody(req);
+        const patch = {};
+        if (Tasks.STATUSES.includes(b.status)) patch.status = b.status;
+        if (b.status === 'todo') { patch.agent = ''; patch.pr = null; } // back to the pile: unassign
+        if (typeof b.title === 'string' && b.title.trim()) patch.title = b.title.trim().slice(0, 120);
+        save(patch); await poll(); return send(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && act === 'assign') {
+        const b = await readBody(req);
+        const sessions = await listSessions();
+        let name = '', branch = '';
+        if (b.mode === 'new') {
+          // a fresh agent on its own branch in its own worktree
+          branch = Tasks.branchFor(task);
+          name = `task-${task.id}`;
+          const r = await addAgent({ name, cwd: task.cwd, label: task.title.slice(0, 60), worktree: { branch }, size: b.size });
+          if (r.error) return send(res, r.status, { error: r.error });
+        } else {
+          name = b.mode === 'agent' ? String(b.agent || '') : Tasks.pickAgent(task, snapshot.agents, TASKS.get());
+          if (!name) return send(res, 409, { error: 'No idle agent is working in this folder. Start a new one for this task, or pick an agent.', noAgent: true });
+          if (!saved.find((a) => a.name === name) || !sessions.has(name)) return send(res, 409, { error: `${name} is not running.` });
+        }
+        // New agents get it from the queue once Claude Code is ready; an idle one gets it now.
+        const idle = b.mode !== 'new' && (memory.get(name) || {}).state === 'idle';
+        if (idle) await sendPrompt(name, task.text); else QUEUE.set(C.enqueue(QUEUE.get(), name, task.text).all);
+        save({ agent: name, branch, status: 'working', startedAt: Date.now() });
+        await poll();
+        return send(res, 200, { ok: true, agent: name, sent: idle ? 'sent' : 'queued' });
+      }
+      return send(res, 404, { error: 'Not found' });
     }
 
     const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit|permissions))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);

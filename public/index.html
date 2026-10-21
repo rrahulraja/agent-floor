@@ -302,6 +302,20 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .perm-add { display: flex; gap: 6px; } .perm-add input { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--bg); font: 13px var(--mono); }
 .perm-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; } .perm-presets .btn { padding: 2px 10px; font-size: 13px; }
 .perm-other { margin-top: 10px; font-size: 13px; } .perm-other h4 { margin: 8px 0 4px; font-size: 13px; }
+.board-dialog { width: min(1280px, 96vw); max-height: 92vh; }
+.board-count { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--work); color: #fff; font-size: 12px; }
+.board-add { display: grid; grid-template-columns: 260px minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.board-add input, .board-add textarea { border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: var(--bg); font: 14px/1.4 var(--sans); }
+.board-add textarea { resize: vertical; min-height: 38px; }
+.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.board-col { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 160px; }
+.board-col h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 8px 9px; margin-bottom: 8px; font-size: 14px; }
+.card b { display: block; line-height: 1.3; overflow-wrap: anywhere; }
+.card small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
+.card .row { margin-top: 6px; gap: 4px; } .card .btn { padding: 1px 8px; font-size: 12px; }
+.card select { font-size: 12px; max-width: 100%; }
+@media (max-width: 900px) { .board { grid-template-columns: 1fr; } .board-add { grid-template-columns: 1fr; } }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* The instruction box lives inside the terminal window and looks like Claude Code's own input. */
 #dRunning { display: flex; flex-direction: column; flex: 1 0 auto; height: calc(100vh - 150px); min-height: 420px; gap: 8px; }
@@ -410,6 +424,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   </div>
   <button class="btn" id="alertsBtn" hidden>Turn on alerts</button>
   <button class="btn inbox-btn" id="inboxBtn" title="Everything waiting on you (i)">Inbox <b id="inboxCount" hidden></b></button>
+  <button class="btn" id="boardBtn" title="Task board (b)">Board <b id="boardCount" class="board-count" hidden></b></button>
   <button class="btn" id="todayBtn">Today</button>
   <button class="btn" id="searchBtn">Search</button>
   <button class="btn" id="broadcastBtn">Broadcast</button>
@@ -599,6 +614,19 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <div class="row" style="margin-top:14px"><button class="btn primary" id="permSave">Save</button><button class="btn" id="permClose">Cancel</button>
     <small class="hint" style="align-self:center">Running agents pick up the change on their next command; restart one if it doesn't.</small></div>
 </dialog>
+<dialog id="boardDialog" class="board-dialog">
+  <h2>Task board</h2>
+  <form class="board-add" id="boardAdd">
+    <input id="bdCwd" list="bdCwds" placeholder="Project folder" autocomplete="off" aria-label="Project folder">
+    <datalist id="bdCwds"></datalist>
+    <textarea id="bdText" rows="2" placeholder="What should be done? The first line is the title. (Cmd+Enter adds it)" aria-label="Task"></textarea>
+    <button class="btn primary" type="submit">Add task</button>
+  </form>
+  <p class="error" id="bdError" hidden></p>
+  <div class="board" id="boardCols"></div>
+  <div class="row" style="margin-top:12px"><button class="btn" id="boardClose" autofocus>Close</button>
+    <small class="hint" style="align-self:center">Tasks move by themselves: a busy agent → Working, its PR opens → In review, merged → Merged.</small></div>
+</dialog>
 <dialog id="timelineDialog" class="wide">
   <h2 id="tlTitle">Timeline</h2>
   <div id="tlBody"></div>
@@ -627,6 +655,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next / previous agent</dd>
     <dt><kbd>/</kbd></dt><dd>Write an instruction (↑ / ↓ go through what you sent before)</dd>
     <dt><kbd>i</kbd></dt><dd>Inbox: everything waiting on you, oldest first</dd>
+    <dt><kbd>b</kbd></dt><dd>Task board</dd>
     <dt><kbd>t</kbd></dt><dd>Terminal view: widen the terminal (Esc goes back)</dd>
     <dt><kbd>a</kbd></dt><dd>Approve (when the agent needs your approval)</dd>
     <dt><kbd>d</kbd></dt><dd>Decline (when the agent needs your approval)</dd>
@@ -708,7 +737,7 @@ function toast(msg) {
 // ---------- live updates ----------
 function connect() {
   const es = new EventSource('/events');
-  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || [], s.settings); renderUsage(s.usage); renderTokens(s.tokens); renderInboxCount(); };
+  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || [], s.settings); renderUsage(s.usage); renderTokens(s.tokens); renderInboxCount(); renderBoard(s.tasks); };
   es.onerror = () => { $('summary').textContent = 'Lost connection to the Agent Floor server. Retrying…'; };
 }
 
@@ -1746,6 +1775,75 @@ $('permSave').addEventListener('click', async () => {
   } catch (err) { $('permError').hidden = false; $('permError').textContent = err.message; }
 });
 
+// ---------- task board ----------
+let tasks = [];
+const COLUMNS = [['todo', 'To do'], ['working', 'Working'], ['review', 'In review'], ['merged', 'Merged'], ['done', 'Done']];
+const base = (p) => String(p || '').replace(/\/+$/, '').split('/').pop();
+async function taskCall(method, url, body) { try { return await api(method, url, body); } catch (err) { toast(err.message); return null; } }
+function taskCard(t) {
+  const c = el('div', 'card');
+  c.append(el('b', '', t.title));
+  const ag = t.agent && agents.find((a) => a.name === t.agent);
+  c.append(el('small', '', [base(t.cwd), t.agent ? `${labelOf(t.agent)}${ag ? ` · ${displayState(ag) === 'idle' ? 'idle' : LABEL[displayState(ag)] || ag.state}` : ' · gone'}` : '', t.branch].filter(Boolean).join(' · ')));
+  c.title = t.text;
+  const row = el('div', 'row');
+  const btn = (text, fn, cls = '') => { const b = el('button', `btn ${cls}`, text); b.type = 'button'; b.addEventListener('click', fn); row.append(b); return b; };
+  if (t.status === 'todo') {
+    btn('Assign', async () => {
+      const r = await api('POST', `/api/tasks/${t.id}/assign`, { mode: 'auto' }).catch((err) => err);
+      if (r instanceof Error) {
+        if (confirm(`${r.message}\n\nStart a new agent for "${t.title}" on its own branch?`)) {
+          const n = await taskCall('POST', `/api/tasks/${t.id}/assign`, { mode: 'new', size: panelTermSize() });
+          if (n) toast(`Started ${n.agent}; it gets the task once Claude Code is ready`);
+        }
+      } else toast(`${labelOf(r.agent)} ${r.sent === 'sent' ? 'is on it' : 'will get it when idle'}`);
+    }, 'primary');
+    btn('New agent', async () => { const n = await taskCall('POST', `/api/tasks/${t.id}/assign`, { mode: 'new', size: panelTermSize() }); if (n) toast(`Started ${n.agent} on its own branch`); });
+    const pick = el('select'); pick.append(el('option', '', 'Give to…'));
+    for (const a of agents.filter((x) => x.state !== 'stopped')) { const o = el('option', '', labelOf(a.name)); o.value = a.name; pick.append(o); }
+    pick.addEventListener('change', async () => { if (!pick.value) return; const r = await taskCall('POST', `/api/tasks/${t.id}/assign`, { mode: 'agent', agent: pick.value }); if (r) toast(`${labelOf(r.agent)} ${r.sent === 'sent' ? 'is on it' : 'will get it when idle'}`); });
+    row.append(pick);
+  } else {
+    if (t.agent && ag) btn('Open', () => { $('boardDialog').close(); select(t.agent); });
+    if (t.pr && t.pr.url) btn(`PR #${t.pr.number}`, () => window.open(t.pr.url, '_blank', 'noopener'));
+    if (t.status !== 'done') btn('Done', () => taskCall('POST', `/api/tasks/${t.id}`, { status: 'done' }));
+    btn('Back to To do', () => taskCall('POST', `/api/tasks/${t.id}`, { status: 'todo' }));
+  }
+  btn('×', () => { if (confirm(`Delete "${t.title}"?`)) taskCall('DELETE', `/api/tasks/${t.id}`); }).title = 'Delete task';
+  c.append(row);
+  return c;
+}
+function renderBoard(list) {
+  if (list) tasks = list;
+  const open = tasks.filter((t) => t.status === 'todo' || t.status === 'working' || t.status === 'review').length;
+  $('boardCount').hidden = !open; $('boardCount').textContent = String(open);
+  if (!$('boardDialog').open) return;
+  if (sameAs($('boardCols'), [tasks, agents.map((a) => [a.name, a.state])])) return;
+  $('boardCols').replaceChildren(...COLUMNS.map(([k, label]) => {
+    const col = el('div', 'board-col'); const items = tasks.filter((t) => t.status === k);
+    col.append(el('h3', '', `${label} (${items.length})`), ...items.map(taskCard));
+    return col;
+  }));
+}
+function openBoard() {
+  const dirs = [...new Set(agents.map((a) => a.cwd).filter(Boolean))];
+  $('bdCwds').replaceChildren(...dirs.map((d) => { const o = el('option'); o.value = d; return o; }));
+  const a = agents.find((x) => x.name === selected);
+  if (!$('bdCwd').value && a) $('bdCwd').value = a.cwd || '';
+  $('boardCols').dataset.key = '';
+  if (!$('boardDialog').open) $('boardDialog').showModal();
+  renderBoard();
+}
+$('boardBtn').addEventListener('click', openBoard);
+$('boardClose').addEventListener('click', () => $('boardDialog').close());
+$('boardAdd').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('bdError').hidden = true;
+  try { await api('POST', '/api/tasks', { cwd: $('bdCwd').value, text: $('bdText').value }); $('bdText').value = ''; toast('Task added'); }
+  catch (err) { $('bdError').hidden = false; $('bdError').textContent = err.message; }
+});
+$('bdText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('boardAdd').requestSubmit(); } });
+
 // ---------- keyboard shortcuts ----------
 document.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1767,6 +1865,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape' && document.body.classList.contains('termview')) setTermView(false);
   else if (e.key === '?') $('keysDialog').showModal();
   else if (e.key === 'i') openInbox();
+  else if (e.key === 'b') openBoard();
   else if (e.key === 'a' && a && a.state === 'waiting') { if (a.trust) $('trustYes').click(); else key('Enter'); } // Enter would pick "No, exit" on the trust screen
   else if (e.key === 'd' && a && a.state === 'waiting') key('Escape');
   else if (/^[1-9]$/.test(e.key) && a && a.state === 'asking' && a.question && a.question.kind === 'tool') key(e.key);
