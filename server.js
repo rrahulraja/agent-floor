@@ -26,6 +26,7 @@ const Tasks = require('./lib/tasks');
 const Handoff = require('./lib/handoff');
 const Archive = require('./lib/archive');
 const Guard = require('./lib/guard');
+const Summary = require('./lib/summary');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -43,6 +44,7 @@ const QUEUE = C.jsonStore(path.join(DATA_DIR, 'queue.json'), () => ({}));
 const TASKS = C.jsonStore(path.join(DATA_DIR, 'tasks.json'), () => []);
 const HANDOFFS = C.jsonStore(path.join(DATA_DIR, 'handoffs.json'), () => []);
 const ARCHIVE = C.jsonStore(path.join(DATA_DIR, 'archive.json'), () => []);
+const SUMMARY = C.jsonStore(path.join(DATA_DIR, 'summary.json'), () => ({ lastSent: 0 }));
 const PROMPTS = C.jsonStore(path.join(DATA_DIR, 'prompts.json'), () => C.cleanPrompts(C.DEFAULT_PROMPTS));
 const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
 const { short, textOf } = T;
@@ -656,6 +658,19 @@ function guardAlert(key, title, detail) {
   deliver({ title, detail, url: '' }).catch((e) => console.warn(`notify failed: ${e.message}`));
 }
 
+// Morning summary: where things stand now, plus yesterday's PRs and pushes.
+async function summaryNow() {
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  const yesterday = await digestFor(`${y.getFullYear()}-${String(y.getMonth() + 1).padStart(2, '0')}-${String(y.getDate()).padStart(2, '0')}`).catch(() => null);
+  return Summary.build({ agents: snapshot.agents, tasks: TASKS.get(), yesterday, tokens: tokensToday.all, plan: planUsage() });
+}
+setInterval(async () => {
+  if (!Summary.due(CONFIG.get('summary.time'), Date.now(), SUMMARY.get().lastSent)) return;
+  SUMMARY.set({ lastSent: Date.now() });
+  const s = await summaryNow();
+  deliver({ title: s.title, detail: s.lines.join('\n'), url: '' }).catch((e) => console.warn(`summary failed: ${e.message}`));
+}, 60000);
+
 async function poll() {
   const guard = guardNow();
   if (guard.plan) guardAlert(`plan:${guard.plan.level}`, guard.plan.level === 'limit' ? 'Plan usage near its limit' : 'Plan usage is high', guard.plan.why + (guard.plan.hold ? ' · queued instructions are on hold' : ''));
@@ -1121,6 +1136,7 @@ const server = http.createServer(async (req, res) => {
       for (const a of ARCHIVE.get()) list.push(await describe(a, false));
       return send(res, 200, { past: list.sort((x, y) => (y.lastActive || 0) - (x.lastActive || 0)) });
     }
+    if (req.method === 'GET' && p === '/api/summary') return send(res, 200, await summaryNow());
     if (req.method === 'GET' && p === '/api/conversations') {
       const dir = path.resolve(expandHome(String(url.searchParams.get('cwd') || '').trim()));
       return send(res, 200, { cwd: dir, conversations: await listConversations(dir) });
