@@ -117,6 +117,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .o3d-hud { position: absolute; left: 10px; top: 10px; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: auto; }
 .o3d-hud button, .o3d-hud select { font: 600 12px var(--sans); padding: 5px 9px; border-radius: 7px; border: 1px solid rgba(255,255,255,.25); background: rgba(14,18,32,.72); color: #f2f4ff; cursor: pointer; backdrop-filter: blur(4px); }
 .o3d-hud button:hover { background: rgba(14,18,32,.9); }
+.o3d-hud button.on { background: #2f5fc4; border-color: #7aa2f7; }
 .o3d-hud .chip { font: 600 12px var(--sans); padding: 5px 10px; border-radius: 999px; background: #f2b825; color: #1e2235; }
 .o3d-hud .chip:empty { display: none; }
 .o3d-help { position: absolute; right: 10px; bottom: 8px; z-index: 5; font: 11px var(--sans); color: rgba(255,255,255,.75); text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none; }
@@ -686,6 +687,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     <dt><kbd>/</kbd></dt><dd>Write an instruction (↑ / ↓ go through what you sent before)</dd>
     <dt><kbd>i</kbd></dt><dd>Inbox: everything waiting on you, oldest first</dd>
     <dt><kbd>b</kbd></dt><dd>Task board</dd>
+    <dt><kbd>f</kbd></dt><dd>Walk around the office yourself (W A S D, Esc stops)</dd>
     <dt><kbd>m</kbd></dt><dd>Office sounds on or off</dd>
     <dt><kbd>t</kbd></dt><dd>Terminal view: widen the terminal (Esc goes back)</dd>
     <dt><kbd>a</kbd></dt><dd>Approve (when the agent needs your approval)</dd>
@@ -1985,6 +1987,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'i') openInbox();
   else if (e.key === 'b') openBoard();
   else if (e.key === 'm') Sound.toggle();
+  else if (e.key === 'f') setWalk(!(window.Floor3D && window.Floor3D.walking && window.Floor3D.walking()));
   else if (e.key === 'a' && a && a.state === 'waiting') { if (a.trust) $('trustYes').click(); else key('Enter'); } // Enter would pick "No, exit" on the trust screen
   else if (e.key === 'd' && a && a.state === 'waiting') key('Escape');
   else if (/^[1-9]$/.test(e.key) && a && a.state === 'asking' && a.question && a.question.kind === 'tool') key(e.key);
@@ -2895,6 +2898,7 @@ async function setup3d() {
   canvas.style.height = '';
   if (F && F.supported) {
     F.init(document.querySelector('.stage'), { onSelect: (name) => { const m = /^(.+):h:(.+)$/.exec(name); if (m) { select(m[1]); openHelper(m[1], m[2]); } else select(name); }, onStandup: (text) => { const c = document.querySelector('.o3d-hud .chip'); if (c) c.textContent = text; },
+      onWalk: (on) => setWalk(on),
       claimHero: (name, hero) => { if (hero) api('POST', `/api/agents/${name}/hero`, { hero }).catch(() => {}); } });
     F.setVisible(false);
   }
@@ -2939,8 +2943,10 @@ function showHud(on) {
     const snd = el('button', '', Sound.on ? '🔊' : '🔇'); snd.type = 'button'; snd.id = 'soundBtn';
     snd.title = 'Office sounds: typing, a chime when an agent needs you, test results, pushes (m)';
     snd.addEventListener('click', () => Sound.toggle());
-    hud.append(su, q, snd, el('span', 'chip'));
-    help = el('div', 'o3d-help', 'Drag to turn · right-drag to move · scroll to zoom · double-click someone to follow · Esc to reset');
+    const walk = el('button', '', 'Walk'); walk.type = 'button'; walk.id = 'walkBtn'; walk.title = 'Walk around the office yourself (f)';
+    walk.addEventListener('click', () => setWalk(!window.Floor3D.walking()));
+    hud.append(su, walk, q, snd, el('span', 'chip'));
+    help = el('div', 'o3d-help', HELP_ORBIT);
     stage.append(hud, help);
   }
   hud.hidden = false; help.hidden = false;
@@ -3005,6 +3011,16 @@ const Sound = (() => {
   if (on) addEventListener('pointerdown', () => { start(); typing(); }, { once: true });
   return { get on() { return on; }, toggle, event(ev) { if (on && ctx && SOUNDS[ev]) SOUNDS[ev](ctx.currentTime + 0.02); } };
 })();
+
+const HELP_ORBIT = 'Drag to turn · right-drag to move · scroll to zoom · double-click someone to follow · Esc to reset';
+const HELP_WALK = 'Walking: W A S D or arrows to move · Shift to run · drag to look · click someone to open them · Esc to stop';
+function setWalk(on) {
+  if (!use3d || !window.Floor3D.walk) return;
+  on = window.Floor3D.walk(on);
+  const b = document.getElementById('walkBtn'); if (b) { b.textContent = on ? 'Stop walking' : 'Walk'; b.classList.toggle('on', on); }
+  const h = document.querySelector('.o3d-help'); if (h) h.textContent = on ? HELP_WALK : HELP_ORBIT;
+  if (on) document.activeElement && document.activeElement.blur && document.activeElement.blur(); // keys go to walking, not a focused box
+}
 
 // What the 3D floor needs to know about each agent this frame.
 function floorAgents() {

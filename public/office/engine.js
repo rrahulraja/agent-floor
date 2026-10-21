@@ -603,8 +603,8 @@ class Office {
     this.light(L.phase, t, L.hour);
     if (this.dust && L.motion) { this.dust.rotation.y = Math.sin(t * 0.03) * 0.02; this.dust.position.y = Math.sin(t * 0.2) * 0.05; }
     this.tickSpot(t);
-    this.tickFly();
-    this.controls.update();
+    if (this.fp) this.tickWalk(dt);
+    else { this.tickFly(); this.controls.update(); }
     if (L.draw === false) return refit; // simulate only (tests fast-forward this way)
     this.draw();
     this.positionBubbles(t);
@@ -917,7 +917,24 @@ class Office {
       return o ? o.userData.actor : null;
     };
     let down = null;
-    el.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; });
+    el.addEventListener('pointerdown', (e) => { down = [e.clientX, e.clientY]; this.lookFrom = this.fp ? [e.clientX, e.clientY] : null; });
+    el.addEventListener('pointerup', () => { this.lookFrom = null; });
+    // first person: drag to look around
+    el.addEventListener('pointermove', (e) => {
+      if (!this.fp || !this.lookFrom || !e.buttons) return;
+      const [x0, y0] = this.lookFrom; this.lookFrom = [e.clientX, e.clientY];
+      this.fp.yaw -= (e.clientX - x0) * 0.005;
+      this.fp.pitch = Math.max(-1.2, Math.min(1.0, this.fp.pitch - (e.clientY - y0) * 0.004));
+    });
+    const typing = (e) => e.target && e.target.closest && e.target.closest('input, textarea, select, [contenteditable], dialog[open]');
+    window.addEventListener('keydown', (e) => {
+      if (!this.fp || typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'shift'].includes(k)) { this.fp.keys.add(k); e.preventDefault(); e.stopPropagation(); }
+      if (k === 'escape') { this.setWalk(false); if (this.hooks.onWalk) this.hooks.onWalk(false); }
+    }, true);
+    window.addEventListener('keyup', (e) => { if (this.fp) this.fp.keys.delete(e.key.toLowerCase()); });
+    window.addEventListener('blur', () => { if (this.fp) this.fp.keys.clear(); });
     el.addEventListener('click', (e) => {
       if (down && Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return; // that was a drag
       const name = pick(e);
@@ -925,6 +942,7 @@ class Office {
     });
     el.addEventListener('dblclick', (e) => {
       const name = pick(e);
+      if (this.fp) return; // walking: double-click doesn't fly the camera away
       if (name) { this.follow = name; this.focus(name); } else { this.follow = null; this.overview(); }
     });
     el.addEventListener('pointermove', (e) => {
@@ -935,6 +953,33 @@ class Office {
     });
     window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.follow) { this.follow = null; this.overview(); } });
   }
+  // ---------- first person: walk the office at eye height ----------
+  setWalk(on) {
+    if (!!this.fp === !!on) return !!this.fp;
+    if (!on) { this.fp = null; this.controls.enabled = true; this.overview(); return false; }
+    const W = this.world.anchors, start = W.entrance.pos;
+    this.follow = null; this.fly = null; this.controls.enabled = false;
+    // in through the front door, looking into the office
+    this.fp = { x: start[0], z: start[1] - 1.2, yaw: Math.PI, pitch: -0.08, keys: new Set() };
+    return true;
+  }
+  tickWalk(dt) {
+    const f = this.fp, k = f.keys;
+    const fwd = (k.has('w') || k.has('arrowup') ? 1 : 0) - (k.has('s') || k.has('arrowdown') ? 1 : 0);
+    const side = (k.has('d') ? 1 : 0) - (k.has('a') ? 1 : 0);
+    const turn = (k.has('arrowleft') ? 1 : 0) - (k.has('arrowright') ? 1 : 0);
+    f.yaw += turn * dt * 1.8;
+    if (fwd || side) {
+      const speed = (k.has('shift') ? 4 : 2) * dt, len = Math.hypot(fwd, side);
+      const dx = (Math.sin(f.yaw) * fwd - Math.cos(f.yaw) * side) / len * speed, dz = (Math.cos(f.yaw) * fwd + Math.sin(f.yaw) * side) / len * speed;
+      // stay on the walking grid: slide along walls instead of stopping dead
+      const free = (x, z) => !this.nav || this.nav.isFree(x, z);
+      if (free(f.x + dx, f.z + dz)) { f.x += dx; f.z += dz; } else if (free(f.x + dx, f.z)) f.x += dx; else if (free(f.x, f.z + dz)) f.z += dz;
+    }
+    const eye = 1.05;
+    this.camera.position.set(f.x, eye, f.z);
+    this.camera.lookAt(f.x + Math.sin(f.yaw) * Math.cos(f.pitch), eye + Math.sin(f.pitch), f.z + Math.cos(f.yaw) * Math.cos(f.pitch));
+  }
   setQuality(q) { this.quality = q === 'low' || q === 'high' ? q : 'balanced'; this.sizeKey = ''; setAvatarOutlines(this.quality !== 'low'); }
 }
 
@@ -944,6 +989,8 @@ window.Floor3D = {
   supported: webglOk(),
   office: true,
   init(stage, hooks) { if (!office && this.supported) office = new Office(stage, hooks); return !!office; },
+  walk: (on) => (office ? office.setWalk(on) : false),
+  walking: () => !!(office && office.fp),
   setTheme: (theme, url) => (office ? office.setTheme(theme, url) : Promise.resolve(false)),
   setVisible: (on) => { if (office) office.box.hidden = !on; },
   render: (state) => (office ? office.render(state) : false),
