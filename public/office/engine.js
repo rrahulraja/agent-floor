@@ -87,7 +87,7 @@ class Office {
     this.actors = new Map();     // agent name -> actor
     this.extras = [];            // helpers, janitors: actors that aren't agents
     this.confetti = [];
-    this.heroes = this.loadHeroes();
+    this.heroes = this.loadHeroes(); this.claimed = new Set();
     this.standup = null;
     this.follow = null;
     this.fly = null;
@@ -147,6 +147,21 @@ class Office {
 
   // ---------- who looks like what ----------
   loadHeroes() { try { return JSON.parse(localStorage.getItem('af:heroes') || '{}'); } catch { return {}; } }
+  // The server remembers each agent's hero (agents.json), so every browser shows the same one. When it has
+  // none yet, this browser picks a free one and claims it; the first claim wins and the others follow it.
+  syncHeroes(list) {
+    if (this.kind !== 'heroes' || !this.cast) return;
+    for (const ag of list) {
+      if (ag.hero === undefined) continue; // an older server: keep the browser's own choice
+      if (ag.hero && this.cast[ag.hero]) {
+        if (this.heroes[ag.name] !== ag.hero) { this.heroes[ag.name] = ag.hero; try { localStorage.setItem('af:heroes', JSON.stringify(this.heroes)); } catch {} }
+      } else if (!this.claimed.has(ag.name) && this.hooks.claimHero) {
+        this.claimed.add(ag.name);
+        this.heroFor(ag.name);
+        this.hooks.claimHero(ag.name, this.heroes[ag.name]);
+      }
+    }
+  }
   heroFor(name) {
     if (!this.cast) return null;
     const roster = Object.entries(this.cast).filter(([k]) => k !== 'helper');
@@ -180,6 +195,17 @@ class Office {
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.012; ring.renderOrder = 2;
     this.scene.add(ring); a.ringMesh = ring;
     return a;
+  }
+  redress(a) {
+    const old = a.av, pose = old.pose, prop = old.prop;
+    const av = buildAvatar(this.profileFor(a.name));
+    av.root.position.copy(old.root.position); av.root.rotation.copy(old.root.rotation);
+    av.root.userData.actor = a.name;
+    av.root.traverse((o) => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.userData.actor = a.name; } });
+    this.scene.remove(old.root); old.dispose();
+    this.scene.add(av.root);
+    av.setPose(pose); av.setProp(prop);
+    a.av = av; a.heroKey = this.heroes[a.name];
   }
   dropActor(a) {
     this.scene.remove(a.av.root); a.av.dispose();
@@ -420,10 +446,13 @@ class Office {
     const need = L.agents.length + L.agents.reduce((n, a) => n + (a.helpers || []).length, 0);
     if (need > this.deskCount) this.ensureWorld(need);
     const refit = this.fit();
+    this.syncHeroes(L.agents);
     const live = new Set();
     L.agents.forEach((ag, i) => {
       live.add(ag.name);
       let a = this.actors.get(ag.name);
+      // dressed as another hero than the server says (another browser claimed first): change costume in place
+      if (a && this.kind === 'heroes' && a.heroKey && this.heroes[ag.name] && a.heroKey !== this.heroes[ag.name]) this.redress(a);
       if (!a) {
         // A stopped agent isn't in the office: don't place it only to walk it out (on page load), or
         // rebuild it at the door every frame after it has left.
@@ -431,6 +460,7 @@ class Office {
         // people already on the floor when the page opens start at their desks; new ones walk in
         const first = !this.seenAny;
         a = this.makeActor(ag.name, this.profileFor(ag.name), first ? { at: this.world.anchors.desks[i % this.world.anchors.desks.length].seat } : {});
+        a.heroKey = this.kind === 'heroes' ? this.heroes[ag.name] : null;
         a.label = ag.label;
         this.actors.set(ag.name, a);
         a.sessionId = ag.sessionId;

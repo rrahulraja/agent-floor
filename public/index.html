@@ -2401,7 +2401,8 @@ async function setup3d() {
   use3d = false;
   canvas.style.height = '';
   if (F && F.supported) {
-    F.init(document.querySelector('.stage'), { onSelect: (name) => { const m = /^(.+):h:(.+)$/.exec(name); if (m) { select(m[1]); openHelper(m[1], m[2]); } else select(name); }, onStandup: (text) => { const c = document.querySelector('.o3d-hud .chip'); if (c) c.textContent = text; } });
+    F.init(document.querySelector('.stage'), { onSelect: (name) => { const m = /^(.+):h:(.+)$/.exec(name); if (m) { select(m[1]); openHelper(m[1], m[2]); } else select(name); }, onStandup: (text) => { const c = document.querySelector('.o3d-hud .chip'); if (c) c.textContent = text; },
+      claimHero: (name, hero) => { if (hero) api('POST', `/api/agents/${name}/hero`, { hero }).catch(() => {}); } });
     F.setVisible(false);
   }
   showHud(false);
@@ -2463,6 +2464,7 @@ function floorAgents() {
       role: ch.pose === 'sit' ? st : st === 'done' ? 'done' : 'idle',
       party: file ? { kind: party.kind, file } : null,
       helpers: helpersShown(a).map((h, k) => ({ id: h.id || String(k), state: h.state })),
+      hero: a.hero, // the server's pick (undefined from an older server)
     });
   });
   return out;

@@ -87,8 +87,8 @@ function bindSession(a, id) {
 }
 function persist() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  const keep = ({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree }) =>
-    Object.fromEntries(Object.entries({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  const keep = ({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree, hero }) =>
+    Object.fromEntries(Object.entries({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree, hero }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
   fs.writeFileSync(AGENTS_FILE, JSON.stringify(saved.map(keep), null, 2));
 }
 
@@ -575,7 +575,7 @@ async function poll() {
   for (const a of saved) {
     const s = sessions.get(a.name);
     const prev = memory.get(a.name) || {};
-    const item = { name: a.name, label: a.label || a.name, cwd: a.cwd, session: PREFIX + a.name, attach: `tmux attach -t ${PREFIX}${a.name}` };
+    const item = { name: a.name, label: a.label || a.name, cwd: a.cwd, session: PREFIX + a.name, attach: `tmux attach -t ${PREFIX}${a.name}`, hero: a.hero || '' };
     if (!s) {
       item.state = 'stopped';
       item.detail = 'Not running';
@@ -1039,7 +1039,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 201, { ok: true });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
       const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
@@ -1059,6 +1059,13 @@ const server = http.createServer(async (req, res) => {
         if (!running) return send(res, 409, { error: `${name} is stopped.` });
         await tmux('send-keys', '-t', target(name), key);
         return send(res, 200, { ok: true });
+      }
+      // The hero this agent plays in the heroes theme, so every browser shows the same one. First claim wins.
+      if (req.method === 'POST' && action === 'hero') {
+        const hero = String((await readBody(req)).hero || '');
+        if (!/^[a-z0-9_-]{1,40}$/i.test(hero)) return send(res, 400, { error: 'Unknown hero.' });
+        if (!agent.hero) { agent.hero = hero; persist(); await poll(); }
+        return send(res, 200, { ok: true, hero: agent.hero });
       }
       if (req.method === 'POST' && action === 'label') {
         const label = cleanLabel((await readBody(req)).label);
