@@ -19,6 +19,7 @@ const C = require('./lib/control');
 const N = require('./lib/notify');
 const Hist = require('./lib/history');
 const HelperLog = require('./lib/helperlog');
+const Usage = require('./lib/usage');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -475,6 +476,77 @@ function contextFor(a, info) {
 
 // Plan usage saved by bin/statusline.js (account-wide, so one reading covers every agent).
 let usageCache = { mtimeMs: 0, value: null };
+// ---------- tokens used today (per agent, and across every Claude Code transcript) ----------
+// Each transcript is read once and then only its new bytes; a background pass every 15 s keeps the poll fast.
+const tallies = new Map(); // .jsonl path -> { tally, offset }
+const agentFiles = new Map(); // agent name -> Set of transcript paths it has written (main + helpers)
+let tokensToday = { day: '', all: null, agents: {} };
+async function feedTally(file) {
+  let st; try { st = await fsp.stat(file); } catch { return null; }
+  let t = tallies.get(file);
+  if (!t || st.size < t.offset) { t = { tally: Usage.createTally(), offset: 0 }; tallies.set(file, t); }
+  if (st.size > t.offset) {
+    const fh = await fsp.open(file, 'r');
+    try {
+      const CHUNK = 4 * 1024 * 1024;
+      while (t.offset < st.size) {
+        const buf = Buffer.alloc(Math.min(CHUNK, st.size - t.offset));
+        const { bytesRead } = await fh.read(buf, 0, buf.length, t.offset);
+        if (!bytesRead) break;
+        t.tally.add(buf.toString('utf8', 0, bytesRead)); // transcripts are ASCII-safe JSON per line; a split char only touches one line
+        t.offset += bytesRead;
+      }
+    } finally { await fh.close(); }
+  }
+  return t.tally;
+}
+async function transcriptsTouchedSince(since) {
+  const out = [];
+  let projects; try { projects = await fsp.readdir(PROJECTS_DIR); } catch { return out; }
+  for (const proj of projects) {
+    const dir = path.join(PROJECTS_DIR, proj);
+    let names; try { names = await fsp.readdir(dir); } catch { continue; }
+    for (const n of names) {
+      const f = path.join(dir, n);
+      if (n.endsWith('.jsonl')) { try { if ((await fsp.stat(f)).mtimeMs >= since) out.push(f); } catch {} continue; }
+      const sub = path.join(f, 'subagents');
+      let subs; try { subs = await fsp.readdir(sub); } catch { continue; }
+      for (const m of subs) if (m.endsWith('.jsonl')) { const g = path.join(sub, m); try { if ((await fsp.stat(g)).mtimeMs >= since) out.push(g); } catch {} }
+    }
+  }
+  return out;
+}
+let countingTokens = false;
+async function countTokens() {
+  if (countingTokens) return;
+  countingTokens = true;
+  try {
+    const day = Usage.dayKey(Date.now());
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    const files = await transcriptsTouchedSince(midnight.getTime());
+    const all = [];
+    for (const f of files) { const t = await feedTally(f); if (t) all.push(t.day(day)); }
+    const per = {};
+    for (const [name, set] of agentFiles) {
+      const list = [];
+      for (const f of set) { const t = await feedTally(f); if (t) list.push(t.day(day)); }
+      per[name] = Usage.sum(list);
+    }
+    tokensToday = { day, all: Usage.sum(all), agents: per };
+  } catch (e) { console.warn('token count failed:', e.message); }
+  finally { countingTokens = false; }
+}
+setInterval(countTokens, 15000);
+setTimeout(countTokens, 2000);
+// The transcripts an agent has written: its session file and its helpers' files.
+async function noteAgentFiles(name, file) {
+  if (!file) return;
+  let set = agentFiles.get(name); if (!set) { set = new Set(); agentFiles.set(name, set); }
+  set.add(file.path);
+  const dir = path.join(file.path.slice(0, -6), 'subagents');
+  try { for (const n of await fsp.readdir(dir)) if (n.endsWith('.jsonl')) set.add(path.join(dir, n)); } catch {}
+}
+
 function planUsage() {
   const file = path.join(DATA_DIR, 'usage.json');
   try {
@@ -538,6 +610,7 @@ async function poll() {
       const waiting = !toolQuestion && sig.waiting && !info.ended;
 
       item.helpers = file ? await listHelpers(file, s.created - 2000) : [];
+      await noteAgentFiles(a.name, file);
       const helpersWorking = item.helpers.filter((h) => h.state === 'working').length;
 
       if (toolQuestion || proseQuestion) {
@@ -600,7 +673,8 @@ async function poll() {
     const { fileStamp, lastChangeAt, screenAt, lastDispatchAt, ...pub } = item;
     agents.push(pub);
   }
-  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage() };
+  for (const it of agents) it.tokens = tokensToday.agents[it.name] || null;
+  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage(), tokens: tokensToday.all };
   const json = JSON.stringify(snapshot);
   if (json !== snapshotJson) {
     snapshotJson = json;
