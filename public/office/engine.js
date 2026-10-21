@@ -295,6 +295,8 @@ class Office {
       a.spotUntil = t + 25 + a.r() * 25;
     }
     if (a.pingpong) return a.pingpong;
+    const mate = a.chat && this.actors.get(a.chat.with);
+    if (mate) return { pos: a.spot.pos, facing: Math.atan2(mate.pos[0] - a.spot.pos[0], mate.pos[1] - a.spot.pos[1]), pose: 'talk', prop: a.spot.prop, key: `${a.spot.key}:chat` };
     return { pos: a.spot.pos, facing: a.spot.facing, pose: a.spot.pose, prop: a.spot.prop, key: a.spot.key, snap: a.spot.snap };
   }
 
@@ -310,6 +312,54 @@ class Office {
     this.pp = { who: [p.name, q.name], until: t + 60 };
     W.pingpong.sides.forEach((side, k) => { const a = k ? q : p; a.pingpong = { pos: side.pos, facing: side.facing, pose: 'pingpong', key: `pp${k}` }; });
     this.say(p, 'Ping-pong? 🏓', t);
+  }
+
+  // ---------- office life: greetings in passing, chats by the water cooler, project syncs ----------
+  tickLife(t, list) {
+    if (this.motionOff) return;
+    const all = [...this.actors.values()];
+    this.greeted = this.greeted || new Map(); // "a|b" -> when they last said hi
+    // 1. two people walking past each other say hi (once per pair every 5 minutes)
+    const walking = all.filter((a) => a.path && a.path.length && !a.leaving);
+    for (let i = 0; i < walking.length; i++) for (let j = i + 1; j < walking.length; j++) {
+      const a = walking[i], b = walking[j], d = Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1]);
+      const key = [a.name, b.name].sort().join('|');
+      if (d > 1.3 || t - (this.greeted.get(key) || -1e9) < 300) continue;
+      this.greeted.set(key, t);
+      const lines = ['Hey 👋', 'Morning!', "How's the build?", 'All good?', 'Coffee later? ☕', '👋'];
+      this.say(a, lines[Math.floor(a.r() * lines.length)], t, 1.8); a.speech.ambient = true;
+    }
+    // 2. idle people standing near each other turn and chat for a while
+    const idle = all.filter((a) => a.mood === 'idle' && a.spot && !a.pingpong && a.spot.pose === 'stand');
+    for (const a of idle) if (a.chat && (t > a.chat.until || !this.actors.has(a.chat.with))) a.chat = null;
+    for (let i = 0; i < idle.length; i++) for (let j = i + 1; j < idle.length; j++) {
+      const a = idle[i], b = idle[j];
+      if (a.chat || b.chat || Math.hypot(a.spot.pos[0] - b.spot.pos[0], a.spot.pos[1] - b.spot.pos[1]) > 2.6) continue;
+      const until = t + 40; a.chat = { with: b.name, until }; b.chat = { with: a.name, until };
+      a.goalKey = b.goalKey = ''; // turn to each other
+    }
+    for (const a of idle) {
+      if (!a.chat || a.speech && a.speech.until > t || t < (a.chatNext || 0)) continue;
+      const lines = ['Tests are green 🟢', 'Who broke main? 😅', 'Lunch?', 'That PR is huge', 'Ship it 🚀', 'Need a review later', 'This coffee though ☕'];
+      this.say(a, lines[Math.floor(a.r() * lines.length)], t, 2.5); a.speech.ambient = true;
+      a.chatNext = t + 6 + a.r() * 6;
+    }
+    // 3. agents busy in the same project meet for a short sync now and then (at most every 20 minutes)
+    if (!this.standup && list && t > (this.syncNext || 0)) {
+      this.syncNext = t + 60;
+      const byProject = new Map();
+      for (const ag of list) if (ag.cwd && ['writing', 'reading', 'thinking', 'planning', 'running', 'tests', 'build', 'review', 'git', 'data'].includes(ag.state)) {
+        const k = ag.cwd.replace(/\.worktrees\/[^/]+$/, ''); // worktrees of one repo count as one project
+        byProject.set(k, [...(byProject.get(k) || []), ag.name]);
+      }
+      this.synced = this.synced || new Map();
+      for (const [k, names] of byProject) {
+        if (names.length < 2 || t - (this.synced.get(k) || -1e9) < 1200) continue;
+        this.synced.set(k, t);
+        this.startStandup(names);
+        break;
+      }
+    }
   }
 
   // ---------- speech ----------
@@ -531,6 +581,7 @@ class Office {
     this.tickStandup(t, L.agents);
     if (L.draw !== false) { this.syncMonitors(L.agents, t); this.syncDesks(L.agents); }
     this.pairPingPong(t);
+    this.tickLife(t, L.agents);
     this.tickSpeech(t);
     this.tickCards(t);
     this.tickConfetti(dt);

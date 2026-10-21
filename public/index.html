@@ -2958,6 +2958,7 @@ function floorAgents() {
       helpers: helpersShown(a).map((h, k) => ({ id: h.id || String(k), state: h.state })),
       hero: a.hero, // the server's pick (undefined from an older server)
       screen: a.screen, // plain screen text, shown on its desk monitor
+      cwd: a.cwd, // agents busy in one project meet for a sync now and then
       todos: a.todos, dirty: (a.git && a.git.dirty) || 0, // the plan board and the paper pile on its desk
     });
   });
