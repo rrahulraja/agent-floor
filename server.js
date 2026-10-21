@@ -452,6 +452,7 @@ async function refreshGit(cwd, c) {
 const memory = new Map();
 const startedAt = new Map();
 let snapshot = { agents: [], tmux: true, claude: CLAUDE_BIN, settings: {} };
+const needSince = new Map(); // agent name -> when it started waiting on you
 let snapshotJson = '';
 const clients = new Set();
 const WORKING_KINDS = new Set(['thinking', 'reading', 'writing', 'running', 'delegating', 'browsing', 'planning', 'tests', 'build', 'deploy', 'data', 'review', 'git']);
@@ -614,6 +615,7 @@ async function poll() {
       } else if (waiting) {
         item.state = 'waiting'; item.detail = sig.trust ? 'Asks whether to trust this folder' : 'Needs your approval';
         if (sig.trust) item.trust = true;
+        else item.approval = C.approvalText(screen);
       } else if (busy) {
         item.state = info.kind === 'asking' ? 'thinking' : info.kind; item.detail = info.detail || 'Working';
       } else if (helpersWorking) {
@@ -670,6 +672,12 @@ async function poll() {
     agents.push(pub);
   }
   for (const it of agents) it.tokens = tokensToday.agents[it.name] || null;
+  // How long each agent has been waiting on you (for the inbox, oldest first).
+  for (const it of agents) {
+    const needs = it.state === 'waiting' || it.state === 'asking';
+    if (!needs) needSince.delete(it.name);
+    else { if (!needSince.has(it.name)) needSince.set(it.name, now); it.needSince = needSince.get(it.name); }
+  }
   snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage(), tokens: tokensToday.all };
   const json = JSON.stringify(snapshot);
   if (json !== snapshotJson) {

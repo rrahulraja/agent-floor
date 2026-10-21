@@ -56,3 +56,21 @@ test('paneSignals: approvals, busy, and the "trust this folder" screen', () => {
   assert.deepEqual(C.paneSignals(trust), { waiting: true, busy: false, trust: true });
   assert.equal(C.paneSignals('> ready').waiting, false);
 });
+
+test('approvalText: what the permission prompt is about, without the box drawing', () => {
+  const screen = [
+    'some earlier output',
+    '╭──────────────────────────────────────╮',
+    '│ Bash command                         │',
+    '│                                      │',
+    '│   kubectl -n prod rollout restart deploy/api │',
+    '│   Restart the API pods               │',
+    '│                                      │',
+    '│ Do you want to proceed?              │',
+    '│ ❯ 1. Yes                             │',
+    '│   2. No, and tell Claude what to do differently (esc) │',
+    '╰──────────────────────────────────────╯',
+  ].join('\n');
+  assert.equal(C.approvalText(screen), 'Bash command\nkubectl -n prod rollout restart deploy/api\nRestart the API pods');
+  assert.equal(C.approvalText('nothing to approve'), '');
+});

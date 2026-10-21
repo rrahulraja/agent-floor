@@ -274,6 +274,15 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .screen-bar { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
 .screen-bar .btn { padding: 2px 10px; font-size: 13px; }
 .tok-today { font-size: 12px; color: var(--muted); white-space: nowrap; } .tok-today b { color: var(--ink); font-weight: 600; }
+.inbox-btn b { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--wait-fill); color: #1e2235; font-size: 12px; }
+.inbox { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.inbox li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+.inbox li:first-child { border-color: var(--wait-fill); }
+.inbox .ih { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.inbox .ih b { font-size: 15px; } .inbox .ih span { color: var(--muted); font-size: 13px; } .inbox .ih time { margin-left: auto; color: var(--muted); font-size: 12px; }
+.inbox .row { margin-top: 8px; }
+.approval { margin: 6px 0 8px; padding: 8px 10px; border-radius: 6px; background: #0f1218; color: #d7dce5; font: 12.5px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; }
+.inbox textarea { width: 100%; min-height: 54px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: var(--surface); font: 13px/1.45 var(--mono); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* The instruction box lives inside the terminal window and looks like Claude Code's own input. */
 #dRunning { display: flex; flex-direction: column; flex: 1 0 auto; height: calc(100vh - 150px); min-height: 420px; gap: 8px; }
@@ -381,6 +390,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     </div>
   </div>
   <button class="btn" id="alertsBtn" hidden>Turn on alerts</button>
+  <button class="btn inbox-btn" id="inboxBtn" title="Everything waiting on you (i)">Inbox <b id="inboxCount" hidden></b></button>
   <button class="btn" id="todayBtn">Today</button>
   <button class="btn" id="searchBtn">Search</button>
   <button class="btn" id="broadcastBtn">Broadcast</button>
@@ -429,6 +439,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
         </div>
         <div class="alert" id="dNeeds" hidden>
           <p>This agent is asking for permission. Check the screen below, then answer.</p>
+          <pre class="approval" id="dApproval" hidden></pre>
           <div class="row">
             <button class="btn warn" data-key="Enter">Approve</button>
             <button class="btn" data-key="2">Choose option 2</button>
@@ -548,6 +559,13 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="pCancel">Cancel</button></div>
   </form>
 </dialog>
+<dialog id="inboxDialog" class="wide">
+  <h2>Waiting on you</h2>
+  <p class="hint" id="inboxHint">Oldest first. <kbd>a</kbd> approves and <kbd>d</kbd> declines the top item, <kbd>1</kbd>–<kbd>9</kbd> answer its question.</p>
+  <ol class="inbox" id="inboxList"></ol>
+  <p class="hint" id="inboxEmpty">Nothing is waiting on you.</p>
+  <div class="row" style="margin-top:14px"><button class="btn" id="inboxClose" autofocus>Close</button></div><!-- focus starts on Close: an Enter right after opening must not approve -->
+</dialog>
 <dialog id="timelineDialog" class="wide">
   <h2 id="tlTitle">Timeline</h2>
   <div id="tlBody"></div>
@@ -575,6 +593,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <dl class="keys">
     <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next / previous agent</dd>
     <dt><kbd>/</kbd></dt><dd>Write an instruction (↑ / ↓ go through what you sent before)</dd>
+    <dt><kbd>i</kbd></dt><dd>Inbox: everything waiting on you, oldest first</dd>
     <dt><kbd>t</kbd></dt><dd>Terminal view: widen the terminal (Esc goes back)</dd>
     <dt><kbd>a</kbd></dt><dd>Approve (when the agent needs your approval)</dd>
     <dt><kbd>d</kbd></dt><dd>Decline (when the agent needs your approval)</dd>
@@ -656,7 +675,7 @@ function toast(msg) {
 // ---------- live updates ----------
 function connect() {
   const es = new EventSource('/events');
-  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || [], s.settings); renderUsage(s.usage); renderTokens(s.tokens); };
+  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || [], s.settings); renderUsage(s.usage); renderTokens(s.tokens); renderInboxCount(); };
   es.onerror = () => { $('summary').textContent = 'Lost connection to the Agent Floor server. Retrying…'; };
 }
 
@@ -966,6 +985,7 @@ function renderPanel() {
   $('dError').hidden = !a.error; $('dError').textContent = a.error || '';
   $('dNeeds').hidden = a.state !== 'waiting' || !!a.trust;
   $('dTrust').hidden = !(a.state === 'waiting' && a.trust);
+  $('dApproval').hidden = !a.approval; if ($('dApproval').textContent !== (a.approval || '')) $('dApproval').textContent = a.approval || '';
   renderQuestion(a); renderHealth(a); renderStatus(a); renderHelpers(a);
   if (a.state !== 'stopped') renderCompose(a);
   renderQueue(a);
@@ -1474,6 +1494,84 @@ $('srForm').addEventListener('submit', async (e) => {
   } catch (err) { $('srStatus').textContent = err.message; }
 });
 
+// ---------- inbox: everything waiting on you, oldest first ----------
+const keyTo = (name, k) => api('POST', `/api/agents/${name}/key`, { key: k });
+function inboxItems() {
+  const out = [];
+  for (const a of agents) {
+    if (needsYou(a)) out.push({ a, kind: a.trust ? 'trust' : a.state === 'waiting' ? 'approve' : 'question', since: a.needSince || 0 });
+    const ck = a.git && a.git.pr && a.git.pr.checks;
+    if (ck && ck.state === 'fail') out.push({ a, kind: 'checks', since: Infinity });
+    if (a.stuck || a.looping) out.push({ a, kind: 'stuck', since: Infinity });
+  }
+  return out.sort((x, y) => x.since - y.since);
+}
+function renderInboxCount() {
+  const n = inboxItems().length;
+  $('inboxCount').hidden = !n; $('inboxCount').textContent = String(n);
+  if ($('inboxDialog').open) renderInbox();
+}
+function inboxActions(it) {
+  const { a } = it, row = el('div', 'row');
+  const btn = (text, cls, fn) => { const b = el('button', `btn ${cls || ''}`, text); b.type = 'button'; b.addEventListener('click', async () => { try { await fn(); } catch (err) { toast(err.message); } }); row.append(b); return b; };
+  if (it.kind === 'approve') { btn('Approve (a)', 'warn', () => keyTo(a.name, 'Enter')); btn('Option 2', '', () => keyTo(a.name, '2')); btn('Decline (d)', '', () => keyTo(a.name, 'Escape')); }
+  if (it.kind === 'trust') { btn('Trust this folder', 'warn', async () => { await keyTo(a.name, 'Down'); await keyTo(a.name, 'Enter'); }); btn('Exit', '', () => keyTo(a.name, 'Escape')); }
+  if (it.kind === 'checks' && a.git.pr.url) btn('Open PR', '', () => window.open(a.git.pr.url, '_blank', 'noopener'));
+  if (it.kind === 'stuck') btn('Interrupt (Esc)', '', () => keyTo(a.name, 'Escape'));
+  btn('Open agent', '', () => { $('inboxDialog').close(); select(a.name); });
+  return row;
+}
+function renderInbox() {
+  const list = $('inboxList'), items = inboxItems();
+  $('inboxEmpty').hidden = items.length > 0;
+  const key = JSON.stringify(items.map((it) => [it.a.name, it.kind, it.a.approval, it.a.question, it.a.state]));
+  if (list.dataset.key === key) return; // don't rebuild under someone typing a reply
+  list.dataset.key = key;
+  list.replaceChildren(...items.map((it) => {
+    const { a } = it, li = el('li');
+    const title = { approve: 'Needs your approval', trust: 'Trust this folder?', question: 'Has a question', checks: `PR #${a.git && a.git.pr && a.git.pr.number}: checks failing`, stuck: a.looping ? `Same command failed ${a.looping.count}× in a row` : `No change for ${a.stuck && a.stuck.minutes} min` }[it.kind];
+    const head = el('div', 'ih'); head.append(el('b', '', labelOf(a.name)), el('span', '', title));
+    if (it.since && it.since !== Infinity) head.append(el('time', '', `waiting ${ago(it.since).replace(' ago', '')}`));
+    li.append(head);
+    if (it.kind === 'approve' && a.approval) li.append(el('pre', 'approval', a.approval));
+    if (it.kind === 'question' && a.question) {
+      if (a.question.kind === 'prose') {
+        li.append(el('blockquote', '', a.question.text));
+        const ta = el('textarea'); ta.placeholder = 'Reply (Enter sends)';
+        ta.addEventListener('keydown', async (e) => {
+          if (e.key !== 'Enter' || e.shiftKey || !ta.value.trim()) return;
+          e.preventDefault();
+          try { await api('POST', `/api/agents/${a.name}/prompt`, { text: ta.value }); toast(`Sent to ${labelOf(a.name)}`); ta.value = ''; } catch (err) { toast(err.message); }
+        });
+        li.append(ta);
+      } else {
+        const q = a.question.questions[0] || {};
+        li.append(el('p', '', q.question || ''));
+        const opts = el('div', 'row');
+        (q.options || []).slice(0, 9).forEach((o, i) => { const b = el('button', 'btn', `${i + 1}. ${o.label}`); b.type = 'button'; b.title = o.description || ''; b.addEventListener('click', () => keyTo(a.name, String(i + 1)).then(() => toast(`Answered: ${o.label}`)).catch((err) => toast(err.message))); opts.append(b); });
+        li.append(opts);
+      }
+    }
+    li.append(inboxActions(it));
+    return li;
+  }));
+}
+function openInbox() { renderInbox(); if (!$('inboxDialog').open) $('inboxDialog').showModal(); }
+$('inboxBtn').addEventListener('click', openInbox);
+$('inboxClose').addEventListener('click', () => $('inboxDialog').close());
+// a / d / 1–9 act on the top item while the inbox is open
+$('inboxDialog').addEventListener('keydown', (e) => {
+  if (e.target.closest('textarea, input') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const it = inboxItems()[0]; if (!it) return;
+  const { a } = it;
+  if (e.key === 'a' && it.kind === 'approve') keyTo(a.name, 'Enter');
+  else if (e.key === 'a' && it.kind === 'trust') keyTo(a.name, 'Down').then(() => keyTo(a.name, 'Enter'));
+  else if (e.key === 'd' && (it.kind === 'approve' || it.kind === 'trust')) keyTo(a.name, 'Escape');
+  else if (/^[1-9]$/.test(e.key) && it.kind === 'question' && a.question && a.question.kind === 'tool') keyTo(a.name, e.key);
+  else return;
+  e.preventDefault();
+});
+
 // ---------- keyboard shortcuts ----------
 document.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1494,6 +1592,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 't' && a) setTermView(!document.body.classList.contains('termview'));
   else if (e.key === 'Escape' && document.body.classList.contains('termview')) setTermView(false);
   else if (e.key === '?') $('keysDialog').showModal();
+  else if (e.key === 'i') openInbox();
   else if (e.key === 'a' && a && a.state === 'waiting') { if (a.trust) $('trustYes').click(); else key('Enter'); } // Enter would pick "No, exit" on the trust screen
   else if (e.key === 'd' && a && a.state === 'waiting') key('Escape');
   else if (/^[1-9]$/.test(e.key) && a && a.state === 'asking' && a.question && a.question.kind === 'tool') key(e.key);
