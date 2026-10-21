@@ -25,6 +25,7 @@ const Perms = require('./lib/permissions');
 const Tasks = require('./lib/tasks');
 const Handoff = require('./lib/handoff');
 const Archive = require('./lib/archive');
+const Guard = require('./lib/guard');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -641,7 +642,23 @@ function settingsForPage() {
   };
 }
 
+// Spend guard: from plan usage and today's tokens (both read from the previous poll; they change slowly).
+function guardNow() {
+  const c = CONFIG.all();
+  return Guard.evaluate({
+    usage: planUsage(), agents: tokensToday.agents,
+    config: { planWarnPct: c['guard.planWarnPct'], planHoldPct: c['guard.planHoldPct'], holdAtPlanLimit: c['guard.holdAtPlanLimit'],
+      agentDailyTokens: c['guard.agentDailyTokens'], agentWarnPct: c['guard.agentWarnPct'], holdAtAgentLimit: c['guard.holdAtAgentLimit'] },
+  });
+}
+function guardAlert(key, title, detail) {
+  if (!CONFIG.get('notify.events.budget') || !notifyOnce(`guard:${key}:${Usage.dayKey(Date.now())}`)) return;
+  deliver({ title, detail, url: '' }).catch((e) => console.warn(`notify failed: ${e.message}`));
+}
+
 async function poll() {
+  const guard = guardNow();
+  if (guard.plan) guardAlert(`plan:${guard.plan.level}`, guard.plan.level === 'limit' ? 'Plan usage near its limit' : 'Plan usage is high', guard.plan.why + (guard.plan.hold ? ' · queued instructions are on hold' : ''));
   const sessions = await listSessions();
   let changed = false;
   for (const [name, s] of sessions) {
@@ -732,7 +749,11 @@ async function poll() {
     item.queue = C.queueOf(QUEUE.get(), a.name);
     item.lastDispatchAt = prev.lastDispatchAt || 0;
     if (a.worktree) item.worktree = { repo: a.repo };
-    if (s && C.shouldDispatch({
+    const held = (guard.plan && guard.plan.hold) || (guard.agents[a.name] && guard.agents[a.name].hold);
+    item.guard = guard.agents[a.name] || null;
+    if (item.guard) guardAlert(`${a.name}:${item.guard.level}`, `${a.label || a.name}: token budget`, item.guard.why + (item.guard.hold ? ' · its queue is on hold' : ''));
+    if (held && item.queue.items.length) item.queueHeld = true;
+    if (s && !held && C.shouldDispatch({
       state: item.state, question: item.question, proseMode: CONFIG.get('proseQuestion'), sessionUnknown: item.sessionUnknown,
       now, quietSince: Math.max(item.since, item.lastChangeAt || 0), idleSecs: CONFIG.get('queueIdleSeconds'), queue: item.queue, lastDispatchAt: item.lastDispatchAt,
     })) {
@@ -773,7 +794,7 @@ async function poll() {
     return Handoff.afterFiring(r, it.finishedAt);
   });
   if (rulesChanged) HANDOFFS.set(rules);
-  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage(), tokens: tokensToday.all, tasks, handoffs: rules.filter((r) => !r.done) };
+  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage(), tokens: tokensToday.all, tasks, handoffs: rules.filter((r) => !r.done), guard: guard.plan };
   const json = JSON.stringify(snapshot);
   if (json !== snapshotJson) {
     snapshotJson = json;
