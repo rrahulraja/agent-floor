@@ -20,6 +20,7 @@ const N = require('./lib/notify');
 const Hist = require('./lib/history');
 const HelperLog = require('./lib/helperlog');
 const Usage = require('./lib/usage');
+const Diff = require('./lib/diffpreview');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -453,6 +454,20 @@ const memory = new Map();
 const startedAt = new Map();
 let snapshot = { agents: [], tmux: true, claude: CLAUDE_BIN, settings: {} };
 const needSince = new Map(); // agent name -> when it started waiting on you
+// The change an Edit / Write waiting for approval would make (built once per tool call).
+const diffCache = new Map();
+function diffFor(tool) {
+  if (!tool || !['Edit', 'MultiEdit', 'Write'].includes(tool.name)) return null;
+  if (diffCache.has(tool.id)) return diffCache.get(tool.id);
+  const read = (f) => {
+    if (!f || !path.isAbsolute(f)) return null;
+    try { const st = fs.statSync(f); return st.isFile() && st.size <= 2 * 1024 * 1024 ? fs.readFileSync(f, 'utf8') : null; } catch { return null; }
+  };
+  let d = null; try { d = Diff.preview(tool, read); } catch (e) { console.warn('diff preview failed:', e.message); }
+  diffCache.set(tool.id, d);
+  if (diffCache.size > 50) diffCache.delete(diffCache.keys().next().value);
+  return d;
+}
 let snapshotJson = '';
 const clients = new Set();
 const WORKING_KINDS = new Set(['thinking', 'reading', 'writing', 'running', 'delegating', 'browsing', 'planning', 'tests', 'build', 'deploy', 'data', 'review', 'git']);
@@ -615,7 +630,7 @@ async function poll() {
       } else if (waiting) {
         item.state = 'waiting'; item.detail = sig.trust ? 'Asks whether to trust this folder' : 'Needs your approval';
         if (sig.trust) item.trust = true;
-        else item.approval = C.approvalText(screen);
+        else { item.approval = C.approvalText(screen); item.diff = diffFor(Diff.pendingTool(entries)); }
       } else if (busy) {
         item.state = info.kind === 'asking' ? 'thinking' : info.kind; item.detail = info.detail || 'Working';
       } else if (helpersWorking) {
