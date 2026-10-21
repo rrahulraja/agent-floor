@@ -3042,6 +3042,7 @@ function floorAgents() {
       hero: a.hero, // the server's pick (undefined from an older server)
       screen: a.screen, // plain screen text, shown on its desk monitor
       cwd: a.cwd, // agents busy in one project meet for a sync now and then
+      result: a.lastResult ? { kind: a.lastResult.kind, outcome: a.lastResult.outcome, at: a.lastResult.at } : null, // a hero powers up when tests pass
       todos: a.todos, dirty: (a.git && a.git.dirty) || 0, // the plan board and the paper pile on its desk
     });
   });

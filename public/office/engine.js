@@ -225,6 +225,7 @@ class Office {
   }
   dropActor(a) {
     this.scene.remove(a.av.root); a.av.dispose();
+    if (a.streak) { this.scene.remove(a.streak); a.streak.geometry.dispose(); a.streak.material.dispose(); }
     if (a.ringMesh) { this.scene.remove(a.ringMesh); a.ringMesh.geometry.dispose(); a.ringMesh.material.dispose(); }
     if (a.bubble) a.bubble.remove();
     if (a.plate) a.plate.remove();
@@ -238,10 +239,14 @@ class Office {
     a.goalKey = k;
     a.path = this.nav ? this.nav.findPath(a.pos, pos) : [pos];
     if (!a.path) a.path = [pos]; // no route: walk straight (rare; better than freezing)
+    // the trip's length, for heroes who fly the long ones
+    let len = 0, prev = a.pos; for (const p of a.path) { len += dist(prev, p); prev = p; }
+    a.trip = len; a.travel = 0;
   }
   step(a, dt, speedMul = 1) {
     if (!a.path || !a.path.length) { a.moving = 0; return true; }
     let left = WALK * speedMul * dt;
+    const budget = left;
     while (left > 0 && a.path.length) {
       const p = a.path[0], d = dist(a.pos, p);
       if (d <= left) { a.pos = [p[0], p[1]]; a.path.shift(); left -= d; continue; }
@@ -249,6 +254,7 @@ class Office {
       a.yaw = lerpAngle(a.yaw, Math.atan2(p[0] - a.pos[0], p[1] - a.pos[1]), Math.min(1, dt * 10));
       left = 0;
     }
+    a.travel = (a.travel || 0) + (budget - Math.max(0, left));
     a.moving = a.path.length ? WALK * speedMul : 0;
     return !a.path.length;
   }
@@ -542,7 +548,10 @@ class Office {
         a.lastSpoken = ag.state;
       }
       if (ag.state === 'idle' || ag.state === 'done') { if (a.idleSince === undefined) a.idleSince = t; } else { a.idleSince = undefined; a.spot = null; a.pingpong = null; }
-      if (ag.party && !a.party) { a.partyUntil = t + PARTY_POSE; if (L.motion) this.burst(a); this.partyIcon(a, ag.party.file); }
+      if (ag.party && !a.party) { a.partyUntil = t + PARTY_POSE; if (L.motion) this.burst(a); this.partyIcon(a, ag.party.file); if (this.kind === 'heroes' && L.motion) this.powerUp(a, t); }
+      // tests or a build just passed: a hero powers up
+      const rk = ag.result ? `${ag.result.kind}|${ag.result.outcome}|${ag.result.at || ''}` : '';
+      if (rk !== a.resultKey) { if (a.resultKey !== undefined && ag.result && ag.result.outcome === 'pass' && this.kind === 'heroes' && L.motion) this.powerUp(a, t); a.resultKey = rk; }
       if (!ag.party && a.party) { if (a.partyIcon) this.scene.remove(a.partyIcon); a.partyIcon = null; }
       a.party = ag.party;
       if (ag.state === 'done' && a.prevState !== 'done') a.partyUntil = Math.max(a.partyUntil || 0, t + PARTY_POSE);
@@ -550,7 +559,8 @@ class Office {
 
       const goal = this.place(a, ag, t, i);
       this.goTo(a, goal.pos, goal.facing, goal.pose, goal.key);
-      const arrived = this.step(a, dt, a.mood === 'waiting' || a.mood === 'asking' || (this.standup && this.standup.phase === 'gathering') ? 1.6 : 1);
+      const hurry = a.mood === 'waiting' || a.mood === 'asking' || (this.standup && this.standup.phase === 'gathering') ? 1.6 : 1;
+      const arrived = this.step(a, dt, hurry * this.heroSpeed(a));
       if (arrived) {
         // sit down: slide onto the seat (which is inside the furniture, off the walking grid) at its height
         if (goal.snap) { a.pos[0] += (goal.snap.at[0] - a.pos[0]) * 0.25; a.pos[1] += (goal.snap.at[1] - a.pos[1]) * 0.25; a.y = (a.y || 0) + (goal.snap.y - (a.y || 0)) * 0.25; }
@@ -585,10 +595,13 @@ class Office {
     this.tickSpeech(t);
     this.tickCards(t);
     this.tickConfetti(dt);
+    this.tickFx(t);
     // move everyone's model
     for (const a of [...this.actors.values(), ...this.extras]) {
-      if (a.moving) this.setPose(a, 'walk');
-      a.av.root.position.set(a.pos[0], a.y || a.snapY || 0, a.pos[1]);
+      if (a.moving) this.setPose(a, this.flying(a) ? 'raise' : 'walk'); // a flying hero leads with a fist
+      const lift = this.flying(a) && L.motion ? Math.sin(Math.PI * Math.min(1, a.travel / a.trip)) * 1.5 : 0;
+      a.av.root.position.set(a.pos[0], Math.max(a.y || a.snapY || 0, lift), a.pos[1]);
+      if (a.streak) { a.streak.visible = !!a.moving && L.motion; if (a.streak.visible) { a.streak.position.set(a.pos[0] - Math.sin(a.yaw) * 0.55, 0.45, a.pos[1] - Math.cos(a.yaw) * 0.55); a.streak.rotation.set(-Math.PI / 2, 0, -a.yaw); } }
       a.av.root.rotation.y = a.yaw;
       a.av.update(t, dt, { speed: L.motion ? a.moving : 0 });
       if (a.ringMesh) {
@@ -825,6 +838,42 @@ class Office {
       if (todos.length && key !== P.key) { P.key = key; this.drawPlan(P, todos); }
     }
     this.world.anchors.desks.forEach((d, i) => { if (!used.has(i) && d.props) { d.props.board.visible = false; d.props.sheets.forEach((s) => { s.visible = false; }); } });
+  }
+
+  // ---------- hero moments (heroes theme): flying, speedsters, power-ups ----------
+  heroName(a) { return this.kind === 'heroes' ? String(this.characterName(a.name) || '').toLowerCase() : ''; }
+  flying(a) { return this.kind === 'heroes' && !a.extra && a.moving && a.trip > 6 && !/flash/.test(this.heroName(a)); }
+  heroSpeed(a) {
+    if (this.kind !== 'heroes' || a.extra) return 1;
+    if (/flash/.test(this.heroName(a))) {
+      if (!a.streak) { // the speedster's yellow streak
+        a.streak = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 1.1), new THREE.MeshBasicMaterial({ color: '#ffd84a', transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+        a.streak.visible = false; this.scene.add(a.streak);
+      }
+      return 3;
+    }
+    return a.trip > 6 ? 2.2 : 1;
+  }
+  powerUp(a, t) {
+    const h = this.heroFor(a.name), color = (h && h.outfit && h.outfit.color) || '#ffd84a';
+    for (let k = 0; k < 2; k++) {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.3, 0.42, 48), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      ring.rotation.x = -Math.PI / 2; ring.position.set(a.pos[0], 0.05 + k * 0.6, a.pos[1]);
+      ring.userData = { born: t + k * 0.15, life: 1.3 };
+      this.scene.add(ring); (this.fx = this.fx || []).push(ring);
+    }
+    const lines = ['Nailed it ⚡', 'Mission complete', 'Another one saved', 'Too easy 😎', 'That is how it is done'];
+    this.queueSpeech(a, lines[Math.floor(a.r() * lines.length)]);
+  }
+  tickFx(t) {
+    if (!this.fx || !this.fx.length) return;
+    this.fx = this.fx.filter((m) => {
+      const k = (t - m.userData.born) / m.userData.life;
+      if (k < 0) { m.visible = false; return true; }
+      if (k >= 1) { this.scene.remove(m); m.geometry.dispose(); m.material.dispose(); return false; }
+      m.visible = true; m.scale.setScalar(1 + k * 7); m.material.opacity = 0.9 * (1 - k);
+      return true;
+    });
   }
 
   // ---------- celebration ----------
