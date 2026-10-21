@@ -10,9 +10,15 @@
 // Units: the figure is modelled in Hermes "model units" inside `body`, which is scaled by AGENT_SCALE (1.75),
 // so a figure is about 1.0 world unit (metre) tall. root's origin is the floor under the feet, facing +Z.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 export const AGENT_SCALE = 1.75;
 export const SEAT_HEIGHT = 0.45; // world height of a chair seat that 'sit' / 'type' / 'nap' expect
+const HEAD_SCALE = 1.28; // chibi head: bigger than Hermes's so faces and costumes read from the overview camera
+const OUTLINE = 0.0035; // inked outline thickness, model units (about 6 mm in the world)
+let outlines = true;
+// Inked outlines double the draw calls; the engine turns them off on 'low' quality.
+export function setAvatarOutlines(on) { outlines = !!on; }
 
 // ---------------------------------------------------------------- shared caches
 const geoCache = new Map();
@@ -20,8 +26,13 @@ const matCache = new Map();
 const texCache = new Map();
 function geo(key, make) { let g = geoCache.get(key); if (!g) { g = make(); geoCache.set(key, g); } return g; }
 const boxGeo = (w, h, d) => geo(`b${w}|${h}|${d}`, () => new THREE.BoxGeometry(w, h, d));
+// Soft toy edges: parts at least 2 cm across get rounded corners (a quarter of their thinnest side).
+const softGeo = (w, h, d) => {
+  const m = Math.min(w, h, d);
+  return m < 0.02 ? boxGeo(w, h, d) : geo(`r${w}|${h}|${d}`, () => new RoundedBoxGeometry(w, h, d, 2, m * 0.24));
+};
 function mat(key, make) { let m = matCache.get(key); if (!m) { m = make(); matCache.set(key, m); } return m; }
-const std = (color, rough = 0.75, metal = 0) => mat(`s${color}|${rough}|${metal}`, () => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal }));
+const std = (color, rough = 0.6, metal = 0) => mat(`s${color}|${rough}|${metal}`, () => new THREE.MeshStandardMaterial({ color, roughness: rough, metalness: metal }));
 const basic = (color) => mat(`c${color}`, () => new THREE.MeshBasicMaterial({ color }));
 const glow = (color, opacity = 0.5) => mat(`g${color}|${opacity}`, () => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide }));
 const glass = (color, opacity) => mat(`l${color}|${opacity}`, () => new THREE.MeshStandardMaterial({ color, roughness: 0.1, metalness: 0.1, transparent: true, opacity, depthWrite: false }));
@@ -53,10 +64,11 @@ function hashSeed(seed) { // FNV-1a, as in Hermes profile.ts
 const pick = (arr, n) => arr[n % arr.length];
 const _c = new THREE.Color(); const _hsl = {};
 function shade(hex, dl) { _c.set(hex); _c.getHSL(_hsl); _c.setHSL(_hsl.h, _hsl.s, clamp(_hsl.l + dl, 0, 1)); return `#${_c.getHexString()}`; }
+const ONE = new THREE.Vector3(1, 1, 1), _v = new THREE.Vector3();
 const keyName = (n) => String(n || '').toLowerCase().replace(/[^a-z]/g, '');
 
 // ---------------------------------------------------------------- office looks (Hermes profile.ts palettes)
-const SKINS = ['#f7d7c2', '#f4c58a', '#d8a06e', '#b7794e', '#8a5a3b', '#5d3a24'];
+const SKINS = ['#f7d7c2', '#f4c58a', '#d8a06e', '#c08458', '#a8714a', '#8a5a3b']; // darkest two lifted: ambient occlusion turned them black
 const HAIR_STYLES = ['short', 'parted', 'spiky', 'bun'];
 const HAIR_COLORS = ['#151515', '#3e2723', '#6b4f3a', '#7b341e', '#d6b56c', '#7c3aed', '#0891b2', '#db2777'];
 const TOPS = ['tee', 'hoodie', 'jacket'];
@@ -190,6 +202,10 @@ export function heroProfile(cast, seed) {
     case 'robin':
       P.bottom.color = '#1F7A3A'; P.gloves = '#1F7A3A'; P.boots = '#1E2235'; P.belt = GOLD; P.cape = { color: GOLD };
       P.chest = [{ op: 'letter', letter: 'R', color: GOLD, ink: RED, x: 92, y: 34, r: 17 }]; break;
+    case 'wonderwoman':
+      P.bottom.color = '#1F3A9A'; P.trunks = '#1F3A9A'; P.gloves = null; P.bracers = '#C7CCD8'; P.boots = RED; P.belt = GOLD; P.top.style = 'tunic'; P.sleeveless = true;
+      P.head.band = { color: GOLD, gem: RED, star: true };
+      P.chest = [{ op: 'ww', color: GOLD, x: 64, y: 40 }]; break;
     case 'tonystark':
       P.chestGlow = '#9FE8FF'; P.chestGlowSmall = true; P.beard = { style: 'goatee', color: '#2B1D14' }; break;
     case 'superman':
@@ -235,10 +251,9 @@ function drawFace(ctx, P) {
   ctx.fillStyle = P.skin; ctx.fillRect(0, 0, W, W);
   ctx.fillStyle = 'rgba(255,255,255,0.14)'; ctx.fillRect(0, 0, W, 20);
   if (P.face.cheeks) {
-    ctx.fillStyle = 'rgba(196,122,84,0.18)'; ctx.beginPath();
-    ctx.arc(36, 76, 14, 0, Math.PI * 2); ctx.arc(92, 76, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(236,112,112,0.22)'; ctx.beginPath();
+    ctx.ellipse(30, 84, 13, 8, 0, 0, Math.PI * 2); ctx.ellipse(98, 84, 13, 8, 0, 0, Math.PI * 2); ctx.fill();
   }
-  ctx.fillStyle = shade(P.skin, -0.1); ctx.fillRect(60, 56, 8, 20); ctx.fillRect(58, 74, 12, 4);
   if (P.face.scar) { ctx.strokeStyle = shade(P.skin, -0.22); ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(78, 30); ctx.lineTo(90, 84); ctx.moveTo(98, 36); ctx.lineTo(104, 80); ctx.stroke(); }
   const H = P.head; const col = H.color;
   if (H.paint === 'cowl' || H.paint === 'cowlLow') {
@@ -321,6 +336,11 @@ function drawChest(ctx, ops, W, H) {
       case 'strap': ctx.strokeStyle = o.color; ctx.lineWidth = 12; ctx.beginPath(); ctx.moveTo(108, -4); ctx.lineTo(18, 146); ctx.stroke(); break;
       case 'shoulders': ctx.fillStyle = o.color; ctx.fillRect(0, 0, W, 22); ctx.fillRect(0, 0, 18, H); ctx.fillRect(W - 18, 0, 18, H); break;
       case 'sides': ctx.fillStyle = o.color; ctx.fillRect(0, 0, 24, H); ctx.fillRect(W - 24, 0, 24, H); ctx.fillStyle = GOLD; ctx.fillRect(24, 0, 4, H); ctx.fillRect(W - 28, 0, 4, H); break;
+      case 'ww': { // two linked gold Ws
+        ctx.strokeStyle = o.color; ctx.lineWidth = 9; ctx.lineJoin = 'round';
+        for (const dy of [0, 16]) { ctx.beginPath(); ctx.moveTo(o.x - 44, o.y - 14 + dy); ctx.lineTo(o.x - 22, o.y + 12 + dy); ctx.lineTo(o.x, o.y - 6 + dy); ctx.lineTo(o.x + 22, o.y + 12 + dy); ctx.lineTo(o.x + 44, o.y - 14 + dy); ctx.stroke(); }
+        break;
+      }
       case 'eagle': ctx.fillStyle = '#C7CCD8'; ctx.beginPath(); ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#1E2235';
         ctx.beginPath(); ctx.moveTo(o.x - 7, o.y - 3); ctx.lineTo(o.x, o.y + 6); ctx.lineTo(o.x + 7, o.y - 3); ctx.lineTo(o.x, o.y + 1); ctx.closePath(); ctx.fill(); break;
       default: break;
@@ -358,7 +378,7 @@ export function buildAvatar(profile) {
   const add = (parent, g, m, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => {
     const o = new THREE.Mesh(g, m); o.position.set(x, y, z); o.rotation.set(rx, ry, rz); o.castShadow = true; parent.add(o); return o;
   };
-  const B = (parent, w, h, d, color, x, y, z, rx, ry, rz) => add(parent, boxGeo(w, h, d), typeof color === 'string' ? std(color) : color, x, y, z, rx, ry, rz);
+  const B = (parent, w, h, d, color, x, y, z, rx, ry, rz) => add(parent, softGeo(w, h, d), typeof color === 'string' ? std(color) : color, x, y, z, rx, ry, rz);
   const hairMat = (c) => std(c, 0.35, 0.05);
 
   // blob shadow (Hermes: circle 0.12, black 20%)
@@ -474,7 +494,7 @@ export function buildAvatar(profile) {
       if (P.sleeveless) B(arm, AW + 0.002, 0.04, AW + 0.002, topC, 0, -0.02, 0);
       else B(arm, AW + 0.002, 0.06, AW + 0.002, topC, 0, -0.03, 0);
       B(arm, AW - 0.006, 0.15, AW - 0.006, skin, 0, -0.075, 0);
-      if (P.sleeveless) B(arm, AW - 0.002, 0.05, AW - 0.002, P.gloves || '#2A1A3A', 0, -0.12, 0); // arm guard
+      if (P.sleeveless) B(arm, AW - 0.002, 0.05, AW - 0.002, P.bracers || P.gloves || '#2A1A3A', 0, -0.12, 0); // arm guard
     } else B(arm, AW, 0.15, AW, sleeveC, 0, -0.075, 0);
     if (S === 'hoodie') B(arm, AW + 0.004, 0.03, AW + 0.004, '#d1d5db', 0, -0.135, 0);
     if (S === 'robe') B(arm, AW + 0.012, 0.035, AW + 0.012, P.cuffs || accent, 0, -0.13, 0);
@@ -493,33 +513,34 @@ export function buildAvatar(profile) {
   const front = new THREE.Group(); front.position.set(0, 0.14, 0.17); torso.add(front); // carry anchor: on top of the forward hands
 
   // ---- head
-  const head = new THREE.Group(); head.position.y = 0.2 * by; torso.add(head);
+  const head = new THREE.Group(); head.position.y = 0.2 * by; head.scale.setScalar(HEAD_SCALE); torso.add(head);
   B(head, 0.07, 0.05, 0.07, P.head.paint === 'spider' || P.head.paint === 'iron' || P.head.paint === 'panther' ? P.head.color : skin, 0, 0.01, 0);
   const coverC = P.head.paint ? P.head.color : null;
   const faceTex = canvasTex(`face|${JSON.stringify([P.skin, P.face.cheeks, P.face.scar, P.head.paint, coverC, P.head.letter])}`, 128, 128, (ctx) => drawFace(ctx, P));
-  const faceMat = mat(`facemat|${faceTex.uuid}`, () => new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.55 }));
-  const sideMat = std(coverC || skin, 0.55);
-  const headMesh = new THREE.Mesh(boxGeo(0.16, 0.16, 0.14), [sideMat, sideMat, sideMat, sideMat, faceMat, sideMat]);
+  // A little self-light keeps faces readable in shade, at night and next to monitors.
+  const faceMat = mat(`facemat|${faceTex.uuid}`, () => new THREE.MeshStandardMaterial({ map: faceTex, roughness: 0.55, emissive: '#ffffff', emissiveMap: faceTex, emissiveIntensity: 0.18 }));
+  const sideMat = mat(`side|${coverC || skin}`, () => new THREE.MeshStandardMaterial({ color: coverC || skin, roughness: 0.55, emissive: coverC || skin, emissiveIntensity: 0.18 }));
+  const headMesh = new THREE.Mesh(geo('headR', () => new RoundedBoxGeometry(0.16, 0.16, 0.14, 3, 0.035)), [sideMat, sideMat, sideMat, sideMat, faceMat, sideMat]);
   headMesh.position.y = HEAD_C; headMesh.castShadow = true; head.add(headMesh);
   const fullHead = P.head.paint === 'spider' || P.head.paint === 'iron' || P.head.paint === 'panther';
 
   // hair
   let hs = P.head.paint ? 'none' : P.hair.style; const hc = hairMat(P.hair.color);
   if (P.hat && P.hat !== 'none' && (hs === 'spiky' || hs === 'bun' || hs === 'parted')) hs = 'short'; // keep hair under the hat
-  const H = (w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) => add(head, boxGeo(w, h, d), hc, x, y, z, rx, ry, rz);
-  if (hs === 'short') H(0.17, 0.05, 0.15, 0, 0.175, 0);
+  const H = (w, h, d, x, y, z, rx = 0, ry = 0, rz = 0) => add(head, softGeo(w, h, d), hc, x, y, z, rx, ry, rz);
+  if (hs === 'short') { H(0.172, 0.045, 0.152, 0, 0.172, 0); H(0.172, 0.08, 0.03, 0, 0.13, -0.062); H(0.11, 0.022, 0.03, -0.025, 0.152, 0.064, 0, 0, -0.12); }
   if (hs === 'parted') { H(0.17, 0.045, 0.15, 0, 0.175, 0); H(0.12, 0.03, 0.08, -0.035, 0.21, 0.01, 0.1, 0, -0.2); }
   if (hs === 'spiky') { H(0.168, 0.035, 0.148, 0, 0.17, 0); H(0.04, 0.06, 0.04, -0.05, 0.21, 0, 0, 0, -0.2); H(0.04, 0.08, 0.04, 0, 0.225, 0); H(0.04, 0.06, 0.04, 0.05, 0.21, 0, 0, 0, 0.2); }
   if (hs === 'bun') { H(0.17, 0.04, 0.15, 0, 0.168, 0); add(head, geo('bun', () => new THREE.SphereGeometry(0.042, 14, 12)), hc, 0, 0.22, -0.035); }
   if (hs === 'buzz') H(0.166, 0.03, 0.146, 0, 0.165, 0);
   if (hs === 'long') { H(0.172, 0.05, 0.152, 0, 0.175, 0); H(0.172, 0.22, 0.03, 0, 0.065, -0.068); H(0.02, 0.14, 0.11, -0.085, 0.1, -0.015); H(0.02, 0.14, 0.11, 0.085, 0.1, -0.015); }
-  if (P.hair.temples && hs !== 'none') { for (const s of [-1, 1]) add(head, boxGeo(0.006, 0.04, 0.05), hairMat(P.hair.temples), s * 0.083, 0.14, 0.0); }
+  if (P.hair.temples && hs !== 'none') { for (const s of [-1, 1]) add(head, softGeo(0.006, 0.04, 0.05), hairMat(P.hair.temples), s * 0.083, 0.14, 0.0); }
   if (P.hair.curl) H(0.03, 0.036, 0.012, 0.012, 0.14, 0.078, 0, 0, 0.5);
   // beard
   if (P.beard && !fullHead) {
     const bm = hairMat(P.beard.color);
-    if (P.beard.style === 'short') { add(head, boxGeo(0.166, 0.04, 0.148), bm, 0, 0.03, 0); add(head, boxGeo(0.06, 0.01, 0.01), bm, 0, 0.068, 0.075); }
-    if (P.beard.style === 'mustache' || P.beard.style === 'goatee') { add(head, boxGeo(0.058, 0.012, 0.01), bm, 0, 0.068, 0.075); add(head, boxGeo(0.026, 0.024, 0.012), bm, 0, 0.02, 0.072); }
+    if (P.beard.style === 'short') { add(head, softGeo(0.166, 0.04, 0.148), bm, 0, 0.03, 0); add(head, softGeo(0.06, 0.01, 0.01), bm, 0, 0.068, 0.075); }
+    if (P.beard.style === 'mustache' || P.beard.style === 'goatee') { add(head, softGeo(0.058, 0.012, 0.01), bm, 0, 0.068, 0.075); add(head, softGeo(0.026, 0.024, 0.012), bm, 0, 0.02, 0.072); }
   }
   // hats / headset
   if (P.hat === 'cap') { B(head, 0.172, 0.03, 0.152, P.hatColor, 0, 0.21, 0); B(head, 0.09, 0.012, 0.05, P.hatColor, 0, 0.195, 0.07); }
@@ -527,17 +548,24 @@ export function buildAvatar(profile) {
   if (P.headset) {
     add(head, geo('headband', () => new THREE.TorusGeometry(0.1, 0.008, 8, 24, Math.PI)), std('#94a3b8', 0.4, 0.25), 0, 0.1, 0);
     B(head, 0.018, 0.05, 0.028, '#475569', -0.1, 0.1, 0); B(head, 0.018, 0.05, 0.028, '#475569', 0.1, 0.1, 0);
-    add(head, boxGeo(0.012, 0.06, 0.012), std('#94a3b8', 0.4, 0.25), 0.085, 0.05, 0.06, 0.25, 0.25, -0.4);
+    add(head, softGeo(0.012, 0.06, 0.012), std('#94a3b8', 0.4, 0.25), 0.085, 0.05, 0.06, 0.25, 0.25, -0.4);
   }
   // hero head pieces
   if (P.mask && !fullHead) B(head, 0.164, 0.034, 0.142, P.mask, 0, EYE_Y + 0.002, 0);
-  if (P.head.band) { B(head, 0.164, 0.02, 0.144, P.head.band.color, 0, 0.15, 0); add(head, geo('gem', () => new THREE.OctahedronGeometry(0.014)), basic(P.head.band.gem), 0, 0.15, 0.075); }
+  if (P.head.band) {
+    B(head, 0.166, 0.02, 0.146, P.head.band.color, 0, 0.15, 0);
+    if (P.head.band.star) { add(head, geo('tiara', () => new THREE.ConeGeometry(0.03, 0.05, 3)), std(P.head.band.color, 0.35, 0.5), 0, 0.165, 0.07, -0.2, 0, 0); add(head, geo('tiaraStar', () => new THREE.OctahedronGeometry(0.011)), basic(P.head.band.gem), 0, 0.162, 0.084); }
+    else add(head, geo('gem', () => new THREE.OctahedronGeometry(0.014)), basic(P.head.band.gem), 0, 0.15, 0.075);
+  }
   for (const ex of P.head.extras) {
     if (ex === 'batEars') for (const s of [-1, 1]) { B(head, 0.026, 0.055, 0.03, coverC, s * 0.052, HEAD_TOP + 0.02, -0.01, 0, 0, s * -0.12); }
     if (ex === 'catEars') for (const s of [-1, 1]) { B(head, 0.024, 0.026, 0.024, coverC, s * 0.055, HEAD_TOP + 0.008, -0.01, 0, 0, Math.PI / 4); }
     if (ex === 'flashWings' || ex === 'capWings') {
       const wc = ex === 'flashWings' ? GOLD : WHITE;
-      for (const s of [-1, 1]) { B(head, 0.014, 0.03, 0.075, wc, s * 0.086, 0.112, -0.012, -0.55, 0, 0); B(head, 0.014, 0.022, 0.05, wc, s * 0.086, 0.145, -0.03, -0.8, 0, 0); }
+      // three swept-back feathers per side
+      for (const s of [-1, 1]) for (const [y, len, tilt] of [[0.095, 0.07, -0.35], [0.115, 0.06, -0.6], [0.134, 0.045, -0.85]]) {
+        add(head, boxGeo(0.008, 0.012, len), std(wc, 0.45), s * 0.084, y, -0.005 - len * 0.3, tilt, 0, 0);
+      }
     }
   }
   if (P.head.paint === 'iron') B(head, 0.01, 0.02, 0.01, GOLD, 0, 0.0, 0.074);
@@ -553,15 +581,18 @@ export function buildAvatar(profile) {
     else if (eyeStyle === 'iron') { eg.rotation.z = s * 0.15; B(eg, 0.042, 0.011, 0.008, basic('#e8fbff'), 0, 0, 0.0745); const h = add(eg, boxGeo(0.06, 0.03, 0.002), glow('#9FE8FF', 0.35), 0, 0, 0.079); h.castShadow = false; }
     else if (eyeStyle === 'lens') { B(eg, 0.036, 0.024, 0.01, basic('#f4f6fb'), 0, 0, 0.073); }
     else if (P.face.eyepatch && s === 1) { B(eg, 0.03, 0.03, 0.01, basic('#1a1a2e'), 0, 0, 0.072); B(head, 0.04, 0.036, 0.008, basic('#0b0b0f'), 0.04, EYE_Y, 0.079); }
-    else { B(eg, 0.03, 0.03, 0.01, basic('#1a1a2e'), 0, 0, 0.072); const hl = B(head, 0.008, 0.008, 0.01, basic('#ffffff'), s * 0.04 + 0.01, EYE_Y + 0.007, 0.074); highlights.push(hl); }
+    else {
+      add(eg, geo('eyeBall', () => new THREE.SphereGeometry(1, 16, 12)), std('#1d1a2b', 0.25), 0, 0, 0.071).scale.set(0.0155, 0.02, 0.006);
+      const hl = add(head, geo('eyeHl', () => new THREE.SphereGeometry(1, 10, 8)), basic('#ffffff'), s * 0.04 + 0.006, EYE_Y + 0.008, 0.0775); hl.scale.set(0.0055, 0.0055, 0.002); hl.castShadow = false; highlights.push(hl);
+    }
     if (!fullHead && eyeStyle !== 'none') brows.push(B(head, 0.04, 0.01, 0.01, basic(featureColor), s * 0.04, BROW_Y, 0.074));
   }
   if (P.face.eyepatch) B(head, 0.166, 0.008, 0.146, '#0b0b0f', 0, 0.12, 0, 0, 0, -0.38);
   const showMouth = !fullHead && P.face.mouth !== 'none';
-  const mouthC = basic('#9c4a4a');
-  const mouth = B(head, 0.05, 0.014, 0.01, mouthC, 0, MOUTH_Y, 0.074); mouth.visible = showMouth;
-  const cornerL = B(head, 0.014, 0.014, 0.01, mouthC, -0.031, MOUTH_Y + 0.002, 0.074);
-  const cornerR = B(head, 0.014, 0.014, 0.01, mouthC, 0.031, MOUTH_Y + 0.002, 0.074);
+  const mouthC = basic('#5b2a2e');
+  const mouth = B(head, 0.026, 0.011, 0.008, mouthC, 0, MOUTH_Y, 0.073); mouth.visible = showMouth;
+  const cornerL = B(head, 0.009, 0.008, 0.008, mouthC, -0.017, MOUTH_Y + 0.002, 0.073);
+  const cornerR = B(head, 0.009, 0.008, 0.008, mouthC, 0.017, MOUTH_Y + 0.002, 0.073);
   cornerL.visible = cornerR.visible = false;
   // glasses
   if (P.glasses && !fullHead) {
@@ -581,6 +612,24 @@ export function buildAvatar(profile) {
       B(head, 0.006, 0.006, 0.08, fm, s * 0.083, EYE_Y + 0.01, 0.04);
     }
     B(head, 0.03, 0.006, 0.006, fm, 0, EYE_Y + 0.004, 0.08);
+  }
+
+  // inked outline: a slightly bigger back-face copy of each solid part (Crossy Road / toy-figure look)
+  if (outlines) {
+    const ink = mat('ink', () => new THREE.MeshBasicMaterial({ color: '#1b1d29', side: THREE.BackSide }));
+    const parts = [];
+    body.traverse((o) => { if (o.isMesh && !o.userData.ink) parts.push(o); });
+    for (const o of parts) {
+      const m = Array.isArray(o.material) ? o.material[0] : o.material;
+      if (!m || m.isMeshBasicMaterial || m.transparent || !o.scale.equals(ONE)) continue;
+      const g = o.geometry; if (!g.boundingBox) g.computeBoundingBox();
+      const sz = g.boundingBox.getSize(_v);
+      if (Math.min(sz.x, sz.y, sz.z) < 0.008) continue;
+      const hull = new THREE.Mesh(g, ink);
+      hull.scale.set((sz.x + 2 * OUTLINE) / sz.x, (sz.y + 2 * OUTLINE) / sz.y, (sz.z + 2 * OUTLINE) / sz.z);
+      hull.userData.ink = true; hull.userData.noShadow = true; hull.castShadow = false;
+      o.add(hull);
+    }
   }
 
   // measure height in the neutral stand pose (before any prop)
@@ -776,8 +825,9 @@ export function buildAvatar(profile) {
       mouth.scale.set(mx, my, 1); mouth.position.y = MOUTH_Y + mdy;
       const corners = forceClosed || talking || (flat && expr !== 'happy' && expr !== 'error') ? null : E.corners;
       cornerL.visible = cornerR.visible = !!corners;
-      if (corners === 'smile') { cornerL.rotation.z = 0.62; cornerR.rotation.z = -0.62; cornerL.position.y = cornerR.position.y = MOUTH_Y + 0.002 + mdy * 0.5 + 0.006; }
-      if (corners === 'frown') { cornerL.rotation.z = -0.6; cornerR.rotation.z = 0.6; cornerL.position.y = cornerR.position.y = MOUTH_Y - 0.011; }
+      cornerL.position.x = -(0.013 * mx + 0.003); cornerR.position.x = 0.013 * mx + 0.003;
+      if (corners === 'smile') { cornerL.rotation.z = 0.62; cornerR.rotation.z = -0.62; cornerL.position.y = cornerR.position.y = MOUTH_Y + 0.003 + mdy * 0.3; }
+      if (corners === 'frown') { cornerL.rotation.z = -0.6; cornerR.rotation.z = 0.6; cornerL.position.y = cornerR.position.y = MOUTH_Y - 0.006; }
     }
   }
 

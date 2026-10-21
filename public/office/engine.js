@@ -12,7 +12,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { buildOffice } from './world.js';
-import { buildAvatar, officeProfile, helperProfile, heroProfile, SEAT_HEIGHT } from './avatar.js';
+import { buildAvatar, officeProfile, helperProfile, heroProfile, setAvatarOutlines, SEAT_HEIGHT } from './avatar.js';
 import { createNav } from './nav.js';
 
 const WALK = 1.25;            // metres per second
@@ -66,7 +66,7 @@ class Office {
     this.box.append(this.gl.domElement, this.bubbles);
     stage.prepend(this.box);
     this.software = isSoftware(this.gl);
-    this.quality = this.software ? 'low' : 'balanced';
+    this.quality = this.software ? 'low' : 'balanced'; setAvatarOutlines(this.quality !== 'low');
 
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog('#c3cedb', 58, 165);
@@ -185,6 +185,7 @@ class Office {
     this.scene.remove(a.av.root); a.av.dispose();
     if (a.ringMesh) { this.scene.remove(a.ringMesh); a.ringMesh.geometry.dispose(); a.ringMesh.material.dispose(); }
     if (a.bubble) a.bubble.remove();
+    if (a.plate) a.plate.remove();
     if (a.partyIcon) this.scene.remove(a.partyIcon);
   }
   // Walk to pos (and then face/pose). Plans a path once per new goal.
@@ -647,7 +648,26 @@ class Office {
     if (!a) return null;
     return this.screen(new THREE.Vector3(a.pos[0], a.av.height + 0.18, a.pos[1]));
   }
+  // Who is who for the figures that aren't agents (agents have the page's name plates).
+  plateText(x) {
+    const owner = this.actors.get(x.owner || (x.janitor && x.janitor.owner));
+    const whose = owner ? owner.label || owner.name : '';
+    return x.janitor ? 'Janitor' : `Helper${whose ? ` · ${whose}` : ''}`;
+  }
+  positionPlates() {
+    for (const x of this.extras) {
+      if (!x.owner && !x.janitor) continue;
+      if (!x.plate) { x.plate = document.createElement('div'); x.plate.className = 'o3d-plate'; this.bubbles.append(x.plate); }
+      const text = this.plateText(x);
+      if (x.plate.textContent !== text) x.plate.textContent = text;
+      const p = this.screen(new THREE.Vector3(x.pos[0], x.av.height * x.av.root.scale.y + 0.12, x.pos[1]));
+      if (!p) { x.plate.style.display = 'none'; continue; }
+      x.plate.style.display = '';
+      x.plate.style.transform = `translate(${p.left}px, ${p.top}px) translate(-50%, -100%)`;
+    }
+  }
   positionBubbles(t) {
+    this.positionPlates();
     for (const a of [...this.actors.values(), ...this.extras]) {
       const on = a.speech && a.speech.until > t;
       if (!on) { if (a.bubble) { a.bubble.remove(); a.bubble = null; } if (a.speech && a.speech.until <= t) a.speech = null; continue; }
@@ -690,7 +710,7 @@ class Office {
     });
     window.addEventListener('keydown', (e) => { if (e.key === 'Escape' && this.follow) { this.follow = null; this.overview(); } });
   }
-  setQuality(q) { this.quality = q === 'low' || q === 'high' ? q : 'balanced'; this.sizeKey = ''; }
+  setQuality(q) { this.quality = q === 'low' || q === 'high' ? q : 'balanced'; this.sizeKey = ''; setAvatarOutlines(this.quality !== 'low'); }
 }
 
 let office = null;

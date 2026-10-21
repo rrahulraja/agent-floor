@@ -110,6 +110,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .v3d-css { pointer-events: none; }
 .view-btn { padding: 6px 9px; font-weight: 700; }
 .o3d-bubbles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.o3d-plate { position: absolute; left: 0; top: 0; padding: 1px 6px; border-radius: 6px; background: rgba(30,34,53,.72); color: #f4f1e8; font: 600 10px/1.4 var(--sans); white-space: nowrap; }
 .o3d-bubble { position: absolute; left: 0; top: 0; max-width: 260px; padding: 7px 10px; border-radius: 10px; background: #fffdf6; color: #1e2235;
   font: 500 12.5px/1.35 var(--sans); box-shadow: 0 2px 10px rgba(0,0,0,.25); white-space: normal; z-index: 4; }
 .o3d-bubble::after { content: ''; position: absolute; left: 50%; bottom: -6px; border: 6px solid transparent; border-top-color: #fffdf6; border-bottom: 0; transform: translateX(-50%); }
@@ -2443,7 +2444,11 @@ function renderTags() {
     b.setAttribute('aria-pressed', String(a.name === selected));
     b.title = `${a.label || a.name}: ${a.detail || LABEL[st]}`;
     b.querySelector('.nm').textContent = a.label || a.name;
-    b.querySelector('.st').textContent = (theme.labels && theme.labels[st]) || LABEL[st] || st;
+    // Theme labels may name a character per state ("Tony Stark · Off duty"); in 3D each agent plays one
+    // character, so keep only the state words and put that agent's own character in front.
+    const stLabel = (theme.labels && theme.labels[st]) || LABEL[st] || st;
+    const own = use3d && window.Floor3D.characterName ? window.Floor3D.characterName(a.name) : '';
+    b.querySelector('.st').textContent = own ? `${own} · ${stLabel.includes(' · ') ? stLabel.split(' · ').slice(1).join(' · ') : stLabel}` : stLabel;
     // Compact badges: last tests/build, PR checks, stuck/looping.
     const badges = [];
     if (a.lastResult) badges.push([a.lastResult.outcome === 'pass' ? 'bd-pass' : 'bd-fail', a.lastResult.outcome === 'pass' ? '✓' : '✗', `${a.lastResult.kind === 'build' ? 'Build' : 'Tests'}: ${a.lastResult.summary}`]);
