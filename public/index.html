@@ -1218,6 +1218,12 @@ function renderStatus(a) {
     dd.append(sel);
     rows.push(['Context', dd]);
   }
+  if (a.todos && a.todos.length) {
+    const done = a.todos.filter((t) => t.status === 'completed').length, now = a.todos.find((t) => t.status === 'in_progress');
+    const dd = el('dd', '', `${done}/${a.todos.length} done${now ? ` · now: ${now.text}` : ''}`);
+    dd.title = a.todos.map((t) => `${t.status === 'completed' ? '☑' : t.status === 'in_progress' ? '▸' : '☐'} ${t.text}`).join('\n');
+    rows.push(['Plan', dd]);
+  }
   if (a.tokens && a.tokens.total) {
     const dd = el('dd', '', `${fmtTok(a.tokens.total)} tokens · ${fmtTok(a.tokens.output)} written`);
     dd.title = tokenTip(a.tokens, `${labelOf(a.name)} and its helpers`);
@@ -1253,7 +1259,7 @@ function renderStatus(a) {
   }
   box.hidden = !rows.length;
   if (document.activeElement && box.contains(document.activeElement)) return; // don't rebuild under an open select
-  if (sameAs(box, [a.name, c, r, g, a.tokens])) return;
+  if (sameAs(box, [a.name, c, r, g, a.tokens, a.todos])) return;
   box.replaceChildren(...rows.flatMap(([k, dd]) => [el('dt', '', k), dd]));
 }
 
@@ -2952,6 +2958,7 @@ function floorAgents() {
       helpers: helpersShown(a).map((h, k) => ({ id: h.id || String(k), state: h.state })),
       hero: a.hero, // the server's pick (undefined from an older server)
       screen: a.screen, // plain screen text, shown on its desk monitor
+      todos: a.todos, dirty: (a.git && a.git.dirty) || 0, // the plan board and the paper pile on its desk
     });
   });
   return out;

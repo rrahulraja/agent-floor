@@ -729,7 +729,7 @@ export async function buildOffice({ deskCount = 8, quality = 'balanced', palette
     if (quality === 'high') { lamp = new THREE.PointLight('#ffcf8a', 0, 2.2, 2); lamp.position.set(lx, DESK.top + 0.28, lz); dynamic.add(lamp); lampLights.push({ l: lamp, max: 1.4 }); }
     if (i % 3 === 1) place(['plantSmall1', 'plantSmall2', 'plantSmall3'][i % 3], { x: x - DESK.w / 2 + 0.13, z: z + 0.22, y: DESK.top, h: 0.24 });
     if (i % 2 === 0) trash(x + DESK.w / 2 + 0.16, z + 0.2);
-    anchors.desks.push({ id, seat: P(x, cz), facing: 0, seatY: 0.36, monitor: screen, lamp, desk: P(x, z) });
+    anchors.desks.push({ id, seat: P(x, cz), facing: 0, seatY: 0.36, monitor: screen, lamp, desk: P(x, z), top: DESK.top, width: DESK.w, depth: DESK.d });
   }
   {
     const xs = anchors.desks.map((d) => d.desk[0]), zs = anchors.desks.map((d) => d.desk[1]);

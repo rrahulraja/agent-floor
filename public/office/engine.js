@@ -529,7 +529,7 @@ class Office {
     for (const x of this.extras) if (x.gone) { this.dropActor(x); const o = this.actors.get(x.owner); if (o && o.helpers) for (const [k, v] of o.helpers) if (v === x) o.helpers.delete(k); }
     this.extras = this.extras.filter((x) => !x.gone);
     this.tickStandup(t, L.agents);
-    if (L.draw !== false) this.syncMonitors(L.agents, t);
+    if (L.draw !== false) { this.syncMonitors(L.agents, t); this.syncDesks(L.agents); }
     this.pairPingPong(t);
     this.tickSpeech(t);
     this.tickCards(t);
@@ -709,6 +709,71 @@ class Office {
       this.showOnMonitor(Number(m[1]), ag.screen, t);
     }
     this.world.anchors.desks.forEach((d, i) => { if (!showing.has(i)) this.clearMonitor(i); });
+  }
+
+  // ---------- visible progress: a paper pile for uncommitted files, a plan board for the to-do list ----------
+  deskProps(i) {
+    const desk = this.world.anchors.desks[i];
+    if (!desk) return null;
+    if (desk.props) return desk.props;
+    const g = new THREE.Group(); this.world.group.add(g);
+    const [x, z] = desk.desk, top = desk.top || 0.58, w = desk.width || 1.1;
+    // paper pile at the front-left of the desk, one sheet per uncommitted file (up to 20)
+    const pile = new THREE.Group(); pile.position.set(x - w / 2 + 0.2, top, z - 0.22); g.add(pile);
+    const sheet = new THREE.BoxGeometry(0.21, 0.012, 0.28), paper = new THREE.MeshStandardMaterial({ color: '#f4f1e8', roughness: 0.9 });
+    const sheets = [];
+    for (let k = 0; k < 20; k++) { const m = new THREE.Mesh(sheet, paper); m.position.y = 0.006 + k * 0.012; m.rotation.y = (rand(i * 31 + k)() - 0.5) * 0.25; m.castShadow = true; m.visible = false; pile.add(m); sheets.push(m); }
+    // plan board on a stand beside the desk, facing the room
+    const board = new THREE.Group(); board.position.set(x + w / 2 + 0.3, 0, z + 0.05); g.add(board);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.9, 8), new THREE.MeshStandardMaterial({ color: '#6b7385', metalness: 0.5, roughness: 0.4 }));
+    pole.position.y = 0.45; board.add(pole);
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.02, 16), pole.material); foot.position.y = 0.01; board.add(foot);
+    const c = document.createElement('canvas'); c.width = 360; c.height = 280;
+    const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.48), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, emissive: '#ffffff', emissiveMap: tex, emissiveIntensity: 0.25 }));
+    face.position.y = 1.12; board.add(face);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.52, 0.02), new THREE.MeshStandardMaterial({ color: '#d4d8e0', roughness: 0.5 }));
+    frame.position.set(0, 1.12, -0.012); board.add(frame);
+    for (const o of [pole, foot, frame]) o.castShadow = true;
+    desk.props = { g, sheets, board, c, tex, key: '' };
+    return desk.props;
+  }
+  drawPlan(P, todos) {
+    const g = P.c.getContext('2d'), W = 360, H = 280;
+    g.fillStyle = '#fbfcfe'; g.fillRect(0, 0, W, H);
+    const done = todos.filter((t) => t.status === 'completed').length;
+    g.fillStyle = '#1e2235'; g.font = 'bold 22px Helvetica, Arial, sans-serif'; g.fillText(`Plan  ${done}/${todos.length}`, 16, 34);
+    g.fillStyle = '#e3e7ef'; g.fillRect(16, 46, W - 32, 12);
+    g.fillStyle = '#22a06b'; g.fillRect(16, 46, (W - 32) * (todos.length ? done / todos.length : 0), 12);
+    g.font = '17px Helvetica, Arial, sans-serif';
+    todos.slice(0, 8).forEach((t, k) => {
+      const y = 84 + k * 25, st = t.status;
+      g.fillStyle = st === 'completed' ? '#22a06b' : st === 'in_progress' ? '#2f5fc4' : '#8a90a6';
+      g.fillText(st === 'completed' ? '☑' : st === 'in_progress' ? '▶' : '☐', 16, y);
+      g.fillStyle = st === 'completed' ? '#8a90a6' : '#1e2235';
+      const text = t.text.length > 30 ? `${t.text.slice(0, 29)}…` : t.text;
+      g.fillText(text, 40, y);
+      if (st === 'completed') { const w = g.measureText(text).width; g.fillRect(40, y - 6, w, 1.5); }
+    });
+    if (todos.length > 8) { g.fillStyle = '#8a90a6'; g.fillText(`+${todos.length - 8} more`, 40, 84 + 8 * 25); }
+    P.tex.needsUpdate = true;
+  }
+  syncDesks(list) {
+    const used = new Set();
+    for (const ag of list) {
+      const a = this.actors.get(ag.name), m = a && /^desk:(\d+)/.exec(a.goalKey || '');
+      const i = m ? Number(m[1]) : a && a.deskIdx; // its own desk, even while it's off elsewhere
+      if (i === undefined || i === null || !this.world.anchors.desks[i]) continue;
+      used.add(i);
+      const P = this.deskProps(i);
+      const n = Math.min(20, ag.dirty || 0);
+      P.sheets.forEach((s, k) => { s.visible = k < n; });
+      const todos = Array.isArray(ag.todos) ? ag.todos : [];
+      P.board.visible = todos.length > 0;
+      const key = JSON.stringify(todos);
+      if (todos.length && key !== P.key) { P.key = key; this.drawPlan(P, todos); }
+    }
+    this.world.anchors.desks.forEach((d, i) => { if (!used.has(i) && d.props) { d.props.board.visible = false; d.props.sheets.forEach((s) => { s.visible = false; }); } });
   }
 
   // ---------- celebration ----------

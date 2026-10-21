@@ -700,6 +700,7 @@ async function poll() {
         item.state = 'idle'; item.detail = info.lastReply ? 'Finished, ready for more' : 'Ready for instructions';
       }
       item.lastPrompt = info.lastPrompt;
+      item.todos = info.todos;
       item.lastReply = info.lastReply;
       item.screen = screen;
       item.screenAnsi = screenAnsi;
