@@ -420,6 +420,13 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
         <p class="activity" id="dActivity"></p>
         <p class="error" id="dError" hidden></p>
 
+        <div class="alert" id="dTrust" hidden>
+          <p>Claude Code is opening this folder for the first time and asks whether you trust it. Trusting lets it read, edit and run files here.</p>
+          <div class="row">
+            <button class="btn warn" type="button" id="trustYes">Trust this folder</button>
+            <button class="btn" data-key="Escape">Exit</button>
+          </div>
+        </div>
         <div class="alert" id="dNeeds" hidden>
           <p>This agent is asking for permission. Check the screen below, then answer.</p>
           <div class="row">
@@ -957,7 +964,8 @@ function renderPanel() {
   $('dPath').textContent = `${a.cwd}  ·  ${a.session}`;
   $('dActivity').textContent = a.detail || '';
   $('dError').hidden = !a.error; $('dError').textContent = a.error || '';
-  $('dNeeds').hidden = a.state !== 'waiting';
+  $('dNeeds').hidden = a.state !== 'waiting' || !!a.trust;
+  $('dTrust').hidden = !(a.state === 'waiting' && a.trust);
   renderQuestion(a); renderHealth(a); renderStatus(a); renderHelpers(a);
   if (a.state !== 'stopped') renderCompose(a);
   renderQueue(a);
@@ -1486,7 +1494,7 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 't' && a) setTermView(!document.body.classList.contains('termview'));
   else if (e.key === 'Escape' && document.body.classList.contains('termview')) setTermView(false);
   else if (e.key === '?') $('keysDialog').showModal();
-  else if (e.key === 'a' && a && a.state === 'waiting') key('Enter');
+  else if (e.key === 'a' && a && a.state === 'waiting') { if (a.trust) $('trustYes').click(); else key('Enter'); } // Enter would pick "No, exit" on the trust screen
   else if (e.key === 'd' && a && a.state === 'waiting') key('Escape');
   else if (/^[1-9]$/.test(e.key) && a && a.state === 'asking' && a.question && a.question.kind === 'tool') key(e.key);
   else return;
@@ -1501,6 +1509,12 @@ document.querySelectorAll('[data-key]').forEach((btn) => btn.addEventListener('c
   try { await api('POST', `/api/agents/${selected}/key`, { key: btn.dataset.key }); }
   catch (err) { toast(err.message); }
 }));
+// The trust menu has "No, exit" highlighted and no numbers: move to "Yes" first, then confirm.
+$('trustYes').addEventListener('click', async () => {
+  if (!selected) return;
+  try { await api('POST', `/api/agents/${selected}/key`, { key: 'Down' }); await api('POST', `/api/agents/${selected}/key`, { key: 'Enter' }); }
+  catch (err) { toast(err.message); }
+});
 $('copyAttach').addEventListener('click', async () => {
   const a = agents.find((x) => x.name === selected); if (!a) return;
   try { await navigator.clipboard.writeText(a.attach); toast(`Copied: ${a.attach}`); }

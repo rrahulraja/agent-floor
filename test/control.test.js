@@ -46,3 +46,13 @@ test('worktree path from the template', () => {
   assert.equal(C.branchSlug('../../etc'), '..-..-etc');
 });
 
+
+test('paneSignals: approvals, busy, and the "trust this folder" screen', () => {
+  const approve = 'Bash command\n  npm publish\nDo you want to proceed?\n❯ 1. Yes\n  2. No, and tell Claude what to do differently';
+  assert.deepEqual(C.paneSignals(approve), { waiting: true, busy: false, trust: false });
+  assert.equal(C.paneSignals('✻ Thinking… (12s · esc to interrupt)').busy, true);
+  const trust = 'Accessing workspace:\n\n/Users/rrahul\n\nQuick safety check: Is this a project you created or one you trust?\n\n'
+    + 'Security guide\n\n❯ No, exit\n  Yes, I trust this folder\n\nEnter to confirm · Esc to cancel';
+  assert.deepEqual(C.paneSignals(trust), { waiting: true, busy: false, trust: true });
+  assert.equal(C.paneSignals('> ready').waiting, false);
+});

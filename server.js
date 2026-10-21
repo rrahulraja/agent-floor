@@ -320,13 +320,7 @@ function celebrate(name, entries, since) {
   return cs.recent;
 }
 
-function paneSignals(text) {
-  // Only the bottom of the screen matters: Claude Code redraws its status line and dialogs there.
-  const tail = text.split('\n').filter((l) => l.trim()).slice(-12).join('\n');
-  const waiting = /(Do you want to|Would you like to)/i.test(tail) && /^\s*(❯\s*)?1\.\s/m.test(tail);
-  const busy = /esc to interrupt/i.test(tail);
-  return { waiting, busy };
-}
+const paneSignals = C.paneSignals;
 
 // ---------- which transcript belongs to which agent ----------
 // First entries of a transcript (cached; the head of a file never changes).
@@ -618,7 +612,8 @@ async function poll() {
         item.question = toolQuestion ? { kind: 'tool', questions: info.question.questions } : { kind: 'prose', text: info.question.text, mode: proseMode };
         item.detail = toolQuestion ? 'Has a question for you' : 'May have a question';
       } else if (waiting) {
-        item.state = 'waiting'; item.detail = 'Needs your approval';
+        item.state = 'waiting'; item.detail = sig.trust ? 'Asks whether to trust this folder' : 'Needs your approval';
+        if (sig.trust) item.trust = true;
       } else if (busy) {
         item.state = info.kind === 'asking' ? 'thinking' : info.kind; item.detail = info.detail || 'Working';
       } else if (helpersWorking) {
