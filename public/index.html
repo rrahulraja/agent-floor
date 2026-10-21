@@ -319,6 +319,11 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .handoffs h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .handoffs p { margin: 2px 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
 .handoffs button { border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 0 6px; cursor: pointer; }
+.replay { display: grid; grid-template-columns: auto auto minmax(120px, 1fr) minmax(0, 2fr) auto; gap: 10px; align-items: center; margin-top: 10px;
+  padding: 8px 10px; border: 1px solid var(--work); border-radius: 8px; background: var(--surface); }
+.replay input[type=range] { width: 100%; accent-color: var(--work); }
+.rp-now { min-width: 0; display: flex; gap: 8px; align-items: baseline; } .rp-now b { font: 600 14px var(--mono); }
+.rp-now span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 14px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* The instruction box lives inside the terminal window and looks like Claude Code's own input. */
 #dRunning { display: flex; flex-direction: column; flex: 1 0 auto; height: calc(100vh - 150px); min-height: 420px; gap: 8px; }
@@ -444,6 +449,13 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
       <canvas id="office" width="384" height="208" aria-hidden="true"></canvas>
       <div class="tags" id="tags"></div>
     </div>
+    <div class="replay" id="replayBar" hidden>
+      <button class="btn" type="button" id="rpPlay" aria-label="Play">▶</button>
+      <select id="rpSpeed" aria-label="Replay speed"><option value="30">30×</option><option value="120" selected>120×</option><option value="600">600×</option></select>
+      <input type="range" id="rpSlider" min="0" max="1000" value="0" aria-label="Time of day">
+      <div class="rp-now"><b id="rpTime"></b><span id="rpStep"></span></div>
+      <button class="btn" type="button" id="rpClose" aria-label="Close replay">✕</button>
+    </div>
     <section class="feed" aria-labelledby="feedTitle">
       <h2 id="feedTitle">Activity</h2>
       <ol class="feed-list" id="feedList"></ol>
@@ -530,6 +542,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
           <button class="btn" data-key="BTab" title="Cycles Claude Code modes, like accept edits and plan mode">Switch mode</button>
           <button class="btn" id="timelineBtn">Timeline</button>
           <button class="btn" id="permBtn" title="What this agent may run without asking">Permissions</button>
+          <button class="btn" id="replayBtn" title="Replay what this agent did today, on the floor">Replay</button>
           <button class="btn" id="handoffBtn" title="When this agent finishes, pass its result to another agent">Hand off…</button>
           <button class="btn copy" id="copyAttach">Copy attach command</button>
           <button class="btn danger" id="stopBtn">Stop agent</button>
@@ -1829,6 +1842,50 @@ $('handoffForm').addEventListener('submit', async (e) => {
   } catch (err) { $('hoError').hidden = false; $('hoError').textContent = err.message; }
 });
 
+// ---------- replay: scrub through an agent's day while the floor acts it out ----------
+var replay = null; // { name, events, from, to, t, playing }
+function replayStep(name) {
+  if (!replay || replay.name !== name) return null;
+  let cur = null;
+  for (const e of replay.events) { if (e.at > replay.t) break; cur = e; }
+  return cur || { state: 'idle', text: 'Before the first step today' };
+}
+async function openReplay() {
+  if (!selected) return;
+  try {
+    const r = await api('GET', `/api/agents/${selected}/replay`);
+    if (!r.events.length) { toast(`${labelOf(selected)} has no steps today`); return; }
+    const from = r.events[0].at - 30000, to = r.events[r.events.length - 1].at + 30000;
+    replay = { name: selected, events: r.events, from, to, t: from, playing: true };
+    $('replayBar').hidden = false;
+    if (document.body.classList.contains('termview')) setTermView(false); // the floor has to be visible
+    if (use3d && window.Floor3D.focus) window.Floor3D.focus(selected);
+    drawReplay();
+  } catch (err) { toast(err.message); }
+}
+function drawReplay() {
+  if (!replay) return;
+  const step = replayStep(replay.name);
+  $('rpSlider').value = String(Math.round(((replay.t - replay.from) / (replay.to - replay.from)) * 1000));
+  $('rpTime').textContent = `${labelOf(replay.name)} · ${new Date(replay.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+  $('rpStep').textContent = step.text;
+  $('rpStep').title = step.text;
+  $('rpPlay').textContent = replay.playing ? '⏸' : '▶';
+  $('rpPlay').setAttribute('aria-label', replay.playing ? 'Pause' : 'Play');
+}
+// advanced from the frame loop
+function tickReplay(dt) {
+  if (!replay || !replay.playing) return;
+  replay.t = Math.min(replay.to, replay.t + dt * 1000 * Number($('rpSpeed').value));
+  if (replay.t >= replay.to) replay.playing = false;
+  drawReplay();
+}
+function closeReplay() { replay = null; $('replayBar').hidden = true; }
+$('replayBtn').addEventListener('click', openReplay);
+$('rpClose').addEventListener('click', closeReplay);
+$('rpPlay').addEventListener('click', () => { if (!replay) return; if (replay.t >= replay.to) replay.t = replay.from; replay.playing = !replay.playing; drawReplay(); });
+$('rpSlider').addEventListener('input', () => { if (!replay) return; replay.playing = false; replay.t = replay.from + (Number($('rpSlider').value) / 1000) * (replay.to - replay.from); drawReplay(); });
+
 // ---------- task board ----------
 let tasks = [];
 const COLUMNS = [['todo', 'To do'], ['working', 'Working'], ['review', 'In review'], ['merged', 'Merged'], ['done', 'Done']];
@@ -2471,6 +2528,7 @@ let lastT = performance.now();
 function frame(now) {
   if (document.body.classList.contains('termview')) { lastT = now; requestAnimationFrame(frame); return; } // floor is hidden
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  tickReplay(dt);
   const t = now / 1000;
   const P = palette();
   const rows = rowsFor(agents.length);
@@ -2880,11 +2938,13 @@ function floorAgents() {
   const out = [];
   agents.forEach((a, i) => {
     const ch = chars.get(a.name) || { x: 0, y: 0, pose: 'sit' };
-    const st = displayState(a);
+    let st = displayState(a);
+    const rp = replayStep(a.name); // replaying this agent's day: act out that moment instead of now
+    if (rp) st = rp.state;
     const party = cheering.get(a.name);
     const file = party && theme3d && theme3d.celebration && theme3d.celebration[party.kind];
     out.push({
-      name: a.name, label: a.label || a.name, state: st, detail: a.detail, lastPrompt: a.lastPrompt, lastReply: a.lastReply, sessionId: a.sessionId,
+      name: a.name, label: a.label || a.name, state: st, detail: rp ? rp.text : a.detail, lastPrompt: a.lastPrompt, lastReply: a.lastReply, sessionId: a.sessionId,
       question: a.question ? (isProse(a) ? a.question.text : (a.question.questions[0] || {}).question) : '', pr: !!(a.git && a.git.pr), stuck: !!a.stuck,
       slot: i, x: ch.x, y: ch.y, pose: ch.pose, selected: a.name === selected, done: st === 'done',
       role: ch.pose === 'sit' ? st : st === 'done' ? 'done' : 'idle',

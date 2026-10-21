@@ -83,3 +83,22 @@ test('terminalText: the conversation drawn like Claude Code prints it', () => {
     '● All green now.', '',
   ].join('\n'));
 });
+
+test('replayEvents: what the agent was doing, step by step, inside a time window', () => {
+  const at = (m) => `2026-10-21T10:${String(m).padStart(2, '0')}:00Z`;
+  const entries = [
+    { type: 'user', timestamp: at(0), message: { content: 'Fix the flaky test' } },
+    { type: 'assistant', timestamp: at(1), message: { content: [{ type: 'tool_use', id: 'a', name: 'Read', input: { file_path: '/r/test/a.test.js' } }] } },
+    { type: 'assistant', timestamp: at(3), message: { content: [{ type: 'tool_use', id: 'b', name: 'Bash', input: { command: 'npm test' } }] } },
+    { type: 'assistant', timestamp: at(6), message: { content: [{ type: 'text', text: 'Fixed: the test waited on a timer.' }] } },
+    { type: 'assistant', timestamp: at(7), isSidechain: true, message: { content: [{ type: 'tool_use', id: 'c', name: 'Bash', input: { command: 'ls' } }] } },
+  ];
+  const ev = H.replayEvents(entries, Date.parse(at(0)), Date.parse(at(59)));
+  assert.deepEqual(ev.map((e) => [e.state, e.text]), [
+    ['planning', 'You: Fix the flaky test'],
+    ['reading', 'Read a.test.js'],
+    ['tests', '$ npm test'],
+    ['idle', 'Fixed: the test waited on a timer.'],
+  ]);
+  assert.equal(H.replayEvents(entries, Date.parse(at(2)), Date.parse(at(4))).length, 1);
+});

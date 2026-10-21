@@ -1208,7 +1208,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 404, { error: 'Not found' });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit|permissions|history-text))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit|permissions|history-text|replay))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
       const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
@@ -1276,6 +1276,26 @@ const server = http.createServer(async (req, res) => {
         const lines = raw.split('\n'); if (want < st.size) lines.shift(); // the first line is cut
         const entries = []; for (const l of lines) { if (!l.trim()) continue; try { entries.push(JSON.parse(l)); } catch {} }
         return send(res, 200, { ok: true, text: Hist.terminalText(entries), stamp: st.mtimeMs });
+      }
+      // Replay: what the agent did today, step by step, from its main transcripts (helpers left out).
+      if (req.method === 'GET' && action === 'replay') {
+        const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+        const from = midnight.getTime(), to = Date.now();
+        const files = new Set([...(agentFiles.get(name) || [])].filter((f) => !f.includes(`${path.sep}subagents${path.sep}`)));
+        const sid = (memory.get(name) || {}).sessionId || agent.sessionId;
+        if (sid && SESSION_RE.test(sid)) files.add(path.join(PROJECTS_DIR, encodeCwd(agent.cwd), `${sid}.jsonl`));
+        const entries = [];
+        for (const f of files) {
+          let st; try { st = await fsp.stat(f); } catch { continue; }
+          if (st.mtimeMs < from) continue;
+          const want = Math.min(st.size, 8 * 1024 * 1024);
+          const fh = await fsp.open(f, 'r');
+          let raw; try { const buf = Buffer.alloc(want); await fh.read(buf, 0, want, st.size - want); raw = buf.toString('utf8'); } finally { await fh.close(); }
+          const lines = raw.split('\n'); if (want < st.size) lines.shift();
+          for (const l of lines) { if (!l.trim()) continue; try { entries.push(JSON.parse(l)); } catch {} }
+        }
+        entries.sort((x, y) => (Date.parse(x.timestamp) || 0) - (Date.parse(y.timestamp) || 0));
+        return send(res, 200, { ok: true, from, to, events: Hist.replayEvents(entries, from, to) });
       }
       if (action === 'permissions') {
         if (req.method === 'GET') return send(res, 200, { ok: true, ...(await permissionsView(agent.cwd)) });
