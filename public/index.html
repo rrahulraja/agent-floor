@@ -810,7 +810,7 @@ function select(name) {
   localStorage.setItem('af:selected', name || '');
   if (name) markSeen(name);
   renderTags(); renderPanel();
-  fitTerm(true);
+  fitTerm();
 }
 
 // ---------- terminal: wide view, fitting tmux to the panel, typing like a terminal ----------
@@ -819,39 +819,27 @@ function setTermView(on) {
   $('termWide').setAttribute('aria-pressed', String(on));
   try { localStorage.setItem('af:termview', on ? '1' : ''); } catch {}
   if (use3d) window.Floor3D.setVisible(!on);
-  fitTerm(true);
+  fitTerm();
 }
 $('termWide').addEventListener('click', () => setTermView(!document.body.classList.contains('termview')));
-// Columns and rows the screen can show without wrapping, measured in the terminal font.
-function termCells() {
-  const scr = $('dScreen');
-  if (!scr.clientWidth) return null;
-  const probe = document.createElement('span'); probe.textContent = 'M'.repeat(50);
-  probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre';
-  scr.append(probe);
-  const cw = probe.getBoundingClientRect().width / 50, lh = parseFloat(getComputedStyle(scr).lineHeight) || 19;
-  probe.remove();
+// Fit the terminal font so Claude Code's full line width shows without wrapping. (Resizing the agent's tmux
+// window instead made Claude Code redraw and wipe its scrollback, so the size is left to tmux.)
+var charW = 0; // width of one character at 1px font size, in the terminal font
+function fitTerm() {
+  const scr = $('dScreen'), a = agents.find((x) => x.name === selected);
+  if (!scr.clientWidth || !a || !a.cols) { scr.style.fontSize = ''; return; }
+  if (!charW) {
+    const probe = document.createElement('span'); probe.textContent = 'M'.repeat(100);
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-size:100px';
+    scr.append(probe); charW = probe.getBoundingClientRect().width / 10000; probe.remove();
+  }
   const cs = getComputedStyle(scr);
-  const w = scr.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 4;
-  const h = scr.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
-  return { cols: Math.floor(w / cw), rows: Math.max(10, Math.floor(h / lh)) };
+  const room = scr.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 2;
+  const px = Math.max(9.5, Math.min(13.5, room / (a.cols * charW))); // below 9.5px is unreadable: scroll sideways instead
+  scr.style.fontSize = `${px.toFixed(2)}px`;
 }
-// Ask the server to size the agent's tmux window to the panel, so Claude Code lays its lines out for it.
-var fitTimer = 0, fitSent = ''; // var: select() can run before this line is reached
-function fitTerm(now) {
-  clearTimeout(fitTimer);
-  fitTimer = setTimeout(() => {
-    const a = agents.find((x) => x.name === selected);
-    const c = a && a.state !== 'stopped' && termCells();
-    if (!c) return;
-    const key = `${a.name}:${c.cols}x${c.rows}`;
-    if (key === fitSent && !now) return;
-    fitSent = key;
-    api('POST', `/api/agents/${a.name}/size`, c).catch(() => {});
-  }, now ? 50 : 250);
-}
-new ResizeObserver(() => fitTerm(false)).observe($('dScreen'));
-setInterval(() => fitTerm(true), 20000); // re-check now and then: someone may have attached or detached
+new ResizeObserver(() => fitTerm()).observe($('dScreen'));
+document.fonts && document.fonts.ready.then(() => { charW = 0; fitTerm(); });
 try { if (localStorage.getItem('af:termview')) setTimeout(() => setTermView(true), 0); } catch {}
 
 // The instruction box grows with what you type, up to 40% of the screen.
@@ -993,6 +981,7 @@ function renderPanel() {
   const scr = $('dScreen');
   const text = a.screenAnsi || a.screen || '';
   $('termTitle').textContent = `${a.label || a.name} — ${a.session || 'claude'}`;
+  if ($('dScreen').dataset.cols !== String(a.cols || '')) { $('dScreen').dataset.cols = String(a.cols || ''); fitTerm(); }
   const switched = lastScreenFor !== a.name;
   if (switched) { screenHistory = null; screenFrozen = false; }
   const atBottom = scr.scrollHeight - scr.scrollTop - scr.clientHeight < 24;

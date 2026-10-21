@@ -46,9 +46,3 @@ test('worktree path from the template', () => {
   assert.equal(C.branchSlug('../../etc'), '..-..-etc');
 });
 
-test('terminal size from the page: whole numbers inside sane bounds, or nothing', () => {
-  assert.deepEqual(C.cleanSize({ cols: 132.7, rows: 41 }), { cols: 132, rows: 41 });
-  assert.deepEqual(C.cleanSize({ cols: 5, rows: 9000 }), { cols: 40, rows: 200 });
-  assert.equal(C.cleanSize({ cols: 'wide', rows: 40 }), null);
-  assert.equal(C.cleanSize(null), null);
-});

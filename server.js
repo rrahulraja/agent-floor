@@ -94,13 +94,13 @@ function persist() {
 
 // ---------- tmux ----------
 async function listSessions() {
-  const r = await tmux('list-sessions', '-F', ['#{session_name}', '#{session_created}', '#{@cwd}', '#{pane_current_path}'].join(SEP));
+  const r = await tmux('list-sessions', '-F', ['#{session_name}', '#{session_created}', '#{@cwd}', '#{pane_current_path}', '#{window_width}'].join(SEP));
   const map = new Map();
   if (!r.ok) return map; // no tmux server running yet
   for (const line of r.stdout.split('\n')) {
     if (!line.startsWith(PREFIX)) continue;
-    const [session, created, optCwd, paneCwd] = line.split(SEP);
-    map.set(session.slice(PREFIX.length), { created: Number(created) * 1000, cwd: optCwd || paneCwd });
+    const [session, created, optCwd, paneCwd, cols] = line.split(SEP);
+    map.set(session.slice(PREFIX.length), { created: Number(created) * 1000, cwd: optCwd || paneCwd, cols: Number(cols) || 0 });
   }
   return map;
 }
@@ -630,6 +630,7 @@ async function poll() {
       item.lastReply = info.lastReply;
       item.screen = screen;
       item.screenAnsi = screenAnsi;
+      item.cols = s.cols; // the terminal width Claude Code lays out for
       item.sessionId = a.sessionId || (file ? path.basename(file.path, '.jsonl') : '');
       if (unknown) item.sessionUnknown = true;
       item.context = contextFor(a, info);
@@ -1043,7 +1044,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 201, { ok: true });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|size|start|stop|label|context|queue))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
       const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
@@ -1063,20 +1064,6 @@ const server = http.createServer(async (req, res) => {
         if (!running) return send(res, 409, { error: `${name} is stopped.` });
         await tmux('send-keys', '-t', target(name), key);
         return send(res, 200, { ok: true });
-      }
-      // Fit the agent's tmux window to the page's terminal, so Claude Code lays its lines out for that width.
-      // Only while nobody is attached from a real terminal: then their terminal decides the size.
-      if (req.method === 'POST' && action === 'size') {
-        const size = C.cleanSize(await readBody(req));
-        if (!size) return send(res, 400, { error: 'Give the size in columns and rows.' });
-        if (!running) return send(res, 409, { error: `${name} is stopped.` });
-        const att = await tmux('display-message', '-p', '-t', target(name), '#{session_attached}');
-        if (Number(att.stdout.trim()) > 0) {
-          await tmux('set-window-option', '-t', target(name), 'window-size', 'latest');
-          return send(res, 200, { ok: true, fitted: false });
-        }
-        await tmux('resize-window', '-t', target(name), '-x', String(size.cols), '-y', String(size.rows));
-        return send(res, 200, { ok: true, fitted: true });
       }
       if (req.method === 'POST' && action === 'label') {
         const label = cleanLabel((await readBody(req)).label);
