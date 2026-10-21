@@ -325,6 +325,12 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .replay input[type=range] { width: 100%; accent-color: var(--work); }
 .rp-now { min-width: 0; display: flex; gap: 8px; align-items: baseline; } .rp-now b { font: 600 14px var(--mono); }
 .rp-now span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 14px; }
+.past { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 62vh; overflow: auto; }
+.past li { border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; background: var(--bg); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
+.past b { font-size: 15px; } .past .tag-s { font-size: 11px; padding: 0 6px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); margin-left: 6px; }
+.past small { display: block; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
+.past .acts { display: flex; gap: 6px; align-items: center; } .past .btn { padding: 3px 10px; font-size: 13px; } .past select { max-width: 220px; font-size: 12.5px; }
+.past-pick { max-width: 190px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* The instruction box lives inside the terminal window and looks like Claude Code's own input. */
 #dRunning { display: flex; flex-direction: column; flex: 1 0 auto; height: calc(100vh - 150px); min-height: 420px; gap: 8px; }
@@ -440,6 +446,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <select class="btn theme-sel" id="themeSel" aria-label="Theme" title="Theme"><option value="pixel">Pixel office</option></select>
   <button class="btn view-btn" id="viewBtn" type="button" hidden title="Switch between the 3D and flat floor" aria-pressed="false">3D</button>
   <button class="btn" id="settingsBtn">Settings</button>
+  <select class="btn past-pick" id="pastPick" title="Agents you had before: pick one to bring it back on its last conversation" aria-label="Past agents"><option value="">Past agents ▾</option></select>
   <button class="btn primary" id="addBtn">Add agent</button>
 </header>
 
@@ -657,6 +664,14 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     <p class="error" id="hoError" hidden></p>
     <div class="row" style="margin-top:12px"><button class="btn primary" type="submit">Set up hand-off</button><button class="btn" type="button" id="hoCancel">Cancel</button></div>
   </form>
+</dialog>
+<dialog id="pastDialog" class="wide">
+  <h2>Past agents</h2>
+  <p class="hint">Stopped agents and ones you removed from the floor. Resume brings one back on its last conversation, so you carry on where it left off.</p>
+  <input id="pastFilter" type="search" placeholder="Filter by name, folder or conversation" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--bg);margin-bottom:8px">
+  <ol class="past" id="pastList"></ol>
+  <p class="hint" id="pastEmpty" hidden>No past agents yet. Agents you stop or remove show up here.</p>
+  <div class="row" style="margin-top:12px"><button class="btn" id="pastClose" autofocus>Close</button></div>
 </dialog>
 <dialog id="timelineDialog" class="wide">
   <h2 id="tlTitle">Timeline</h2>
@@ -1894,6 +1909,72 @@ $('replayBtn').addEventListener('click', openReplay);
 $('rpClose').addEventListener('click', closeReplay);
 $('rpPlay').addEventListener('click', () => { if (!replay) return; if (replay.t >= replay.to) replay.t = replay.from; replay.playing = !replay.playing; drawReplay(); });
 $('rpSlider').addEventListener('input', () => { if (!replay) return; replay.playing = false; replay.t = replay.from + (Number($('rpSlider').value) / 1000) * (replay.to - replay.from); drawReplay(); });
+
+// ---------- past agents: bring one back on its conversation ----------
+var pastItems = [];
+async function openPast() {
+  try { pastItems = (await (await fetch('/api/past')).json()).past || []; } catch (err) { toast(err.message); return; }
+  $('pastFilter').value = ''; renderPast();
+  if (!$('pastDialog').open) $('pastDialog').showModal();
+}
+function renderPast() {
+  const q = $('pastFilter').value.trim().toLowerCase();
+  const items = pastItems.filter((p) => !q || [p.name, p.label, p.cwd, p.title].some((v) => String(v || '').toLowerCase().includes(q)));
+  $('pastEmpty').hidden = items.length > 0;
+  $('pastList').replaceChildren(...items.map((p) => {
+    const li = el('li'), info = el('div');
+    const head = el('b', '', p.label || p.name); info.append(head);
+    if (p.label && p.label !== p.name) info.append(el('span', 'tag-s', p.name));
+    info.append(el('span', 'tag-s', p.onFloor ? 'stopped' : 'removed'));
+    info.append(el('small', '', `${p.cwd}${p.folderExists ? '' : ' (folder no longer exists)'}`));
+    info.append(el('small', '', [p.title ? `“${p.title}”` : 'no conversation yet', p.lastActive ? ago(p.lastActive) : ''].filter(Boolean).join(' · ')));
+    const acts = el('div', 'acts');
+    const pick = el('select'); pick.setAttribute('aria-label', 'Conversation'); pick.append(new Option('Last conversation', p.sessionId || 'latest'));
+    let loaded = false;
+    pick.addEventListener('focus', async () => { // its folder's other conversations, on demand
+      if (loaded) return; loaded = true;
+      try { const r = await (await fetch(`/api/conversations?cwd=${encodeURIComponent(p.cwd)}`)).json(); for (const c of r.conversations || []) if (c.id !== p.sessionId) pick.append(new Option(`${(c.title || c.id).slice(0, 60)} · ${ago(c.updatedAt)}`, c.id)); pick.append(new Option('Start fresh', '')); } catch {}
+    });
+    const go = el('button', 'btn primary', 'Resume'); go.type = 'button'; go.disabled = !p.folderExists;
+    go.addEventListener('click', async () => {
+      go.disabled = true;
+      try { await resumePast(p, pick.value); $('pastDialog').close(); fillPastPick(); } catch (err) { toast(err.message); go.disabled = false; }
+    });
+    acts.append(pick, go);
+    li.append(info, acts);
+    return li;
+  }));
+}
+// The header dropdown: every past agent; picking one brings it back on its last conversation.
+async function resumePast(p, conversation) {
+  if (p.onFloor) await api('POST', `/api/agents/${p.name}/start`, { conversation, size: panelTermSize() });
+  else { const r = await api('POST', '/api/past/restore', { name: p.name, cwd: p.cwd, conversation, size: panelTermSize() }); p.name = r.name; }
+  toast(`${p.label || p.name} is back`); select(p.name);
+}
+async function fillPastPick() {
+  try { pastItems = (await (await fetch('/api/past')).json()).past || []; } catch { return; }
+  const sel = $('pastPick');
+  const opts = [new Option(pastItems.length ? `Past agents (${pastItems.length}) ▾` : 'Past agents ▾', '')];
+  pastItems.forEach((p, i) => {
+    const o = new Option(`${p.label || p.name} · ${base(p.cwd)}${p.title ? ` · ${p.title.slice(0, 40)}` : ''}${p.lastActive ? ` · ${ago(p.lastActive)}` : ''}${p.onFloor ? '' : ' (removed)'}`, String(i));
+    o.disabled = !p.folderExists; opts.push(o);
+  });
+  opts.push(new Option('More options…', 'more'));
+  sel.replaceChildren(...opts);
+}
+$('pastPick').addEventListener('focus', fillPastPick);
+$('pastPick').addEventListener('mousedown', () => { if (!pastItems.length) fillPastPick(); });
+$('pastPick').addEventListener('change', async () => {
+  const sel = $('pastPick'), v = sel.value; sel.value = '';
+  if (v === 'more') return openPast();
+  const p = pastItems[Number(v)]; if (!p) return;
+  try { await resumePast(p, p.sessionId || 'latest'); } catch (err) { toast(err.message); }
+  fillPastPick();
+});
+fillPastPick();
+setInterval(() => { if (document.activeElement !== $('pastPick')) fillPastPick(); }, 30000); // newly stopped or removed agents show up
+$('pastClose').addEventListener('click', () => $('pastDialog').close());
+$('pastFilter').addEventListener('input', renderPast);
 
 // ---------- task board ----------
 let tasks = [];

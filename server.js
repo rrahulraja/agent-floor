@@ -24,6 +24,7 @@ const Diff = require('./lib/diffpreview');
 const Perms = require('./lib/permissions');
 const Tasks = require('./lib/tasks');
 const Handoff = require('./lib/handoff');
+const Archive = require('./lib/archive');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -40,6 +41,7 @@ const KEYS = new Set(['Enter', 'Escape', '1', '2', '3', '4', '5', '6', '7', '8',
 const QUEUE = C.jsonStore(path.join(DATA_DIR, 'queue.json'), () => ({}));
 const TASKS = C.jsonStore(path.join(DATA_DIR, 'tasks.json'), () => []);
 const HANDOFFS = C.jsonStore(path.join(DATA_DIR, 'handoffs.json'), () => []);
+const ARCHIVE = C.jsonStore(path.join(DATA_DIR, 'archive.json'), () => []);
 const PROMPTS = C.jsonStore(path.join(DATA_DIR, 'prompts.json'), () => C.cleanPrompts(C.DEFAULT_PROMPTS));
 const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
 const { short, textOf } = T;
@@ -1084,6 +1086,20 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { hours: CONFIG.get('timelineHours'), turns: await agentTimeline(agent) });
     }
     if (req.method === 'GET' && p === '/api/projects') return send(res, 200, { projects: await listProjects() });
+    // Past agents: stopped ones still on the floor, and ones removed from it, with their last conversation.
+    if (req.method === 'GET' && p === '/api/past') {
+      const sessions = await listSessions();
+      const describe = async (a, onFloor) => {
+        const out = { name: a.name, label: a.label || a.name, cwd: a.cwd, sessionId: a.sessionId || '', onFloor, removedAt: a.removedAt || 0, folderExists: fs.existsSync(a.cwd) };
+        const file = out.sessionId && SESSION_RE.test(out.sessionId) ? path.join(PROJECTS_DIR, encodeCwd(a.cwd), `${out.sessionId}.jsonl`) : '';
+        try { const st = await fsp.stat(file); const meta = await sessionMeta(file, st.mtimeMs, st.size); out.title = meta.title || meta.firstPrompt || ''; out.lastActive = st.mtimeMs; } catch { out.lastActive = a.removedAt || 0; }
+        return out;
+      };
+      const list = [];
+      for (const a of saved) if (!sessions.has(a.name)) list.push(await describe(a, true));
+      for (const a of ARCHIVE.get()) list.push(await describe(a, false));
+      return send(res, 200, { past: list.sort((x, y) => (y.lastActive || 0) - (x.lastActive || 0)) });
+    }
     if (req.method === 'GET' && p === '/api/conversations') {
       const dir = path.resolve(expandHome(String(url.searchParams.get('cwd') || '').trim()));
       return send(res, 200, { cwd: dir, conversations: await listConversations(dir) });
@@ -1144,6 +1160,19 @@ const server = http.createServer(async (req, res) => {
       const r = await addAgent(await readBody(req));
       if (r.error) return send(res, r.status, { error: r.error });
       return send(res, 201, { ok: true });
+    }
+
+    // Bring a past agent back: back on the floor under its name (or name-2), resuming a conversation.
+    if (req.method === 'POST' && p === '/api/past/restore') {
+      const b = await readBody(req);
+      const entry = ARCHIVE.get().find((x) => x.name === b.name && x.cwd === b.cwd);
+      if (!entry) return send(res, 404, { error: 'That agent is no longer in the list.' });
+      const conversation = SESSION_RE.test(b.conversation || '') ? b.conversation : entry.sessionId || 'latest';
+      const name = Archive.freeName(entry.name, saved.map((a) => a.name));
+      const r = await addAgent({ name, cwd: entry.cwd, label: entry.label, conversation, size: b.size });
+      if (r.error) return send(res, r.status, { error: r.error });
+      ARCHIVE.set(Archive.drop(ARCHIVE.get(), entry.name, entry.cwd));
+      return send(res, 201, { ok: true, name });
     }
 
     // ---------- hand-offs ----------
@@ -1362,6 +1391,7 @@ const server = http.createServer(async (req, res) => {
           if (r.error) return send(res, 409, { error: r.error });
         }
         const q = QUEUE.get(); if (q[name]) { const { [name]: _, ...rest } = q; QUEUE.set(rest); }
+        ARCHIVE.set(Archive.add(ARCHIVE.get(), agent)); // kept so it can be brought back on the same conversation
         saved = saved.filter((a) => a.name !== name); persist();
         memory.delete(name);
         await poll();
