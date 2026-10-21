@@ -12,7 +12,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { buildOffice } from './world.js';
-import { buildAvatar, officeProfile, helperProfile, heroProfile } from './avatar.js';
+import { buildAvatar, officeProfile, helperProfile, heroProfile, SEAT_HEIGHT } from './avatar.js';
 import { createNav } from './nav.js';
 
 const WALK = 1.25;            // metres per second
@@ -28,8 +28,8 @@ const PHASE = {
   dawn: { sky: '#f3c6a8', fog: '#e8c8b4', hemi: ['#ffd9c2', '#6b5a7a', 0.55], sun: ['#ffb38a', 2.2], fill: 0.35, exposure: 1.0 },
   morning: { sky: '#c9dcef', fog: '#c3cedb', hemi: ['#cfe0f4', '#8a6b4d', 0.42], sun: ['#ffedd2', 3.3], fill: 0.55, exposure: 1.05 },
   afternoon: { sky: '#cddbe9', fog: '#c8d2dd', hemi: ['#d8e4f2', '#8a6b4d', 0.42], sun: ['#fff1dc', 3.1], fill: 0.5, exposure: 1.05 },
-  evening: { sky: '#e7a77f', fog: '#c99a86', hemi: ['#ffb88a', '#4a3a5a', 0.4], sun: ['#ff9a5a', 1.8], fill: 0.35, exposure: 0.95 },
-  night: { sky: '#1a2140', fog: '#1d2440', hemi: ['#6a7aaa', '#14141f', 0.28], sun: ['#8aa0ff', 0.45], fill: 0.2, exposure: 0.9 },
+  evening: { sky: '#e7a77f', fog: '#c99a86', hemi: ['#ffc9a0', '#5a4a6a', 0.62], sun: ['#ffa66a', 2.2], fill: 0.45, exposure: 1.05 },
+  night: { sky: '#1a2140', fog: '#1d2440', hemi: ['#8a9ac8', '#24243a', 0.45], sun: ['#9ab0ff', 0.7], fill: 0.3, exposure: 1.0 },
 };
 
 const hashStr = (s) => { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
@@ -38,6 +38,10 @@ const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
 const lerpAngle = (a, b, k) => { let d = ((b - a + Math.PI) % (Math.PI * 2)) - Math.PI; if (d < -Math.PI) d += Math.PI * 2; return a + d * k; };
 const clip = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').replace(/[*_`#>]/g, '').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 const speakFor = (text) => Math.min(9000, Math.max(3400, 1800 + 34 * text.length)) / 1000;
+
+// Where to put the body once it has walked up to a seat: the seat point, raised or lowered to the seat's height.
+const seated = (spot) => (spot && spot.seatY !== undefined ? { at: spot.seat || spot.pos, y: spot.seatY - SEAT_HEIGHT } : null);
+const using = (g) => (g.use ? { at: g.use, y: g.kind === 'run' ? g.useY : g.useY - SEAT_HEIGHT } : null);
 
 function isSoftware(gl) {
   try {
@@ -170,7 +174,7 @@ class Office {
     };
     av.root.position.set(a.pos[0], 0, a.pos[1]);
     av.root.userData.actor = name;
-    av.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.userData.actor = name; } });
+    av.root.traverse((o) => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.userData.actor = name; } }); // blob shadows and glows don't cast
     this.scene.add(av.root);
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.4, 32), new THREE.MeshBasicMaterial({ color: '#22c55e', transparent: true, opacity: 0, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.012; ring.renderOrder = 2;
@@ -206,7 +210,7 @@ class Office {
     return !a.path.length;
   }
 
-  // Decides where an agent should be and what it is doing there.
+    // Decides where an agent should be and what it is doing there.
   place(a, ag, t, i) {
     const W = this.world.anchors, st = ag.state;
     // a state only moves people once it has lasted a little (quick test runs don't send them across the room)
@@ -220,7 +224,7 @@ class Office {
     if (s === 'stopped') return { pos: W.entrance.pos, facing: W.entrance.facing, pose: 'stand', leave: true };
     if (this.standup && this.standup.seats.has(ag.name)) {
       const seat = this.standup.seats.get(ag.name);
-      return { pos: seat.pos, facing: seat.facing, pose: 'sit', key: `standup:${ag.name}` };
+      return { pos: seat.pos, facing: seat.facing, pose: 'sit', key: `standup:${ag.name}`, snap: seated(seat) };
     }
     if (a.partyUntil > t) { a.mood = 'happy'; return { pos: stand, facing: desk.facing, pose: 'cheer', key: `desk:${i}:stand` }; }
     if (s === 'waiting') { a.mood = 'waiting'; return { pos: stand, facing: desk.facing, pose: 'raise', key: `desk:${i}:stand` }; }
@@ -228,27 +232,27 @@ class Office {
     if (s === 'tests' && W.qa.length) { a.mood = 'working'; const q = W.qa[i % W.qa.length]; return { pos: q.pos, facing: q.facing, pose: 'stand', key: `qa:${i % W.qa.length}` }; }
     if ((s === 'review' || (s === 'git' && ag.pr)) && W.review) { a.mood = 'working'; return { pos: W.review.pos, facing: W.review.facing, pose: 'stand', key: 'review' }; }
     if ((s === 'build' || s === 'deploy') && W.servers.length) { a.mood = 'working'; const v = W.servers[i % W.servers.length]; return { pos: v.pos, facing: v.facing, pose: 'stand', key: `server:${i % W.servers.length}` }; }
-    if (AT_DESK.has(s) || WORKING.has(s)) { a.mood = 'working'; return { pos: desk.seat, facing: desk.facing, pose: 'type', key: `desk:${i}` }; }
+    if (AT_DESK.has(s) || WORKING.has(s)) { a.mood = 'working'; return { pos: desk.seat, facing: desk.facing, pose: 'type', key: `desk:${i}`, snap: seated(desk) }; }
     // idle (and done, once the cheering is over)
     const idleFor = t - (a.idleSince ?? (a.idleSince = t));
-    if (idleFor < IDLE_WANDER || this.motionOff) return { pos: desk.seat, facing: desk.facing, pose: 'sit', key: `desk:${i}` };
+    if (idleFor < IDLE_WANDER || this.motionOff) return { pos: desk.seat, facing: desk.facing, pose: 'sit', key: `desk:${i}`, snap: seated(desk) };
     if (idleFor >= IDLE_AWAY && W.couches.length) {
       a.mood = 'away';
       const c = W.couches[i % W.couches.length];
-      return { pos: c.pos, facing: c.facing, pose: 'nap', key: `couch:${i % W.couches.length}` };
+      return { pos: c.pos, facing: c.facing, pose: 'nap', key: `couch:${i % W.couches.length}`, snap: seated(c) };
     }
     // wander: a new spot every 25-50 s
     if (!a.spot || t > a.spotUntil) {
-      const options = [...W.kitchen.map((k) => ({ ...k, pose: k.kind === 'table' ? 'sit' : 'stand', prop: k.kind === 'coffee' || k.kind === 'water' ? 'mug' : null })),
-        ...W.couches.map((c) => ({ ...c, pose: 'sit' })), ...W.beanbags.map((c) => ({ ...c, pose: 'sit' })),
-        ...W.gym.map((g) => ({ ...g, pose: `workout-${g.kind}` })), ...W.wander.map((p) => ({ pos: p, facing: a.r() * 6.28, pose: 'stand' }))];
+      const options = [...W.kitchen.map((k) => ({ ...k, pose: k.kind === 'table' ? 'sit' : 'stand', prop: k.kind === 'coffee' || k.kind === 'water' ? 'mug' : null, snap: k.kind === 'table' ? seated(k) : null })),
+        ...W.couches.map((c) => ({ ...c, pose: 'sit', snap: seated(c) })), ...W.beanbags.map((c) => ({ ...c, pose: 'sit', snap: seated(c) })),
+        ...W.gym.map((g) => ({ ...g, pose: `workout-${g.kind}`, snap: using(g) })), ...W.wander.map((p) => ({ pos: p, facing: a.r() * 6.28, pose: 'stand' }))];
       const taken = new Set([...this.actors.values()].filter((o) => o !== a && o.spot).map((o) => o.spot.key));
       const free = options.map((o, k) => ({ ...o, key: `w${k}` })).filter((o) => !taken.has(o.key));
       a.spot = free[Math.floor(a.r() * free.length)] || options[0];
       a.spotUntil = t + 25 + a.r() * 25;
     }
     if (a.pingpong) return a.pingpong;
-    return { pos: a.spot.pos, facing: a.spot.facing, pose: a.spot.pose, prop: a.spot.prop, key: a.spot.key };
+    return { pos: a.spot.pos, facing: a.spot.facing, pose: a.spot.pose, prop: a.spot.prop, key: a.spot.key, snap: a.spot.snap };
   }
 
   // Two agents who have been idle a while sometimes play ping-pong for a minute.
@@ -313,6 +317,7 @@ class Office {
       const working = hp.data && hp.data.state === 'working';
       if (d) this.goTo(hp, d.seat, d.facing, 'type', `h:desk:${hp.desk}`);
       else this.goTo(hp, near, 0, 'stand', `h:${hp.owner}:near`);
+      hp.snapY = d && hp.path && !hp.path.length ? d.seatY - SEAT_HEIGHT : 0;
       if (this.step(hp, dt, 1.2)) { hp.av.setProp(null); this.setPose(hp, d ? (working ? 'type' : 'sit') : 'stand'); if (hp.target) hp.yaw = lerpAngle(hp.yaw, hp.target.facing, 0.15); }
     } else if (hp.phase === 'return') {
       hp.av.setProp('card');
@@ -329,7 +334,7 @@ class Office {
     glow.rotation.x = -Math.PI / 2; card.add(glow);
     this.scene.add(card);
     this.cards = this.cards || [];
-    this.cards.push({ mesh: card, from: [...from.pos], to, t0: performance.now() / 1000, dur: 0.9 });
+    this.cards.push({ mesh: card, from: [...from.pos], to, t0: this.now || 0, dur: 0.9 });
   }
   tickCards(t) {
     for (const c of this.cards || []) {
@@ -380,13 +385,14 @@ class Office {
       if (s) seats.set(n, s);
       else { const ang = (k / who.length) * Math.PI * 2, c = W.meeting.center; seats.set(n, { pos: [c[0] + Math.cos(ang) * 2.4, c[1] + Math.sin(ang) * 2.4], facing: Math.atan2(-Math.cos(ang), -Math.sin(ang)) }); }
     });
-    this.standup = { seats, order: who, phase: 'gathering', since: performance.now() / 1000, speaker: -1, next: 0 };
+    this.standup = { seats, order: who, phase: 'gathering', since: null, speaker: -1, next: 0 }; // since: set on the next frame, on the frame clock
     this.notify();
     return true;
   }
   tickStandup(t, agents) {
     const S = this.standup;
     if (!S) return;
+    if (S.since === null) S.since = t;
     const arrived = S.order.filter((n) => { const a = this.actors.get(n); return a && !a.path?.length && a.goalKey === `standup:${n}`; }).length;
     if (S.phase === 'gathering' && (arrived === S.order.length || t - S.since > 25)) { S.phase = 'talking'; S.next = t; }
     if (S.phase === 'talking' && t >= S.next) {
@@ -408,6 +414,7 @@ class Office {
   render(L) {
     if (!this.world) return false;
     const t = L.t, dt = Math.min(0.1, L.dt);
+    this.now = t;
     this.motionOff = !L.motion;
     const need = L.agents.length + L.agents.reduce((n, a) => n + (a.helpers || []).length, 0);
     if (need > this.deskCount) this.ensureWorld(need);
@@ -445,11 +452,14 @@ class Office {
       this.goTo(a, goal.pos, goal.facing, goal.pose, goal.key);
       const arrived = this.step(a, dt, a.mood === 'waiting' || a.mood === 'asking' || (this.standup && this.standup.phase === 'gathering') ? 1.6 : 1);
       if (arrived) {
+        // sit down: slide onto the seat (which is inside the furniture, off the walking grid) at its height
+        if (goal.snap) { a.pos[0] += (goal.snap.at[0] - a.pos[0]) * 0.25; a.pos[1] += (goal.snap.at[1] - a.pos[1]) * 0.25; a.y = (a.y || 0) + (goal.snap.y - (a.y || 0)) * 0.25; }
+        else a.y = (a.y || 0) * 0.75;
         this.setPose(a, goal.pose);
         a.yaw = lerpAngle(a.yaw, goal.facing, Math.min(1, dt * 8));
         a.av.setProp(goal.prop || (goal.pose === 'pingpong' ? 'paddle' : this.kind === 'heroes' && goal.pose !== 'type' && goal.pose !== 'sit' && goal.pose !== 'nap' ? 'hero' : null));
         if (goal.leave) a.gone = true;
-      } else { this.setPose(a, 'walk'); a.av.setProp(null); }
+      } else { this.setPose(a, 'walk'); a.av.setProp(null); a.y = 0; }
       a.av.setExpression(a.mood === 'away' ? 'sleepy' : a.mood === 'waiting' || a.mood === 'asking' ? 'focused' : a.mood === 'working' ? 'focused' : a.mood === 'happy' ? 'happy' : ag.stuck ? 'error' : 'idle');
       a.av.setOpacity(a.mood === 'away' ? 0.55 : 1);
       a.ring = ag.stuck ? RING.error : a.mood === 'waiting' ? RING.waiting : a.mood === 'asking' ? RING.asking : a.mood === 'working' ? RING.working : null;
@@ -476,7 +486,7 @@ class Office {
     // move everyone's model
     for (const a of [...this.actors.values(), ...this.extras]) {
       if (a.moving) this.setPose(a, 'walk');
-      a.av.root.position.set(a.pos[0], 0, a.pos[1]);
+      a.av.root.position.set(a.pos[0], a.y || a.snapY || 0, a.pos[1]);
       a.av.root.rotation.y = a.yaw;
       a.av.update(t, dt, { speed: L.motion ? a.moving : 0 });
       if (a.ringMesh) {
@@ -493,6 +503,7 @@ class Office {
     this.tickSpot(t);
     this.tickFly();
     this.controls.update();
+    if (L.draw === false) return refit; // simulate only (tests fast-forward this way)
     this.draw();
     this.positionBubbles(t);
     return refit;
@@ -580,7 +591,7 @@ class Office {
     if (!a) return;
     this.follow = null;
     this.flyTo([a.pos[0], 0.6, a.pos[1]], new THREE.Vector3(3.2, 4.2, 5.2), false);
-    this.spotOn = { name, until: performance.now() / 1000 + 2 };
+    this.spotOn = { name, until: (this.now || 0) + 2 };
   }
   tickSpot(t) {
     const s = this.spotOn, a = s && this.actors.get(s.name);
@@ -699,5 +710,6 @@ window.Floor3D = {
   focus: (name) => office && office.focus(name),
   setQuality: (q) => office && office.setQuality(q),
   get quality() { return office ? office.quality : ''; },
+  _debug: () => office && [...office.actors.values(), ...office.extras].map((a) => ({ name: a.name, pos: a.pos.map((v) => +v.toFixed(2)), pose: a.pose, goal: a.goalKey, path: a.path ? a.path.length : null, mood: a.mood })),
 };
 window.dispatchEvent(new Event('floor3d-ready'));

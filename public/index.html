@@ -138,6 +138,13 @@ button, input, textarea, select { font: inherit; color: inherit; }
 @keyframes feed-in { from { background: color-mix(in srgb, var(--wait-fill) 30%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .feed-list li.new { animation: none; } }
 .feed-empty { color: var(--muted); font-size: 13px; }
+.feed-list li.open { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.feed-list .fd { grid-column: 2 / -1; cursor: default; padding: 4px 0 4px; color: var(--ink); }
+.feed-list .fd code { display: block; font: 12.5px/1.45 var(--mono); background: #0f1218; color: #d7dce5; padding: 6px 9px; border-radius: 6px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.feed-list .fd p { margin: 6px 0; white-space: pre-wrap; max-height: 260px; overflow: auto; font-size: 13.5px; }
+.feed-list .fd .fd-gone { color: var(--muted); }
+.fd-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.fd-acts .btn { padding: 4px 10px; font-size: 13px; }
 .tags { position: absolute; inset: 0; pointer-events: none; }
 .tag {
   position: absolute; transform: translateX(-50%); pointer-events: auto;
@@ -147,6 +154,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .tag small { display: block; font: 400 11px/1.2 var(--sans); color: var(--muted); }
 .tag .meta { display: flex; gap: 5px; justify-content: center; align-items: center; font: 700 10px/1.1 var(--sans); }
 .tag .meta:empty { display: none; }
+.u .u-old { font-style: normal; color: var(--wait); }
 .tag .tm { display: block; height: 3px; margin-top: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .tag .tm[hidden] { display: none; }
 .tag .tm b { display: block; height: 100%; background: var(--done); }
@@ -246,11 +254,22 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .set.problem small { color: var(--danger); }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .error { color: var(--danger); margin: 0; }
+.term { border-radius: 10px; overflow: hidden; background: #0f1218; box-shadow: 0 6px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.06); display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.term-bar { display: flex; align-items: center; gap: 7px; padding: 8px 12px; background: linear-gradient(#262a33, #1c1f26); border-bottom: 1px solid #090b0f; }
+.term-bar i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.3); }
+.term-bar i:nth-child(2) { background: #febc2e; }
+.term-bar i:nth-child(3) { background: #28c840; }
+.term-bar span { flex: 1; text-align: center; margin-right: 50px; color: #9aa3b2; font: 500 12px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .screen {
-  margin: 0; background: var(--screen-bg); color: var(--screen-ink); font: 13.5px/1.5 var(--mono);
-  border-radius: 6px; padding: 10px 12px; overflow: auto; white-space: pre-wrap; word-break: break-word;
-  min-height: 240px; max-height: 58vh; flex: 1;
+  margin: 0; background: #0f1218; color: #d7dce5; font: 13px/1.45 var(--mono); font-variant-ligatures: none;
+  padding: 10px 14px 14px; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  min-height: 240px; max-height: 58vh; flex: 1; scrollbar-color: #3a3f4b transparent;
 }
+.screen::selection, .screen *::selection { background: #3d5a8a; }
+.screen .b { font-weight: 700; } .screen .d { opacity: .62; } .screen .i { font-style: italic; } .screen .u { text-decoration: underline; } .screen .s { text-decoration: line-through; }
+.screen .cur { display: inline-block; width: .6em; height: 1.15em; vertical-align: text-bottom; background: #d7dce5; animation: term-blink 1.1s steps(1) infinite; }
+@keyframes term-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .screen .cur { animation: none; } }
 .screen-bar { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
 .screen-bar .btn { padding: 2px 10px; font-size: 13px; }
 .compose label { display: block; font-weight: 600; margin-bottom: 6px; }
@@ -407,7 +426,8 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 
         <div id="dRunning">
           <div class="screen-bar" id="screenBar" hidden><span id="screenNote"></span><button class="btn" type="button" id="screenLatest">Jump to latest</button></div>
-          <pre class="screen" id="dScreen" tabindex="0" aria-label="Agent terminal"></pre>
+          <div class="term"><div class="term-bar" aria-hidden="true"><i></i><i></i><i></i><span id="termTitle">claude</span></div>
+          <pre class="screen" id="dScreen" tabindex="0" aria-label="Agent terminal"></pre></div>
         </div>
 
         <p class="lastline" id="dLastPrompt" hidden></p>
@@ -719,9 +739,11 @@ function renderUsage(u) {
     if (!l) return null;
     const d = el('div', `u ${level(l.pct)} ${old ? 'stale' : ''}`);
     const t = el('span'); t.append(`${label} `, el('b', '', `${l.pct}%`), l.resetsAt ? ` · resets ${when(l.resetsAt, week)}` : l.reset ? ' · reset' : '');
+    // Usage is only as fresh as the last agent that reported it; say so rather than look current.
+    if (old) t.append(el('em', 'u-old', ` · as of ${hhmm(u.at)}`));
     const m = el('div', 'bar-m'); const i = el('i'); i.style.width = `${l.pct}%`; m.append(i);
     d.append(t, m);
-    d.title = `${label === 'Session' ? 'Current 5-hour session' : 'This week'}: ${l.pct}% of your plan used${l.resetsAt ? `, resets ${new Date(l.resetsAt).toLocaleString()}` : ''}. Updated ${ago(u.at)}.`;
+    d.title = `${label === 'Session' ? 'Current 5-hour session' : 'This week'}: ${l.pct}% of your plan used${l.resetsAt ? `, resets ${new Date(l.resetsAt).toLocaleString()}` : ''}. Updated ${ago(u.at)}.${old ? ' Only agents started from this dashboard report usage; none has since then.' : ''}`;
     return d;
   };
   box.replaceChildren(...[meter('Session', u.fiveHour, false), meter('Week', u.sevenDay, true)].filter(Boolean));
@@ -772,15 +794,65 @@ $('dScreen').addEventListener('scroll', async () => {
   screenHistory = 'loading';
   screenFrozen = true;
   try {
-    const r = await (await fetch(`/api/agents/${encodeURIComponent(selected)}/screen?lines=5000`)).json();
+    const r = await (await fetch(`/api/agents/${encodeURIComponent(selected)}/screen?lines=5000&ansi=1`)).json();
     const before = scr.scrollHeight - scr.scrollTop;
-    scr.textContent = r.screen || '';
+    renderAnsi(scr, r.screen || '');
     scr.scrollTop = scr.scrollHeight - before; // keep the same lines in view
     screenHistory = r.screen || '';
     $('screenBar').hidden = false;
     $('screenNote').textContent = 'Showing the full history. Live updates paused while you read.';
   } catch { screenHistory = null; }
 });
+// ---------- terminal colours ----------
+// Draws tmux output with its colour codes (SGR: bold, dim, italic, underline, 16/256/true colours) as spans.
+// Text only ever goes in through textContent, so nothing in the output can become HTML.
+const ANSI16 = ['#1c1f26', '#ff6b6b', '#5fd068', '#f5c451', '#5c9cf5', '#c678dd', '#4fc1d6', '#c9ced8',
+  '#5c6370', '#ff8787', '#7ee08a', '#ffd877', '#82b6ff', '#da93ec', '#70d6e6', '#ffffff'];
+function ansiColor(n) {
+  if (n < 16) return ANSI16[n];
+  if (n < 232) { n -= 16; const v = (k) => (k ? k * 40 + 55 : 0); return `rgb(${v(Math.floor(n / 36))},${v(Math.floor(n / 6) % 6)},${v(n % 6)})`; }
+  const g = (n - 232) * 10 + 8; return `rgb(${g},${g},${g})`;
+}
+function renderAnsi(target, text, cursor) {
+  text = String(text || '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '').replace(/ +$/gm, '');
+  const frag = document.createDocumentFragment();
+  let st = {};
+  const re = /\x1b\[([0-9;:?]*)([A-Za-z])/g;
+  let last = 0, m;
+  const push = (chunk) => {
+    if (!chunk) return;
+    if (!st.fg && !st.bg && !st.b && !st.d && !st.i && !st.u && !st.s) { frag.append(chunk); return; }
+    const sp = document.createElement('span');
+    sp.className = ['b', 'd', 'i', 'u', 's'].filter((k) => st[k]).join(' ');
+    let fg = st.fg, bg = st.bg;
+    if (st.inv) [fg, bg] = [bg || '#0f1218', fg || '#d7dce5'];
+    if (fg) sp.style.color = fg;
+    if (bg) sp.style.backgroundColor = bg;
+    sp.textContent = chunk; frag.append(sp);
+  };
+  while ((m = re.exec(text))) {
+    push(text.slice(last, m.index).replace(/\x1b./g, ''));
+    last = re.lastIndex;
+    if (m[2] !== 'm') continue; // only colours matter in a captured screen
+    const p = m[1] === '' ? [0] : m[1].split(/[;:]/).map(Number);
+    for (let i = 0; i < p.length; i++) {
+      const c = p[i];
+      if (c === 0) st = {};
+      else if (c === 1) st.b = true; else if (c === 2) st.d = true; else if (c === 3) st.i = true; else if (c === 4) st.u = true;
+      else if (c === 7) st.inv = true; else if (c === 9) st.s = true;
+      else if (c === 22) { st.b = false; st.d = false; } else if (c === 23) st.i = false; else if (c === 24) st.u = false; else if (c === 27) st.inv = false; else if (c === 29) st.s = false;
+      else if (c >= 30 && c <= 37) st.fg = ANSI16[c - 30]; else if (c >= 90 && c <= 97) st.fg = ANSI16[c - 82];
+      else if (c >= 40 && c <= 47) st.bg = ANSI16[c - 40]; else if (c >= 100 && c <= 107) st.bg = ANSI16[c - 92];
+      else if (c === 39) st.fg = null; else if (c === 49) st.bg = null;
+      else if ((c === 38 || c === 48) && p[i + 1] === 5) { st[c === 38 ? 'fg' : 'bg'] = ansiColor(p[i + 2] || 0); i += 2; }
+      else if ((c === 38 || c === 48) && p[i + 1] === 2) { st[c === 38 ? 'fg' : 'bg'] = `rgb(${p[i + 2] || 0},${p[i + 3] || 0},${p[i + 4] || 0})`; i += 4; }
+    }
+  }
+  push(text.slice(last).replace(/\x1b./g, ''));
+  if (cursor) frag.append(el('span', 'cur'));
+  target.replaceChildren(frag);
+}
+
 let lastScreenFor = null;
 function renderPanel() {
   const a = agents.find((x) => x.name === selected);
@@ -817,7 +889,8 @@ function renderPanel() {
   } else $('dLastPrompt').hidden = true;
 
   const scr = $('dScreen');
-  const text = a.screen || '';
+  const text = a.screenAnsi || a.screen || '';
+  $('termTitle').textContent = `${a.label || a.name} — ${a.session || 'claude'}`;
   const switched = lastScreenFor !== a.name;
   if (switched) { screenHistory = null; screenFrozen = false; }
   const atBottom = scr.scrollHeight - scr.scrollTop - scr.clientHeight < 24;
@@ -828,7 +901,7 @@ function renderPanel() {
     $('screenNote').textContent = screenHistory ? 'Showing the full history. Live updates paused while you read.' : 'Live updates paused while you read. Scroll to the top for older output.';
   } else if (text !== lastScreen || switched) {
     $('screenBar').hidden = true;
-    scr.textContent = text;
+    renderAnsi(scr, text);
     // A different agent starts at the bottom, whatever the previous one was scrolled to.
     scr.scrollTop = scr.scrollHeight;
     lastScreen = text;
@@ -2112,12 +2185,13 @@ function recordFeed(list) {
     feedSeen.set(a.name, now);
     if (!was) { if (!firstSnapshot) addFeed(a, 'joined', st); continue; }
     if (was.st !== st) {
-      if (st === 'waiting') addFeed(a, 'waiting', 'waiting', { detail: clip(a.detail) });
-      else if (st === 'asking') addFeed(a, 'asking', 'asking', { detail: clip(isProse(a) ? a.question.text : a.question && (a.question.questions[0] || {}).question) });
-      else if (st === 'done') addFeed(a, 'done', 'done', { detail: clip(a.lastReply, 120) });
-      else if (WORKING.has(st) && !WORKING.has(was.st)) addFeed(a, 'start', st, { detail: clip(a.lastPrompt) });
+      const q = isProse(a) ? a.question.text : a.question && (a.question.questions[0] || {}).question;
+      if (st === 'waiting') addFeed(a, 'waiting', 'waiting', { detail: clip(a.detail), full: clip(a.detail, 600) });
+      else if (st === 'asking') addFeed(a, 'asking', 'asking', { detail: clip(q), full: clip(q, 1200) });
+      else if (st === 'done') addFeed(a, 'done', 'done', { detail: clip(a.lastReply, 120), full: clip(a.lastReply, 2000) });
+      else if (WORKING.has(st) && !WORKING.has(was.st)) addFeed(a, 'start', st, { detail: clip(a.lastPrompt), full: clip(a.lastPrompt, 1200) });
     }
-    if (res && res !== was.res) { const r = a.lastResult; addFeed(a, `${r.kind === 'build' ? 'build' : 'tests'}_${r.outcome === 'pass' ? 'pass' : 'fail'}`, r.kind === 'build' ? 'build' : 'tests', { summary: clip(r.summary, 60) }); }
+    if (res && res !== was.res) { const r = a.lastResult; addFeed(a, `${r.kind === 'build' ? 'build' : 'tests'}_${r.outcome === 'pass' ? 'pass' : 'fail'}`, r.kind === 'build' ? 'build' : 'tests', { summary: clip(r.summary, 60), full: clip(r.summary, 400), command: clip(r.command, 300) }); }
     if (checks !== was.checks && (checks === 'pass' || checks === 'fail')) addFeed(a, `checks_${checks}`, 'git', { number: pr.number, url: pr.url });
     if (working > was.working) addFeed(a, 'helpers', 'delegating', { count: working });
     if (now.stuck && !was.stuck) addFeed(a, 'stuck', 'thinking', { detail: `${a.stuck.minutes} min` });
@@ -2134,6 +2208,7 @@ function feedLine(f) {
     .replace(/\(\s*\)/g, '').replace(/\s*[:—]\s*$/, '').replace(/\s+\./g, '.').trim();
 }
 let feedShown = '';
+let feedOpen = ''; // the expanded line (at|agent|event), if any
 function renderFeed() {
   const list = $('feedList');
   const items = feed.slice(0, 60);
@@ -2149,9 +2224,40 @@ function renderFeed() {
     if (f.data && /^https:\/\//.test(f.data.url || '')) { const a = el('a', '', ' ↗'); a.href = f.data.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = 'Open on GitHub'; a.addEventListener('click', (e) => e.stopPropagation()); text.append(a); }
     li.append(tm, text, el('span', 'who', f.label));
     li.title = `${f.label} · ${new Date(f.at).toLocaleString()}`;
-    li.addEventListener('click', () => { if (agents.some((a) => a.name === f.agent)) select(f.agent); });
+    li.tabIndex = 0;
+    if (feedOpen === `${f.at}|${f.agent}|${f.ev}`) { li.classList.add('open'); li.append(feedDetail(f)); }
+    const toggle = () => { feedOpen = feedOpen === `${f.at}|${f.agent}|${f.ev}` ? '' : `${f.at}|${f.agent}|${f.ev}`; feedShown = ''; renderFeed(); if (feedOpen) showAgent(f.agent, false); };
+    li.addEventListener('click', (e) => { if (!e.target.closest('.fd')) toggle(); });
+    li.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === li) { e.preventDefault(); toggle(); } });
     return li;
   }));
+}
+// The open line shows the whole story and what you can do about it.
+function showAgent(name, andSelect = true) {
+  if (!agents.some((a) => a.name === name)) return false;
+  if (andSelect) select(name);
+  if (use3d && window.Floor3D.focus) window.Floor3D.focus(name); // fly the camera there
+  return true;
+}
+function feedDetail(f) {
+  const box = el('div', 'fd');
+  const d = f.data || {};
+  const here = agents.some((a) => a.name === f.agent);
+  if (d.command) { const c = el('code', '', d.command); box.append(c); }
+  const body = d.full || d.detail || d.summary || '';
+  if (body) box.append(el('p', '', body));
+  if (f.ev === 'helpers') box.append(el('p', '', `${d.count} helper${d.count > 1 ? 's' : ''} took on part of the work.`));
+  if (f.ev === 'pr' || f.ev === 'push') box.append(el('p', '', [d.repo, d.branch, d.number ? `PR #${d.number}` : ''].filter(Boolean).join(' · ')));
+  const acts = el('div', 'fd-acts');
+  const btn = (label, fn, primary) => { const b = el('button', `btn${primary ? ' primary' : ''}`, label); b.type = 'button'; b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); acts.append(b); };
+  if (here && (f.ev === 'waiting' || f.ev === 'asking')) btn('Answer', () => { showAgent(f.agent); setTimeout(() => { const q = $('dQuestion'); const t = !q.hidden ? q : $('promptText'); t.scrollIntoView({ behavior: 'smooth', block: 'center' }); (t.querySelector('button, textarea') || t).focus(); }, 60); }, true);
+  if (here && f.ev === 'helpers') btn('Watch helpers', () => { showAgent(f.agent); const a = agents.find((x) => x.name === f.agent); const h = a && (a.helpers || [])[0]; if (h) openHelper(f.agent, h.id); else toast('Those helpers have finished'); }, true);
+  if (/^https:\/\//.test(d.url || '')) btn(f.ev === 'push' ? 'View branch' : 'Open PR', () => window.open(d.url, '_blank', 'noopener'), !here);
+  if (here) btn('Show agent', () => showAgent(f.agent));
+  else box.append(el('p', 'fd-gone', `${f.label} isn't on the floor any more.`));
+  btn('Copy', () => navigator.clipboard.writeText([feedLine(f), d.command, body].filter(Boolean).join('\n')).then(() => toast('Copied'), () => toast('Could not copy')));
+  box.append(acts);
+  return box;
 }
 renderFeed();
 

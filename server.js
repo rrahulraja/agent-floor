@@ -104,10 +104,13 @@ async function listSessions() {
   return map;
 }
 
-async function capture(name, lines = 120) {
-  const r = await tmux('capture-pane', '-p', '-J', '-t', target(name), '-S', `-${lines}`);
+// ansi: keep the colour codes (for the terminal view in the panel). Without it, plain text.
+async function capture(name, lines = 120, ansi = false) {
+  const r = await tmux('capture-pane', '-p', '-J', ...(ansi ? ['-e'] : []), '-t', target(name), '-S', `-${lines}`);
   return r.ok ? r.stdout.replace(/\s+$/, '') : '';
 }
+// Terminal escape sequences (colours, OSC titles/links) removed: what the screen says, as plain text.
+const stripAnsi = (s) => s.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '').replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/\x1b[()][A-Z0-9]/g, '').replace(/[ \t]+$/gm, '').replace(/\s+$/, '');
 
 // Agents started here get a status line that records plan usage (5-hour and weekly limits) for the header.
 // It is passed with --settings, so the user's own ~/.claude/settings.json is never touched.
@@ -515,7 +518,8 @@ async function poll() {
         item.error = 'Claude exited right after starting. If you picked a conversation to continue, try another one or start fresh.';
       }
     } else {
-      const screen = await capture(a.name);
+      const screenAnsi = await capture(a.name, 120, true);
+      const screen = stripAnsi(screenAnsi);
       const sig = paneSignals(screen);
       const { file, unknown } = await resolveTranscript(a, s, sessions);
       let info = { kind: 'thinking', detail: '', lastPrompt: '', lastReply: '', ended: false, question: null, usage: null, lastResult: null, looping: null };
@@ -552,6 +556,7 @@ async function poll() {
       item.lastPrompt = info.lastPrompt;
       item.lastReply = info.lastReply;
       item.screen = screen;
+      item.screenAnsi = screenAnsi;
       item.sessionId = a.sessionId || (file ? path.basename(file.path, '.jsonl') : '');
       if (unknown) item.sessionUnknown = true;
       item.context = contextFor(a, info);
@@ -853,7 +858,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && sc) {
       if (!saved.find((a) => a.name === sc[1])) return send(res, 404, { error: `No agent called ${sc[1]}.` });
       const lines = Math.max(200, Math.min(20000, Number(url.searchParams.get('lines')) || 5000));
-      return send(res, 200, { screen: await capture(sc[1], lines), lines });
+      const ansi = url.searchParams.get('ansi') === '1';
+      return send(res, 200, { screen: await capture(sc[1], lines, ansi), ansi, lines });
     }
     // What one helper (subagent) is doing: its task, recent steps and answer, read from its transcript.
     const hl = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})\/helpers\/([A-Za-z0-9_-]{1,64})$/);
