@@ -49,3 +49,11 @@ SOFTWARE.
 - Licence: Creative Commons Zero (CC0 1.0), http://creativecommons.org/publicdomain/zero/1.0/
 - Used in: `public/office/models/*.glb` (a subset of the kit's GLTF models, unmodified).
 - Licence text as shipped with the kit: [`public/office/models/LICENSE.txt`](public/office/models/LICENSE.txt)
+
+## Kenney Mini Characters
+
+- Source: https://kenney.nl/assets/mini-characters (Mini Characters 1.0 by Kenney, www.kenney.nl)
+- Licence: Creative Commons Zero (CC0 1.0), http://creativecommons.org/publicdomain/zero/1.0/
+- Used in: `public/office/models/characters/` (the character GLB models and their colour map, unmodified), for the
+  office people in the 3D office (`public/office/kchar.js`).
+- Licence text as shipped with the pack: [`public/office/models/characters/LICENSE.txt`](public/office/models/characters/LICENSE.txt)

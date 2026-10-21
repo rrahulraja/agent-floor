@@ -112,7 +112,7 @@ export function helperProfile(seed, theme) {
 }
 function shieldAgent(seed, h, scale = 1) {
   return {
-    seed: String(seed), scale, skin: pick(SKINS, h),
+    seed: String(seed), scale, skin: pick(SKINS, h), costume: true,
     hair: { style: pick(['short', 'buzz', 'parted'], h >>> 3), color: pick(['#151515', '#3e2723', '#6b4f3a'], h >>> 5) },
     top: { style: 'suit', color: '#1E2235', inner: '#f1f5f9' }, tie: '#0b0d14',
     bottom: { style: 'pants', color: '#1E2235' }, shoes: '#0b0d14', glasses: 'shades',
@@ -129,7 +129,7 @@ export function heroProfile(cast, seed) {
   const name = keyName(c.name);
   if (name.includes('shield')) return shieldAgent(seed, hashSeed(seed), 1);
   const P = {
-    seed: String(seed || c.name || 'hero'), name: c.name || '', skin: c.skin || '#F2C9A0',
+    seed: String(seed || c.name || 'hero'), name: c.name || '', skin: c.skin || '#F2C9A0', costume: true,
     hair: { style: (c.hair && c.hair.style) || 'short', color: (c.hair && c.hair.color) || '#2B1D14' },
     beard: c.beard && c.beard.style ? { style: c.beard.style, color: c.beard.color || '#2B1D14' } : null,
     top: { style: o.style || 'tunic', color: o.color || '#2F5FC4', accent: o.accent || shade(o.color || '#2F5FC4', -0.15), inner: o.inner },
@@ -961,3 +961,6 @@ function buildProp(kind, color) {
   }
   return { obj: g, level, hold };
 }
+
+// Shared with the Kenney office people (kchar.js): the same profiles, seeds and props.
+export { norm as normProfile, buildProp, hashSeed };

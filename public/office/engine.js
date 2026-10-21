@@ -13,6 +13,11 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { buildOffice } from './world.js';
 import { buildAvatar, officeProfile, helperProfile, heroProfile, setAvatarOutlines, SEAT_HEIGHT } from './avatar.js';
+import { loadKChars, kReady, buildKChar } from './kchar.js';
+
+// Office people are Kenney's animated characters (when they load); heroes and their S.H.I.E.L.D. helpers keep
+// the hand-built costumed figures, which read better as those characters.
+const buildFigure = (profile) => (kReady() && !(profile && profile.costume) ? buildKChar(profile) : buildAvatar(profile));
 import { createNav } from './nav.js';
 
 const WALK = 1.25;            // metres per second
@@ -117,6 +122,7 @@ class Office {
     this.theme = theme; this.url = url;
     this.kind = theme.id === 'heroes' || /hero/i.test(theme.id) ? 'heroes' : 'office';
     this.cast = null;
+    await loadKChars(); // the animated characters (once); figures fall back to box-built ones if this fails
     if (theme.model) { try { this.cast = (await (await fetch(url(theme.model))).json()).cast || null; } catch { this.cast = null; } }
     for (const a of [...this.actors.values(), ...this.extras]) this.dropActor(a);
     this.actors.clear(); this.extras = [];
@@ -196,7 +202,7 @@ class Office {
 
   // ---------- actors ----------
   makeActor(name, profile, opts = {}) {
-    const av = buildAvatar(profile);
+    const av = buildFigure(profile);
     const ent = this.world.anchors.entrance.pos;
     const a = {
       name, av, pos: opts.at ? [...opts.at] : [...ent], yaw: opts.yaw || 0, path: null, goalKey: '', target: null,
@@ -214,7 +220,7 @@ class Office {
   }
   redress(a) {
     const old = a.av, pose = old.pose, prop = old.prop;
-    const av = buildAvatar(this.profileFor(a.name));
+    const av = buildFigure(this.profileFor(a.name));
     av.root.position.copy(old.root.position); av.root.rotation.copy(old.root.rotation);
     av.root.userData.actor = a.name;
     av.root.traverse((o) => { if (o.isMesh) { o.castShadow = !o.userData.noShadow; o.userData.actor = a.name; } });
