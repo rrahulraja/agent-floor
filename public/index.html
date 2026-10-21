@@ -992,29 +992,30 @@ $('promptText').addEventListener('keydown', (e) => {
 
 let lastScreen = '';
 let screenFrozen = false;  // the user scrolled up: don't replace the text under them
-let screenHistory = null;  // full scrollback, loaded when they reach the top
 function resumeScreen() {
-  screenFrozen = false; screenHistory = null; lastScreen = '';
+  screenFrozen = false; lastScreen = '';
   $('screenBar').hidden = true;
   renderPanel();
 }
 $('screenLatest').addEventListener('click', resumeScreen);
-$('dScreen').addEventListener('scroll', async () => {
+$('dScreen').addEventListener('scroll', () => {
   const scr = $('dScreen');
-  if (scr.scrollHeight - scr.scrollTop - scr.clientHeight < 8 && screenFrozen && !screenHistory) { resumeScreen(); return; }
-  if (scr.scrollTop > 40 || screenHistory || !selected) return;
-  screenHistory = 'loading';
-  screenFrozen = true;
-  try {
-    const r = await (await fetch(`/api/agents/${encodeURIComponent(selected)}/screen?lines=5000&ansi=1`)).json();
-    const before = scr.scrollHeight - scr.scrollTop;
-    renderAnsi(scr, r.screen || '');
-    scr.scrollTop = scr.scrollHeight - before; // keep the same lines in view
-    screenHistory = r.screen || '';
-    $('screenBar').hidden = false;
-    $('screenNote').textContent = 'Showing the full history. Live updates paused while you read.';
-  } catch { screenHistory = null; }
+  if (scr.scrollHeight - scr.scrollTop - scr.clientHeight < 8 && screenFrozen) resumeScreen();
 });
+// Claude Code runs full screen, so tmux keeps only what is on screen now. What scrolled off is rebuilt from the
+// transcript and drawn above the live screen; fetched when the transcript changes, at most every 3 seconds.
+var histFor = '', histStamp = -1, histText = '', histAt = 0, histBusy = false;
+async function loadHistory(a) {
+  if (histBusy || (histFor === a.name && histStamp === a.fileStamp) || (histFor === a.name && Date.now() - histAt < 3000)) return;
+  histBusy = true; histAt = Date.now();
+  try {
+    const r = await api('GET', `/api/agents/${encodeURIComponent(a.name)}/history-text`);
+    if (selected !== a.name) return;
+    const changed = histFor !== a.name || histText !== (r.text || '');
+    histFor = a.name; histStamp = a.fileStamp; histText = r.text || '';
+    if (changed) { lastScreen = ''; renderPanel(); }
+  } catch {} finally { histBusy = false; }
+}
 // ---------- terminal colours ----------
 // Draws tmux output with its colour codes (SGR: bold, dim, italic, underline, 16/256/true colours) as spans.
 // Text only ever goes in through textContent, so nothing in the output can become HTML.
@@ -1109,19 +1110,21 @@ function renderPanel() {
   $('termTitle').textContent = `${a.label || a.name} — ${a.session || 'claude'}`;
   if ($('dScreen').dataset.cols !== String(a.cols || '')) { $('dScreen').dataset.cols = String(a.cols || ''); fitTerm(); }
   const switched = lastScreenFor !== a.name;
-  if (switched) { screenHistory = null; screenFrozen = false; }
+  if (switched) screenFrozen = false;
+  loadHistory(a);
+  const hist = histFor === a.name && histText ? `${histText}\n\x1b[90m──── live screen ${'─'.repeat(40)}\x1b[0m\n` : '';
   const atBottom = scr.scrollHeight - scr.scrollTop - scr.clientHeight < 24;
   // While you're reading further up, the live view holds still (otherwise every update would move the text).
   if (!switched && !atBottom && lastScreen !== '') screenFrozen = true;
   if (screenFrozen) {
     $('screenBar').hidden = false;
-    $('screenNote').textContent = screenHistory ? 'Showing the full history. Live updates paused while you read.' : 'Live updates paused while you read. Scroll to the top for older output.';
-  } else if (text !== lastScreen || switched) {
+    $('screenNote').textContent = 'Live updates paused while you read. Scroll to the bottom or press Jump to latest.';
+  } else if (hist + text !== lastScreen || switched) {
     $('screenBar').hidden = true;
-    renderAnsi(scr, text);
+    renderAnsi(scr, hist + text);
     // A different agent starts at the bottom, whatever the previous one was scrolled to.
     scr.scrollTop = scr.scrollHeight;
-    lastScreen = text;
+    lastScreen = hist + text;
     lastScreenFor = a.name;
   }
 }

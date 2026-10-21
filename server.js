@@ -1208,7 +1208,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 404, { error: 'Not found' });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit|permissions))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit|permissions|history-text))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
       const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
@@ -1262,6 +1262,20 @@ const server = http.createServer(async (req, res) => {
         await tmux('set-option', '-w', '-t', target(name), 'window-size', 'latest');
         await poll();
         return send(res, 200, { ok: true });
+      }
+      // The conversation so far, drawn like Claude Code prints it: the scrollback that full-screen Claude Code
+      // doesn't leave in tmux. Read from the last 3 MB of the agent's current transcript.
+      if (req.method === 'GET' && action === 'history-text') {
+        const sid = (memory.get(name) || {}).sessionId || agent.sessionId;
+        if (!sid || !SESSION_RE.test(sid)) return send(res, 200, { ok: true, text: '', stamp: 0 });
+        const file = path.join(PROJECTS_DIR, encodeCwd(agent.cwd), `${sid}.jsonl`);
+        let st; try { st = await fsp.stat(file); } catch { return send(res, 200, { ok: true, text: '', stamp: 0 }); }
+        const want = Math.min(st.size, 3 * 1024 * 1024);
+        const fh = await fsp.open(file, 'r');
+        let raw; try { const buf = Buffer.alloc(want); await fh.read(buf, 0, want, st.size - want); raw = buf.toString('utf8'); } finally { await fh.close(); }
+        const lines = raw.split('\n'); if (want < st.size) lines.shift(); // the first line is cut
+        const entries = []; for (const l of lines) { if (!l.trim()) continue; try { entries.push(JSON.parse(l)); } catch {} }
+        return send(res, 200, { ok: true, text: Hist.terminalText(entries), stamp: st.mtimeMs });
       }
       if (action === 'permissions') {
         if (req.method === 'GET') return send(res, 200, { ok: true, ...(await permissionsView(agent.cwd)) });

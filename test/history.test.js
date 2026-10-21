@@ -63,3 +63,23 @@ test('searchEntry finds prompts, replies, commands and edits', () => {
   assert.equal(H.searchEntry(entries[8], 'pr #9').role, 'claude');
   assert.equal(H.searchEntry(entries[0], 'nothing-like-this'), null);
 });
+
+test('terminalText: the conversation drawn like Claude Code prints it', () => {
+  const ts = '2026-10-21T10:00:00Z';
+  const entries = [
+    { type: 'user', timestamp: ts, message: { content: 'Run the tests and fix failures' } },
+    { type: 'assistant', timestamp: ts, message: { content: [{ type: 'text', text: 'Running them now.' }, { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm test' } }] } },
+    { type: 'user', timestamp: ts, message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'line 1\nline 2\nline 3\nline 4\nline 5' }] } },
+    { type: 'assistant', timestamp: ts, message: { content: [{ type: 'tool_use', id: 't2', name: 'Edit', input: { file_path: '/repo/src/a.js' } }] } },
+    { type: 'user', timestamp: ts, message: { content: [{ type: 'tool_result', tool_use_id: 't2', is_error: true, content: 'old_string not found' }] } },
+    { type: 'assistant', timestamp: ts, message: { content: [{ type: 'text', text: 'All green now.' }] } },
+  ];
+  const plain = H.terminalText(entries).replace(/\x1b\[[0-9;]*m/g, '');
+  assert.equal(plain, [
+    '> Run the tests and fix failures', '',
+    '● Running them now.', '',
+    '● Bash(npm test)', '  ⎿  line 1', '     line 2', '     line 3', '     … +2 lines', '',
+    '● Edit(src/a.js)', '  ⎿  old_string not found', '',
+    '● All green now.', '',
+  ].join('\n'));
+});
