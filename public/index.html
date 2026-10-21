@@ -293,6 +293,15 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .diff-line.gap { color: #5c6475; padding-left: 52px; }
 .ci-checks { margin: 0 0 4px; padding-left: 4px; list-style: none; font-size: 14px; } .ci-checks a { color: var(--danger); }
 .ci-log { max-height: 320px; }
+.perm-where { font: 13px var(--mono); color: var(--muted); margin-left: 6px; }
+.perm-sec { margin: 12px 0; } .perm-sec h3 { margin: 0 0 4px; font-size: 15px; } .perm-sec > p { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
+.perm-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.perm-rule { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px 1px 8px; font: 12.5px var(--mono); background: var(--bg); }
+.perm-rule.warn { border-color: var(--wait-fill); } .perm-rule.secret { border-color: var(--danger); color: var(--danger); }
+.perm-rule button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 4px; }
+.perm-add { display: flex; gap: 6px; } .perm-add input { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--bg); font: 13px var(--mono); }
+.perm-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; } .perm-presets .btn { padding: 2px 10px; font-size: 13px; }
+.perm-other { margin-top: 10px; font-size: 13px; } .perm-other h4 { margin: 8px 0 4px; font-size: 13px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* The instruction box lives inside the terminal window and looks like Claude Code's own input. */
 #dRunning { display: flex; flex-direction: column; flex: 1 0 auto; height: calc(100vh - 150px); min-height: 420px; gap: 8px; }
@@ -501,6 +510,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
           <button class="btn" data-key="Escape">Interrupt</button>
           <button class="btn" data-key="BTab" title="Cycles Claude Code modes, like accept edits and plan mode">Switch mode</button>
           <button class="btn" id="timelineBtn">Timeline</button>
+          <button class="btn" id="permBtn" title="What this agent may run without asking">Permissions</button>
           <button class="btn copy" id="copyAttach">Copy attach command</button>
           <button class="btn danger" id="stopBtn">Stop agent</button>
         </div>
@@ -577,6 +587,17 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <ol class="inbox" id="inboxList"></ol>
   <p class="hint" id="inboxEmpty">Nothing is waiting on you.</p>
   <div class="row" style="margin-top:14px"><button class="btn" id="inboxClose" autofocus>Close</button></div><!-- focus starts on Close: an Enter right after opening must not approve -->
+</dialog>
+<dialog id="permDialog" class="wide">
+  <h2>Permissions <small id="permWhere" class="perm-where"></small></h2>
+  <p class="hint">Claude Code's own rules: it checks them before every command, so the dashboard never presses keys for you. <b>Blocked</b> beats <b>Always ask</b>, which beats <b>Runs without asking</b>. You're editing your personal file for this project (<code>.claude/settings.local.json</code>).</p>
+  <p class="error" id="permIgnore" hidden></p>
+  <div class="alert health" id="permWarn" hidden></div>
+  <div id="permBody"></div>
+  <details class="perm-other"><summary>Rules from your other settings files (read only)</summary><div id="permOther"></div></details>
+  <p class="error" id="permError" hidden></p>
+  <div class="row" style="margin-top:14px"><button class="btn primary" id="permSave">Save</button><button class="btn" id="permClose">Cancel</button>
+    <small class="hint" style="align-self:center">Running agents pick up the change on their next command; restart one if it doesn't.</small></div>
 </dialog>
 <dialog id="timelineDialog" class="wide">
   <h2 id="tlTitle">Timeline</h2>
@@ -1646,6 +1667,83 @@ $('inboxDialog').addEventListener('keydown', (e) => {
   else if (/^[1-9]$/.test(e.key) && it.kind === 'question' && a.question && a.question.kind === 'tool') keyTo(a.name, e.key);
   else return;
   e.preventDefault();
+});
+
+// ---------- permissions: Claude Code's allow / ask / deny rules for an agent's project ----------
+let perm = null; // { name, view, draft: { allow, ask, deny } }
+const PERM_SECTIONS = [
+  ['allow', 'Runs without asking', 'Commands and tools this agent may use straight away.'],
+  ['ask', 'Always ask', 'Asks you every time, even if something above would allow it. Good for pushes, deletes and deploys.'],
+  ['deny', 'Blocked', 'Never allowed.'],
+];
+async function openPermissions() {
+  if (!selected) return;
+  try {
+    const v = await api('GET', `/api/agents/${selected}/permissions`);
+    const local = v.files.find((f) => f.scope === 'local');
+    perm = { name: selected, view: v, draft: { allow: [...local.allow], ask: [...local.ask], deny: [...local.deny] } };
+    renderPermissions();
+    $('permDialog').showModal();
+  } catch (err) { toast(err.message); }
+}
+function renderPermissions() {
+  const { view: v, draft } = perm;
+  const local = v.files.find((f) => f.scope === 'local');
+  $('permWhere').textContent = local.path.replace(/\/\.claude\/settings\.local\.json$/, '');
+  $('permIgnore').hidden = v.ignored !== false;
+  $('permIgnore').textContent = 'This file is not ignored by git: add .claude/settings.local.json to .gitignore so your personal rules are not committed.';
+  $('permError').hidden = true;
+  // warnings are worked out by the server from the saved files; they refresh after Save
+  const risky = new Set(v.warnings.filter((w) => !w.secret).map((w) => w.rule));
+  const secret = new Set(v.warnings.filter((w) => w.secret).map((w) => w.rule));
+  const short = (r) => (r.length > 70 ? `${r.slice(0, 40)}…` : r); // don't spell a whole secret out in the warning
+  $('permWarn').hidden = !v.warnings.length;
+  $('permWarn').replaceChildren(el('p', '', 'Worth a look:'), ...v.warnings.filter((w) => !w.secret).map((w) => el('p', '', `${w.rule}: ${w.why}.`)));
+  const mine = ['allow', 'ask', 'deny'].flatMap((k) => draft[k].filter((r) => secret.has(r)));
+  if (secret.size) {
+    $('permWarn').append(el('p', '', `${secret.size} saved rule${secret.size > 1 ? 's' : ''} contain what looks like a password or token (marked red). Remove them, and change those passwords: they sit in a plain file.`));
+    if (mine.length) {
+      const b = el('button', 'btn warn', `Remove the ${mine.length} rule${mine.length > 1 ? 's' : ''} with secrets from this file`); b.type = 'button';
+      b.addEventListener('click', () => { for (const k of ['allow', 'ask', 'deny']) draft[k] = draft[k].filter((r) => !secret.has(r)); renderPermissions(); });
+      $('permWarn').append(b);
+    }
+  }
+  const body = $('permBody'); body.replaceChildren();
+  for (const [k, title, help] of PERM_SECTIONS) {
+    const sec = el('section', 'perm-sec'); sec.append(el('h3', '', `${title} (${draft[k].length})`), el('p', '', help));
+    const list = el('div', 'perm-list');
+    draft[k].forEach((r, i) => {
+      const chip = el('span', `perm-rule ${secret.has(r) ? 'secret' : k === 'allow' && risky.has(r) ? 'warn' : ''}`, secret.has(r) ? short(r) : r);
+      if (!secret.has(r)) chip.title = r;
+      const x = el('button', '', '×'); x.type = 'button'; x.title = 'Remove'; x.addEventListener('click', () => { draft[k].splice(i, 1); renderPermissions(); });
+      chip.append(x); list.append(chip);
+    });
+    const add = el('form', 'perm-add'); const inp = el('input'); inp.placeholder = k === 'allow' ? 'Bash(npm test:*)' : k === 'ask' ? 'Bash(git push:*)' : 'Bash(rm -rf /:*)';
+    const b = el('button', 'btn', 'Add'); add.append(inp, b);
+    add.addEventListener('submit', (e) => { e.preventDefault(); const r = inp.value.trim(); if (r && !draft[k].includes(r)) draft[k].push(r); renderPermissions(); });
+    sec.append(list, add);
+    const presets = el('div', 'perm-presets');
+    const preset = (label, rules) => { const pb = el('button', 'btn', `＋ ${label}`); pb.type = 'button'; pb.title = rules.join('\n'); pb.addEventListener('click', () => { for (const r of rules) if (!draft[k].includes(r)) draft[k].push(r); renderPermissions(); }); presets.append(pb); };
+    if (k === 'allow') for (const p of v.presets) preset(p.label, p.rules);
+    if (k === 'ask') preset('Guardrails: force push, deletes, deploys, publish', v.guardrails.rules);
+    if (presets.childElementCount) sec.append(presets);
+    body.append(sec);
+  }
+  const other = $('permOther'); other.replaceChildren();
+  for (const f of v.files.filter((x) => x.scope !== 'local')) {
+    other.append(el('h4', '', `${f.label}${f.exists ? '' : ' (no file)'}`));
+    if (f.error) other.append(el('p', 'error', f.error));
+    for (const k of ['allow', 'ask', 'deny']) if (f[k].length) { const l = el('div', 'perm-list'); l.append(el('span', '', `${k}: `), ...f[k].map((r) => el('span', 'perm-rule', r))); other.append(l); }
+  }
+}
+$('permBtn').addEventListener('click', openPermissions);
+$('permClose').addEventListener('click', () => $('permDialog').close());
+$('permSave').addEventListener('click', async () => {
+  if (!perm) return;
+  try {
+    const v = await api('POST', `/api/agents/${perm.name}/permissions`, perm.draft);
+    perm.view = v; toast('Permissions saved'); $('permDialog').close();
+  } catch (err) { $('permError').hidden = false; $('permError').textContent = err.message; }
 });
 
 // ---------- keyboard shortcuts ----------

@@ -21,6 +21,7 @@ const Hist = require('./lib/history');
 const HelperLog = require('./lib/helperlog');
 const Usage = require('./lib/usage');
 const Diff = require('./lib/diffpreview');
+const Perms = require('./lib/permissions');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -466,6 +467,43 @@ async function ciLog(cwd, pr) {
     parts.push(c.text);
   }
   return parts.join('\n\n').slice(-60000);
+}
+
+// ---------- Claude Code permission rules (the rules editor) ----------
+// Three files apply to an agent's project; the dashboard only ever writes the personal one.
+function permissionFiles(cwd) {
+  return [
+    { scope: 'global', label: 'All projects (~/.claude/settings.json)', path: path.join(HOME, '.claude', 'settings.json') },
+    { scope: 'shared', label: 'This project, shared with the team (.claude/settings.json)', path: path.join(cwd, '.claude', 'settings.json') },
+    { scope: 'local', label: 'This project, just you (.claude/settings.local.json)', path: path.join(cwd, '.claude', 'settings.local.json') },
+  ];
+}
+function readSettings(file) {
+  let text; try { text = fs.readFileSync(file, 'utf8'); } catch { return { exists: false, json: {} }; }
+  try { return { exists: true, json: JSON.parse(text) }; } catch (e) { return { exists: true, json: null, error: `Not valid JSON: ${e.message}` }; }
+}
+async function permissionsView(cwd) {
+  const files = permissionFiles(cwd).map((f) => {
+    const r = readSettings(f.path), p = (r.json && r.json.permissions) || {};
+    return { ...f, exists: r.exists, error: r.error || '', allow: p.allow || [], ask: p.ask || [], deny: p.deny || [], defaultMode: p.defaultMode || '' };
+  });
+  const all = (k) => files.flatMap((f) => f[k]);
+  const local = files[2];
+  // Is the personal file kept out of git? (null: not in a git repo)
+  const inRepo = await run('git', ['-C', cwd, 'rev-parse', '--is-inside-work-tree'], { timeout: 5000 });
+  const ignored = !inRepo.ok ? null : (await run('git', ['-C', cwd, 'check-ignore', '-q', local.path], { timeout: 5000 })).ok;
+  return { files, warnings: Perms.warnings({ allow: all('allow'), ask: all('ask'), deny: all('deny') }), presets: Perms.PRESETS, guardrails: Perms.GUARDRAILS, ignored };
+}
+function savePermissions(cwd, lists) {
+  const file = permissionFiles(cwd)[2].path;
+  const cur = readSettings(file);
+  if (cur.error) throw new Error(`${file} is not valid JSON, so it was left alone. Fix it first.`);
+  const next = Perms.withRules(cur.json, lists);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (cur.exists) fs.copyFileSync(file, `${file}.bak`);
+  const tmp = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
+  fs.renameSync(tmp, file);
 }
 
 // ---------- polling ----------
@@ -1081,7 +1119,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 201, { ok: true });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit|permissions))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
       const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
@@ -1135,6 +1173,15 @@ const server = http.createServer(async (req, res) => {
         await tmux('set-option', '-w', '-t', target(name), 'window-size', 'latest');
         await poll();
         return send(res, 200, { ok: true });
+      }
+      if (action === 'permissions') {
+        if (req.method === 'GET') return send(res, 200, { ok: true, ...(await permissionsView(agent.cwd)) });
+        if (req.method === 'POST') {
+          const b = await readBody(req);
+          const lists = { allow: Array.isArray(b.allow) ? b.allow : [], ask: Array.isArray(b.ask) ? b.ask : [], deny: Array.isArray(b.deny) ? b.deny : [] };
+          try { savePermissions(agent.cwd, lists); } catch (e) { return send(res, 400, { error: e.message }); }
+          return send(res, 200, { ok: true, ...(await permissionsView(agent.cwd)) });
+        }
       }
       if (req.method === 'POST' && action === 'label') {
         const label = cleanLabel((await readBody(req)).label);
