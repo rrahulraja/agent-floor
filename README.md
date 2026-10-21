@@ -56,7 +56,7 @@ tmux attach -t cc-billing     # detach again with Ctrl-b d
 
 **From the dashboard you can:**
 
-- Send an instruction (⌘/Ctrl + Enter). Multi-line text is pasted as one message.
+- Send an instruction with Enter (Shift + Enter for a new line); it goes out right away even while the agent is busy. "Add to queue" holds it until the agent is idle. Multi-line text is pasted as one message.
 - Answer permission prompts: Approve (Enter), Choose option 2, or Decline (Esc).
 - Answer Claude's questions: when an agent asks you something, the panel shows the question and its options as buttons.
 - **Queue instructions.** While an agent is busy, new instructions go into its queue and are sent one at a time when it's idle (pause, reorder or remove them in the panel). The queue survives restarts (`~/.agent-floor/queue.json`).
@@ -93,19 +93,16 @@ tmux attach -t cc-billing     # detach again with Ctrl-b d
 
 Nothing is sent while a dashboard tab is on screen (you can already see it). Each alert carries the agent name, the project folder, what happened, and one short detail line (the question, the command waiting for approval, the branch), trimmed to 120 characters. That line is the only piece of your work that leaves the machine, and only to the channels you turn on. Settings has a *Send a test notification* button.
 
-**Themes.** Pick a theme from the menu in the header; Agent Floor remembers it. In every theme the character at a desk shows what that agent is doing, and its name tag says who it is (for example *Drona · Testing*).
+**Themes and the 3D office.** Pick a theme from the menu in the header; Agent Floor remembers it.
 
-| Theme | Setting | A few of the cast |
-| --- | --- | --- |
-| Pixel office (default) | Pixel-art office | Your agents as little office workers |
-| [Office](public/themes/office/README.md) | Bright modern office | Product lead plans, developer writes, QA tests, SRE deploys, data analyst queries |
-| [Mahabharata](public/themes/mahabharata/README.md) | Pavilion at Kurukshetra | Krishna plans, Ganesha writes, Arjuna runs commands, Drona tests, Bhima builds, Bhishma waits for you |
-| [Ramayana](public/themes/ramayana/README.md) | Forest ashram by the sea | Valmiki writes, Rama runs commands, Lakshmana tests, Nala builds the bridge, Hanuman deploys, Kumbhakarna sleeps |
-| [Wizard school](public/themes/wizard-school/README.md) | Castle classroom | Headmaster plans, Alchemist tests, Owl courier deploys, the Talking hat asks questions |
-| [Space saga](public/themes/space-saga/README.md) | Starship hangar | Admiral plans, robot clerk writes, mechanic builds, starfighter launches deploys |
-| [Small town, 1980s](public/themes/small-town-80s/README.md) | Basement HQ | Game master plans, science teacher tests, ham-radio kid builds, police chief reviews |
+| Theme | What you see |
+| --- | --- |
+| Pixel office (default) | The flat pixel-art office: light on any machine |
+| [Office](public/themes/office/README.md) | A 3D office (in the style of [Hermes3D](https://github.com/iamlukethedev/Hermes3D)): each agent is a person who walks to where its work is — its desk while it works, the QA lab for tests, the review station for PRs, the server racks for builds and deploys, the kitchen and couches when idle — raises a hand when it needs you, and gathers at the meeting table for a standup when you Broadcast |
 
-Each theme also restyles the top bar: *Kurukshetra* in gold with Sanskrit times of day (Brahma muhurta, Sandhya, Ratri), *Hangar Bay* with a glowing clock and a stardate, *HQ* with a green LCD clock. The wizard, space and 1980s themes are original characters inspired by those genres, not copies of any film or book. Your own themes go in `~/.agent-floor/themes/<id>/`: a `theme.json` plus SVG or PNG images, one character per kind of work. See [docs/themes.md](docs/themes.md).
+In 3D: drag to turn, right-drag to move, scroll to zoom, double-click someone to follow them (Esc to stop); the buttons on the floor jump to the desks, meeting room, kitchen and lounge, start a standup, and set the graphics quality. Helpers (subagents) walk in, take a task card from their agent, work at a free desk and hand it back. A **2D** button switches to the flat floor, which also works without WebGL. Below the floor, an activity feed lists tests, builds, pushes, PRs, questions and finished work.
+
+Your own themes go in `~/.agent-floor/themes/<id>/`: a `theme.json` plus SVG or PNG images for the flat floor, and a `model.json` cast to dress people in the 3D office. See [docs/themes.md](docs/themes.md).
 
 **Settings.** Every threshold above (context window size, warning levels, stuck minutes, how loud a "?" reply is, desks per row, refresh rates, celebrations…) is a setting. Open **Settings** in the header, or edit `~/.agent-floor/config.json`, which only stores what you changed. Each agent's context window can also be set from its panel.
 

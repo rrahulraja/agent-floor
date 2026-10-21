@@ -15,7 +15,7 @@
   --screen-bg: #1B1F2E; --screen-ink: #D8DCEA; --danger: #B3261E;
   --pixel: "Pixelify Sans", "Courier New", monospace;
   --sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --mono: "MesloLGS NF", "MesloLGS Nerd Font", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -97,9 +97,56 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .vlayer img.cel { animation: v-pop 1s ease-in-out infinite; }
 @keyframes v-walk { to { transform: translateY(-4%); } }
 @keyframes v-hop { to { transform: translateY(-12%); } }
+.vlayer img.land { animation: v-land .45s ease-out; transform-origin: 50% 100%; }
 @keyframes v-pop { 50% { transform: scale(1.15) rotate(-6deg); } }
-@media (prefers-reduced-motion: reduce) { .vlayer img { animation: none !important; } }
+@keyframes v-land { 35% { transform: translateY(-9%); } 70% { transform: scale(1.06, .94); } }
+.tag.bump { animation: tag-bump .5s ease-out; }
+@keyframes tag-bump { 30% { transform: translateX(-50%) translateY(-5px) scale(1.06); } 60% { transform: translateX(-50%) translateY(1px); } }
+@media (prefers-reduced-motion: reduce) { .vlayer img, .tag.bump { animation: none !important; } }
 .theme-sel { padding: 6px 8px; }
+.v3d { position: absolute; inset: 0; overflow: hidden; border-radius: 4px; }
+.v3d[hidden] { display: none; }
+.v3d-css, .v3d-gl { position: absolute !important; inset: 0; }
+.v3d-css { pointer-events: none; }
+.view-btn { padding: 6px 9px; font-weight: 700; }
+.o3d-bubbles { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.o3d-plate { position: absolute; left: 0; top: 0; padding: 1px 6px; border-radius: 6px; background: rgba(30,34,53,.72); color: #f4f1e8; font: 600 10px/1.4 var(--sans); white-space: nowrap; }
+.o3d-bubble { position: absolute; left: 0; top: 0; max-width: 260px; padding: 7px 10px; border-radius: 10px; background: #fffdf6; color: #1e2235;
+  font: 500 12.5px/1.35 var(--sans); box-shadow: 0 2px 10px rgba(0,0,0,.25); white-space: normal; z-index: 4; }
+.o3d-bubble::after { content: ''; position: absolute; left: 50%; bottom: -6px; border: 6px solid transparent; border-top-color: #fffdf6; border-bottom: 0; transform: translateX(-50%); }
+.o3d-hud { position: absolute; left: 10px; top: 10px; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: auto; }
+.o3d-hud button, .o3d-hud select { font: 600 12px var(--sans); padding: 5px 9px; border-radius: 7px; border: 1px solid rgba(255,255,255,.25); background: rgba(14,18,32,.72); color: #f2f4ff; cursor: pointer; backdrop-filter: blur(4px); }
+.o3d-hud button:hover { background: rgba(14,18,32,.9); }
+.o3d-hud button.on { background: #2f5fc4; border-color: #7aa2f7; }
+.o3d-hud .chip { font: 600 12px var(--sans); padding: 5px 10px; border-radius: 999px; background: #f2b825; color: #1e2235; }
+.o3d-hud .chip:empty { display: none; }
+.o3d-help { position: absolute; right: 10px; bottom: 8px; z-index: 5; font: 11px var(--sans); color: rgba(255,255,255,.75); text-shadow: 0 1px 2px rgba(0,0,0,.6); pointer-events: none; }
+.stage.o3d #office { visibility: hidden; pointer-events: none; }
+.stage.o3d .tag { transform: translate(-50%, -100%); padding: 3px 8px; }
+.stage.o3d .tag small { display: none; }
+.stage.o3d .tag:hover small, .stage.o3d .tag.selected small, .stage.o3d .tag.waiting small, .stage.o3d .tag.asking small { display: block; }
+.feed { max-width: 1180px; margin: 18px auto 0; }
+.feed h2 { margin: 0 0 8px; font: 700 15px/1.2 var(--feed-font, var(--sans)); letter-spacing: .02em; }
+.feed-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--line); }
+.feed-list li { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; align-items: baseline; padding: 7px 4px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.feed-list li:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.feed-list time { color: var(--muted); font: 12px var(--mono); }
+.feed-list .fx { min-width: 0; overflow-wrap: anywhere; }
+.feed-list .who { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.feed-list .bad { color: var(--danger); }
+.feed-list .good { color: var(--done); }
+.feed-list a { color: inherit; }
+.feed-list li.new { animation: feed-in .5s ease-out; }
+@keyframes feed-in { from { background: color-mix(in srgb, var(--wait-fill) 30%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .feed-list li.new { animation: none; } }
+.feed-empty { color: var(--muted); font-size: 13px; }
+.feed-list li.open { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.feed-list .fd { grid-column: 2 / -1; cursor: default; padding: 4px 0 4px; color: var(--ink); }
+.feed-list .fd code { display: block; font: 12.5px/1.45 var(--mono); background: #0f1218; color: #d7dce5; padding: 6px 9px; border-radius: 6px; overflow-wrap: anywhere; white-space: pre-wrap; }
+.feed-list .fd p { margin: 6px 0; white-space: pre-wrap; max-height: 260px; overflow: auto; font-size: 13.5px; }
+.feed-list .fd .fd-gone { color: var(--muted); }
+.fd-acts { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.fd-acts .btn { padding: 4px 10px; font-size: 13px; }
 .tags { position: absolute; inset: 0; pointer-events: none; }
 .tag {
   position: absolute; transform: translateX(-50%); pointer-events: auto;
@@ -109,6 +156,7 @@ button, input, textarea, select { font: inherit; color: inherit; }
 .tag small { display: block; font: 400 11px/1.2 var(--sans); color: var(--muted); }
 .tag .meta { display: flex; gap: 5px; justify-content: center; align-items: center; font: 700 10px/1.1 var(--sans); }
 .tag .meta:empty { display: none; }
+.u .u-old { font-style: normal; color: var(--wait); }
 .tag .tm { display: block; height: 3px; margin-top: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
 .tag .tm[hidden] { display: none; }
 .tag .tm b { display: block; height: 100%; background: var(--done); }
@@ -178,6 +226,23 @@ body.resizing { cursor: col-resize; user-select: none; }
 .helper { display: flex; gap: 10px; align-items: baseline; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
 .helper > div { min-width: 0; flex: 1; }
 .helper small { display: block; color: var(--muted); overflow-wrap: anywhere; }
+.helper.pick { cursor: pointer; border-radius: 6px; }
+.helper.pick:hover { background: color-mix(in srgb, var(--ink) 5%, transparent); }
+.helper.on { background: color-mix(in srgb, var(--work) 14%, transparent); }
+.hview { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin: 8px 0 14px; }
+.hview-head { display: flex; gap: 6px; align-items: center; }
+.hview-head .btn { padding: 4px 9px; }
+.hview-title { flex: 1; min-width: 0; }
+.hview-title b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hview-title small { color: var(--muted); }
+.hview-task { margin: 8px 0; font-size: 13px; }
+.hview-task p { margin: 6px 0 0; white-space: pre-wrap; color: var(--muted); max-height: 160px; overflow: auto; }
+.hview-steps { list-style: none; margin: 0; padding: 0; max-height: 340px; overflow: auto; font-size: 13px; }
+.hview-steps li { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 6px; padding: 4px 0; border-top: 1px solid var(--line); }
+.hview-steps li code { font: 12px var(--mono); overflow-wrap: anywhere; }
+.hview-steps li small { display: block; color: var(--muted); }
+.hview-steps li.failed { color: var(--danger); }
+.hview-steps li.say { color: var(--ink); font-style: italic; }
 .helper .chip { font-size: 12px; white-space: nowrap; }
 dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .settings fieldset { margin: 0 0 12px; padding: 8px 14px 4px; border: 1px solid var(--line); border-radius: 8px; }
@@ -191,15 +256,97 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .set.problem small { color: var(--danger); }
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .error { color: var(--danger); margin: 0; }
+.term { border-radius: 10px; overflow: hidden; background: #0f1218; box-shadow: 0 6px 24px rgba(0,0,0,.35), 0 0 0 1px rgba(255,255,255,.06); display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.term-bar { display: flex; align-items: center; gap: 7px; padding: 8px 12px; background: linear-gradient(#262a33, #1c1f26); border-bottom: 1px solid #090b0f; }
+.term-bar i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; box-shadow: inset 0 0 0 .5px rgba(0,0,0,.3); }
+.term-bar i:nth-child(2) { background: #febc2e; }
+.term-bar i:nth-child(3) { background: #28c840; }
+.term-bar span { flex: 1; text-align: center; margin-right: 50px; color: #9aa3b2; font: 500 12px var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .screen {
-  margin: 0; background: var(--screen-bg); color: var(--screen-ink); font: 13.5px/1.5 var(--mono);
-  border-radius: 6px; padding: 10px 12px; overflow: auto; white-space: pre-wrap; word-break: break-word;
-  min-height: 240px; max-height: 58vh; flex: 1;
+  margin: 0; background: #0f1218; color: #d7dce5; font: 13px/1.45 var(--mono); font-variant-ligatures: none;
+  padding: 10px 14px 14px; overflow: auto; white-space: pre; tab-size: 8;
+  min-height: 240px; flex: 1; scrollbar-color: #3a3f4b transparent;
 }
+.screen::selection, .screen *::selection { background: #3d5a8a; }
+.screen .b { font-weight: 700; } .screen .d { opacity: .62; } .screen .i { font-style: italic; } .screen .u { text-decoration: underline; } .screen .s { text-decoration: line-through; }
+.screen .cur { display: inline-block; width: .6em; height: 1.15em; vertical-align: text-bottom; background: #d7dce5; animation: term-blink 1.1s steps(1) infinite; }
+@keyframes term-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .screen .cur { animation: none; } }
 .screen-bar { display: flex; align-items: center; gap: 8px; justify-content: space-between; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
 .screen-bar .btn { padding: 2px 10px; font-size: 13px; }
-.compose label { display: block; font-weight: 600; margin-bottom: 6px; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.tok-today { font-size: 12px; color: var(--muted); white-space: nowrap; } .tok-today b { color: var(--ink); font-weight: 600; }
+.inbox-btn b { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--wait-fill); color: #1e2235; font-size: 12px; }
+.inbox { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; } /* long diff lines scroll inside, not stretch the card */
+.inbox li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--bg); }
+.inbox li:first-child { border-color: var(--wait-fill); }
+.inbox .ih { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.inbox .ih b { font-size: 15px; } .inbox .ih span { color: var(--muted); font-size: 13px; } .inbox .ih time { margin-left: auto; color: var(--muted); font-size: 12px; }
+.inbox .row { margin-top: 8px; }
+.approval { margin: 6px 0 8px; padding: 8px 10px; border-radius: 6px; background: #0f1218; color: #d7dce5; font: 12.5px/1.45 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 220px; overflow: auto; }
+.inbox textarea { width: 100%; min-height: 54px; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: var(--surface); font: 13px/1.45 var(--mono); }
+.diff { max-width: 100%; min-width: 0; margin: 6px 0 8px; border-radius: 6px; overflow: hidden; border: 1px solid #262b36; background: #0f1218; }
+.diff-head { padding: 6px 10px; background: #181c25; color: #c9cfdb; font: 12.5px var(--mono); }
+.diff-add { color: #7ee2a8; } .diff-del { color: #ff8f8f; }
+.diff-body { max-height: 46vh; overflow: auto; font: 12.5px/1.5 var(--mono); }
+.diff-line { display: flex; white-space: pre; color: #c9cfdb; min-width: max-content; }
+.diff-line i { flex: 0 0 44px; padding-right: 8px; text-align: right; color: #5c6475; font-style: normal; user-select: none; }
+.diff-line.add { background: #12301f; color: #b9f3cf; } .diff-line.del { background: #3a1719; color: #ffc9c9; }
+.diff-line.gap { color: #5c6475; padding-left: 52px; }
+.ci-checks { margin: 0 0 4px; padding-left: 4px; list-style: none; font-size: 14px; } .ci-checks a { color: var(--danger); }
+.ci-log { max-height: 320px; }
+.perm-where { font: 13px var(--mono); color: var(--muted); margin-left: 6px; }
+.perm-sec { margin: 12px 0; } .perm-sec h3 { margin: 0 0 4px; font-size: 15px; } .perm-sec > p { margin: 0 0 6px; color: var(--muted); font-size: 13px; }
+.perm-list { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.perm-rule { display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--line); border-radius: 6px; padding: 1px 4px 1px 8px; font: 12.5px var(--mono); background: var(--bg); }
+.perm-rule.warn { border-color: var(--wait-fill); } .perm-rule.secret { border-color: var(--danger); color: var(--danger); }
+.perm-rule button { border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 4px; }
+.perm-add { display: flex; gap: 6px; } .perm-add input { flex: 1; border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; background: var(--bg); font: 13px var(--mono); }
+.perm-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; } .perm-presets .btn { padding: 2px 10px; font-size: 13px; }
+.perm-other { margin-top: 10px; font-size: 13px; } .perm-other h4 { margin: 8px 0 4px; font-size: 13px; }
+.board-dialog { width: min(1280px, 96vw); max-height: 92vh; }
+.board-count { display: inline-block; min-width: 18px; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: var(--work); color: #fff; font-size: 12px; }
+.board-add { display: grid; grid-template-columns: 260px minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.board-add input, .board-add textarea { border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; background: var(--bg); font: 14px/1.4 var(--sans); }
+.board-add textarea { resize: vertical; min-height: 38px; }
+.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.board-col { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 160px; }
+.board-col h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 7px; padding: 8px 9px; margin-bottom: 8px; font-size: 14px; }
+.card b { display: block; line-height: 1.3; overflow-wrap: anywhere; }
+.card small { display: block; color: var(--muted); font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
+.card .row { margin-top: 6px; gap: 4px; } .card .btn { padding: 1px 8px; font-size: 12px; }
+.card select { font-size: 12px; max-width: 100%; }
+@media (max-width: 900px) { .board { grid-template-columns: 1fr; } .board-add { grid-template-columns: 1fr; } }
+.handoffs h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.handoffs p { margin: 2px 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.handoffs button { border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 0 6px; cursor: pointer; }
+.replay { display: grid; grid-template-columns: auto auto minmax(120px, 1fr) minmax(0, 2fr) auto; gap: 10px; align-items: center; margin-top: 10px;
+  padding: 8px 10px; border: 1px solid var(--work); border-radius: 8px; background: var(--surface); }
+.replay input[type=range] { width: 100%; accent-color: var(--work); }
+.rp-now { min-width: 0; display: flex; gap: 8px; align-items: baseline; } .rp-now b { font: 600 14px var(--mono); }
+.rp-now span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 14px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* The instruction box lives inside the terminal window and looks like Claude Code's own input. */
+#dRunning { display: flex; flex-direction: column; flex: 1 0 auto; height: calc(100vh - 150px); min-height: 420px; gap: 8px; }
+.term { overflow: visible; } .term-bar { border-radius: 10px 10px 0 0; } .compose { border-radius: 0 0 10px 10px; }
+.term-btn { background: none; border: 1px solid #3a3f4b; color: #9aa3b2; border-radius: 5px; font: 14px/1 var(--mono); padding: 2px 6px; cursor: pointer; }
+.term-btn:hover, .term-btn[aria-pressed="true"] { color: #e6e9ef; border-color: #6b7385; }
+.compose { background: #0f1218; padding: 8px 12px 10px; border-top: 1px solid #1f2430; position: sticky; bottom: 0; z-index: 2; } /* always in reach while the terminal is on screen */
+.tline { display: flex; align-items: flex-start; gap: 8px; border: 1px solid #3a3f4b; border-radius: 8px; padding: 7px 10px; background: #12161e; }
+.tline:focus-within { border-color: #7aa2f7; box-shadow: 0 0 0 1px #7aa2f733; }
+.tprompt { color: #7aa2f7; font: 700 14px/1.5 var(--mono); user-select: none; }
+.compose textarea { flex: 1; min-height: 0; max-height: 40vh; resize: none; border: 0; outline: 0; padding: 0; background: transparent;
+  color: #e6e9ef; caret-color: #e6e9ef; font: 14px/1.5 var(--mono); font-variant-ligatures: none; overflow-y: auto; }
+.compose textarea::placeholder { color: #5c6475; }
+.tfoot { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+.tfoot small { flex: 1; color: #6b7385; font: 12px var(--mono); }
+.tfoot .btn { padding: 3px 12px; font-size: 13px; }
+/* Terminal view: the panel takes the room the floor had. */
+body.termview .layout { grid-template-columns: 0 minmax(0, 1fr); }
+body.termview .floor { visibility: hidden; overflow: hidden; }
+body.termview .resizer { display: none; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 2px 10px; font-size: 13px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .chips button:hover { border-color: var(--work); }
 .chips .edit { border-style: dashed; color: var(--muted); }
@@ -233,9 +380,6 @@ dialog.wide { width: min(760px, 94vw); max-height: 88vh; }
 .hit .snip { margin: 4px 0 6px; font-size: 14px; overflow-wrap: anywhere; }
 .hit .snip b { background: color-mix(in srgb, var(--wait-fill) 35%, transparent); font-weight: 600; }
 .hit .btn { padding: 3px 10px; font-size: 13px; }
-.compose textarea { width: 100%; min-height: 84px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px; background: var(--bg); }
-.compose .row { margin-top: 8px; align-items: center; }
-.compose small { color: var(--muted); }
 .lastline { margin: 0; font-size: 15px; color: var(--muted); }
 .lastline b { color: var(--ink); font-weight: 600; }
 .copy { font: 12px var(--mono); }
@@ -272,6 +416,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <h1 id="appTitle">Agent floor</h1>
   <p class="summary" id="summary" aria-live="polite">Connecting…</p>
   <div class="usage" id="usage" hidden></div>
+  <div class="tok-today" id="tokToday" hidden></div>
   <div class="clock">
     <span class="phase-icon" id="phaseIcon" aria-hidden="true"></span>
     <div class="clock-time"><b id="clockTime">--:--</b><span class="clock-phase" id="clockPhase"></span></div>
@@ -287,10 +432,13 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     </div>
   </div>
   <button class="btn" id="alertsBtn" hidden>Turn on alerts</button>
+  <button class="btn inbox-btn" id="inboxBtn" title="Everything waiting on you (i)">Inbox <b id="inboxCount" hidden></b></button>
+  <button class="btn" id="boardBtn" title="Task board (b)">Board <b id="boardCount" class="board-count" hidden></b></button>
   <button class="btn" id="todayBtn">Today</button>
   <button class="btn" id="searchBtn">Search</button>
   <button class="btn" id="broadcastBtn">Broadcast</button>
   <select class="btn theme-sel" id="themeSel" aria-label="Theme" title="Theme"><option value="pixel">Pixel office</option></select>
+  <button class="btn view-btn" id="viewBtn" type="button" hidden title="Switch between the 3D and flat floor" aria-pressed="false">3D</button>
   <button class="btn" id="settingsBtn">Settings</button>
   <button class="btn primary" id="addBtn">Add agent</button>
 </header>
@@ -302,6 +450,18 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
       <canvas id="office" width="384" height="208" aria-hidden="true"></canvas>
       <div class="tags" id="tags"></div>
     </div>
+    <div class="replay" id="replayBar" hidden>
+      <button class="btn" type="button" id="rpPlay" aria-label="Play">▶</button>
+      <select id="rpSpeed" aria-label="Replay speed"><option value="30">30×</option><option value="120" selected>120×</option><option value="600">600×</option></select>
+      <input type="range" id="rpSlider" min="0" max="1000" value="0" aria-label="Time of day">
+      <div class="rp-now"><b id="rpTime"></b><span id="rpStep"></span></div>
+      <button class="btn" type="button" id="rpClose" aria-label="Close replay">✕</button>
+    </div>
+    <section class="feed" aria-labelledby="feedTitle">
+      <h2 id="feedTitle">Activity</h2>
+      <ol class="feed-list" id="feedList"></ol>
+      <p class="feed-empty" id="feedEmpty">What your agents do shows up here: tests and builds, pushes and PRs, questions, finishing.</p>
+    </section>
     <p class="empty" id="empty" hidden>No agents yet. Add one and give it a project folder, or start any tmux session named <code>cc-something</code> that runs <code>claude</code>, and it will show up here.</p>
   </section>
 
@@ -320,8 +480,17 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
         <p class="activity" id="dActivity"></p>
         <p class="error" id="dError" hidden></p>
 
+        <div class="alert" id="dTrust" hidden>
+          <p>Claude Code is opening this folder for the first time and asks whether you trust it. Trusting lets it read, edit and run files here.</p>
+          <div class="row">
+            <button class="btn warn" type="button" id="trustYes">Trust this folder</button>
+            <button class="btn" data-key="Escape">Exit</button>
+          </div>
+        </div>
         <div class="alert" id="dNeeds" hidden>
           <p>This agent is asking for permission. Check the screen below, then answer.</p>
+          <pre class="approval" id="dApproval" hidden></pre>
+          <div id="dDiff" hidden></div>
           <div class="row">
             <button class="btn warn" data-key="Enter">Approve</button>
             <button class="btn" data-key="2">Choose option 2</button>
@@ -333,31 +502,49 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
         <div class="alert health" id="dHealth" hidden></div>
         <dl class="status" id="dStatus" hidden></dl>
         <div class="helpers" id="dHelpers" hidden></div>
+        <section class="hview" id="dHelperView" hidden aria-live="polite">
+          <div class="hview-head">
+            <button class="btn" type="button" id="hPrev" aria-label="Previous helper">←</button>
+            <div class="hview-title"><b id="hName"></b><small id="hState"></small></div>
+            <button class="btn" type="button" id="hNext" aria-label="Next helper">→</button>
+            <button class="btn" type="button" id="hClose" aria-label="Close helper view">✕</button>
+          </div>
+          <details class="hview-task"><summary>Task</summary><p id="hTask"></p></details>
+          <ol class="hview-steps" id="hSteps"></ol>
+        </section>
 
         <div id="dRunning">
           <div class="screen-bar" id="screenBar" hidden><span id="screenNote"></span><button class="btn" type="button" id="screenLatest">Jump to latest</button></div>
-          <pre class="screen" id="dScreen" tabindex="0" aria-label="Agent terminal"></pre>
+          <div class="term">
+            <div class="term-bar"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i><span id="termTitle">claude</span>
+              <button type="button" class="term-btn" id="termFit" title="Fit this agent to the panel at full text size (clears its scroll history)">⇔</button>
+              <button type="button" class="term-btn" id="termWide" title="Terminal view: widen the terminal (t)" aria-pressed="false">⤢</button></div>
+            <pre class="screen" id="dScreen" tabindex="0" aria-label="Agent terminal"></pre>
+            <form class="compose" id="compose">
+              <label for="promptText" id="promptLabel" class="sr-only">Instruction</label>
+              <div class="tline"><span class="tprompt" aria-hidden="true">❯</span><textarea id="promptText" rows="1" spellcheck="false" placeholder="Tell this agent what to do next"></textarea></div>
+              <div class="tfoot">
+                <small id="composeHint">Enter sends · Shift + Enter for a new line</small>
+                <button class="btn" type="button" id="queueBtn">Add to queue</button>
+                <button class="btn primary" type="submit" id="sendBtn">Send</button>
+              </div>
+            </form>
+          </div>
+          <div class="chips" id="chips"></div>
         </div>
 
         <p class="lastline" id="dLastPrompt" hidden></p>
 
-        <form class="compose" id="compose">
-          <label for="promptText" id="promptLabel">Instruction</label>
-          <div class="chips" id="chips"></div>
-          <textarea id="promptText" placeholder="Tell this agent what to do next"></textarea>
-          <div class="row">
-            <button class="btn primary" type="submit" id="sendBtn">Send</button>
-            <button class="btn" type="button" id="queueBtn">Add to queue</button>
-            <small id="composeHint">⌘ or Ctrl + Enter sends</small>
-          </div>
-        </form>
-
         <div class="queue" id="dQueue" hidden></div>
+        <div class="handoffs" id="dHandoffs" hidden></div>
 
         <div class="row" id="dTools">
           <button class="btn" data-key="Escape">Interrupt</button>
           <button class="btn" data-key="BTab" title="Cycles Claude Code modes, like accept edits and plan mode">Switch mode</button>
           <button class="btn" id="timelineBtn">Timeline</button>
+          <button class="btn" id="permBtn" title="What this agent may run without asking">Permissions</button>
+          <button class="btn" id="replayBtn" title="Replay what this agent did today, on the floor">Replay</button>
+          <button class="btn" id="handoffBtn" title="When this agent finishes, pass its result to another agent">Hand off…</button>
           <button class="btn copy" id="copyAttach">Copy attach command</button>
           <button class="btn danger" id="stopBtn">Stop agent</button>
         </div>
@@ -428,6 +615,49 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     <div class="row" style="margin-top:10px"><button class="btn primary" type="submit">Save</button><button class="btn" type="button" id="pCancel">Cancel</button></div>
   </form>
 </dialog>
+<dialog id="inboxDialog" class="wide">
+  <h2>Waiting on you</h2>
+  <p class="hint" id="inboxHint">Oldest first. <kbd>a</kbd> approves and <kbd>d</kbd> declines the top item, <kbd>1</kbd>–<kbd>9</kbd> answer its question.</p>
+  <ol class="inbox" id="inboxList"></ol>
+  <p class="hint" id="inboxEmpty">Nothing is waiting on you.</p>
+  <div class="row" style="margin-top:14px"><button class="btn" id="inboxClose" autofocus>Close</button></div><!-- focus starts on Close: an Enter right after opening must not approve -->
+</dialog>
+<dialog id="permDialog" class="wide">
+  <h2>Permissions <small id="permWhere" class="perm-where"></small></h2>
+  <p class="hint">Claude Code's own rules: it checks them before every command, so the dashboard never presses keys for you. <b>Blocked</b> beats <b>Always ask</b>, which beats <b>Runs without asking</b>. You're editing your personal file for this project (<code>.claude/settings.local.json</code>).</p>
+  <p class="error" id="permIgnore" hidden></p>
+  <div class="alert health" id="permWarn" hidden></div>
+  <div id="permBody"></div>
+  <details class="perm-other"><summary>Rules from your other settings files (read only)</summary><div id="permOther"></div></details>
+  <p class="error" id="permError" hidden></p>
+  <div class="row" style="margin-top:14px"><button class="btn primary" id="permSave">Save</button><button class="btn" id="permClose">Cancel</button>
+    <small class="hint" style="align-self:center">Running agents pick up the change on their next command; restart one if it doesn't.</small></div>
+</dialog>
+<dialog id="boardDialog" class="board-dialog">
+  <h2>Task board</h2>
+  <form class="board-add" id="boardAdd">
+    <input id="bdCwd" list="bdCwds" placeholder="Project folder" autocomplete="off" aria-label="Project folder">
+    <datalist id="bdCwds"></datalist>
+    <textarea id="bdText" rows="2" placeholder="What should be done? The first line is the title. (Cmd+Enter adds it)" aria-label="Task"></textarea>
+    <button class="btn primary" type="submit">Add task</button>
+  </form>
+  <p class="error" id="bdError" hidden></p>
+  <div class="board" id="boardCols"></div>
+  <div class="row" style="margin-top:12px"><button class="btn" id="boardClose" autofocus>Close</button>
+    <small class="hint" style="align-self:center">Tasks move by themselves: a busy agent → Working, its PR opens → In review, merged → Merged.</small></div>
+</dialog>
+<dialog id="handoffDialog">
+  <h2>Hand off</h2>
+  <form id="handoffForm">
+    <p>When <b id="hoFrom"></b> next finishes, send its final message to:</p>
+    <select id="hoTo" aria-label="Agent that takes over"></select>
+    <label for="hoNote" style="display:block;margin-top:10px;font-weight:600">What should it do with it?</label>
+    <textarea id="hoNote" rows="3" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--bg)" placeholder="Update the web client for the new endpoint, then run its tests."></textarea>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-weight:400"><input type="checkbox" id="hoEvery"> Every time it finishes, not just the next time</label>
+    <p class="error" id="hoError" hidden></p>
+    <div class="row" style="margin-top:12px"><button class="btn primary" type="submit">Set up hand-off</button><button class="btn" type="button" id="hoCancel">Cancel</button></div>
+  </form>
+</dialog>
 <dialog id="timelineDialog" class="wide">
   <h2 id="tlTitle">Timeline</h2>
   <div id="tlBody"></div>
@@ -454,7 +684,12 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <h2>Keyboard shortcuts</h2>
   <dl class="keys">
     <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next / previous agent</dd>
-    <dt><kbd>/</kbd></dt><dd>Write an instruction</dd>
+    <dt><kbd>/</kbd></dt><dd>Write an instruction (↑ / ↓ go through what you sent before)</dd>
+    <dt><kbd>i</kbd></dt><dd>Inbox: everything waiting on you, oldest first</dd>
+    <dt><kbd>b</kbd></dt><dd>Task board</dd>
+    <dt><kbd>f</kbd></dt><dd>Walk around the office yourself (W A S D, Esc stops)</dd>
+    <dt><kbd>m</kbd></dt><dd>Office sounds on or off</dd>
+    <dt><kbd>t</kbd></dt><dd>Terminal view: widen the terminal (Esc goes back)</dd>
     <dt><kbd>a</kbd></dt><dd>Approve (when the agent needs your approval)</dd>
     <dt><kbd>d</kbd></dt><dd>Decline (when the agent needs your approval)</dd>
     <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Pick an answer (when the agent has a question)</dd>
@@ -477,6 +712,11 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 </dialog>
 <div class="cheers" id="cheers" aria-live="polite"></div>
 
+<script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js", "three/addons/": "/vendor/addons/" } }</script>
+<script type="module">
+// The 3D office; if it can't load, the simpler 3D floor.
+import('/office/engine.js').catch((err) => { console.warn('3D office unavailable, using the simple 3D floor:', err); return import('/floor3d.js'); });
+</script>
 <script>
 'use strict';
 // ---------- state ----------
@@ -530,7 +770,7 @@ function toast(msg) {
 // ---------- live updates ----------
 function connect() {
   const es = new EventSource('/events');
-  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || [], s.settings); renderUsage(s.usage); };
+  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || [], s.settings); renderUsage(s.usage); renderTokens(s.tokens); renderInboxCount(); renderBoard(s.tasks); renderHandoffs(s.handoffs); };
   es.onerror = () => { $('summary').textContent = 'Lost connection to the Agent Floor server. Retrying…'; };
 }
 
@@ -553,6 +793,7 @@ function onSnapshot(list, st) {
     prevStates[a.name] = now;
     for (const c of a.celebrations || []) if (!cheered.has(c.id)) { rememberCheer(c.id); cheer(a, c); }
   }
+  recordFeed(list);
   agents = list;
   if (selected && !agents.find((a) => a.name === selected)) selected = null;
   if (selected) markSeen(selected);
@@ -586,6 +827,7 @@ function cheer(a, c) {
   cheering.set(a.name, { kind: c.kind, until: performance.now() / 1000 + (settings.celebrateSeconds || 5) });
   burst(a.name, pr ? 90 : 55);
   showCheer(pr ? '🎉' : '🚀', title, sub, c.url, pr ? 'Open PR' : 'View branch');
+  addFeed(a, pr ? 'pr' : 'push', 'git', { branch: c.branch, number: c.number, repo: c.repo, url: c.url });
   notify(pr ? `🎉 ${title}` : `🚀 ${title}`, sub);
 }
 function burst(name, n) {
@@ -622,12 +864,23 @@ function showCheer(icon, title, sub, url, linkText) {
 
 function notify(title, body) {
   if (settings.desktopNotify) return; // the server sends desktop notifications itself
-  if ('Notification' in window && Notification.permission === 'granted' && document.hidden) {
+  if ('Notification' in window && Notification.permission === 'granted' && (document.hidden || !document.hasFocus())) {
     new Notification(title, { body: (body || '').slice(0, 140) });
   }
 }
 
 // Plan usage (Pro/Max): current 5-hour session and the week, from the agents' status line.
+// Tokens used today. Most of a busy day is cached re-reads of the conversation, which weigh little on the plan,
+// so the tooltip breaks the number down and the line leads with what was written.
+const fmtTok = (n) => (n >= 1e6 ? `${(n / 1e6).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n || 0));
+const tokenTip = (t, who) => `${who} today: ${t.total.toLocaleString()} tokens\n· written (output): ${t.output.toLocaleString()}\n· new input: ${t.input.toLocaleString()}\n· cache writes: ${t.cacheWrite.toLocaleString()}\n· cache re-reads: ${t.cacheRead.toLocaleString()} (cheap: the conversation re-read on each turn)`;
+function renderTokens(t) {
+  const box = $('tokToday');
+  box.hidden = !t || !t.total;
+  if (box.hidden || sameAs(box, t)) return;
+  box.replaceChildren(el('span', '', 'Today '), el('b', '', fmtTok(t.total)), el('span', '', ` tokens · ${fmtTok(t.output)} written`));
+  box.title = tokenTip(t, 'All Claude Code work');
+}
 function renderUsage(u) {
   const box = $('usage');
   box.hidden = !u || (!u.fiveHour && !u.sevenDay);
@@ -641,9 +894,11 @@ function renderUsage(u) {
     if (!l) return null;
     const d = el('div', `u ${level(l.pct)} ${old ? 'stale' : ''}`);
     const t = el('span'); t.append(`${label} `, el('b', '', `${l.pct}%`), l.resetsAt ? ` · resets ${when(l.resetsAt, week)}` : l.reset ? ' · reset' : '');
+    // Usage is only as fresh as the last agent that reported it; say so rather than look current.
+    if (old) t.append(el('em', 'u-old', ` · as of ${hhmm(u.at)}`));
     const m = el('div', 'bar-m'); const i = el('i'); i.style.width = `${l.pct}%`; m.append(i);
     d.append(t, m);
-    d.title = `${label === 'Session' ? 'Current 5-hour session' : 'This week'}: ${l.pct}% of your plan used${l.resetsAt ? `, resets ${new Date(l.resetsAt).toLocaleString()}` : ''}. Updated ${ago(u.at)}.`;
+    d.title = `${label === 'Session' ? 'Current 5-hour session' : 'This week'}: ${l.pct}% of your plan used${l.resetsAt ? `, resets ${new Date(l.resetsAt).toLocaleString()}` : ''}. Updated ${ago(u.at)}.${old ? ' Only agents started from this dashboard report usage; none has since then.' : ''}`;
     return d;
   };
   box.replaceChildren(...[meter('Session', u.fiveHour, false), meter('Week', u.sevenDay, true)].filter(Boolean));
@@ -676,33 +931,157 @@ function select(name) {
   localStorage.setItem('af:selected', name || '');
   if (name) markSeen(name);
   renderTags(); renderPanel();
+  fitTerm(); renderHandoffs();
 }
+
+// ---------- terminal: wide view, fitting tmux to the panel, typing like a terminal ----------
+function setTermView(on) {
+  document.body.classList.toggle('termview', on);
+  $('termWide').setAttribute('aria-pressed', String(on));
+  try { localStorage.setItem('af:termview', on ? '1' : ''); } catch {}
+  if (use3d) window.Floor3D.setVisible(!on);
+  fitTerm();
+}
+$('termWide').addEventListener('click', () => setTermView(!document.body.classList.contains('termview')));
+// Fit the terminal font so Claude Code's full line width shows without wrapping. (Resizing the agent's tmux
+// window instead made Claude Code redraw and wipe its scrollback, so the size is left to tmux.)
+var charW = 0; // width of one character at 1px font size, in the terminal font
+function fitTerm() {
+  const scr = $('dScreen'), a = agents.find((x) => x.name === selected);
+  if (!scr.clientWidth || !a || !a.cols) { scr.style.fontSize = ''; return; }
+  if (!charW) {
+    const probe = document.createElement('span'); probe.textContent = 'M'.repeat(100);
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-size:100px';
+    scr.append(probe); charW = probe.getBoundingClientRect().width / 10000; probe.remove();
+  }
+  const cs = getComputedStyle(scr);
+  const room = scr.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 2;
+  const px = Math.max(9.5, Math.min(13.5, room / (a.cols * charW))); // below 9.5px is unreadable: scroll sideways instead
+  scr.style.fontSize = `${px.toFixed(2)}px`;
+}
+new ResizeObserver(() => fitTerm()).observe($('dScreen'));
+// The terminal size the panel shows at a comfortable 13px. New and restarted agents start at this size, so
+// their text is full size without ever resizing them (which would wipe their scrollback).
+function panelTermSize() {
+  if (!charW) {
+    const probe = document.createElement('span'); probe.textContent = 'M'.repeat(100);
+    probe.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;font-size:100px;font-family:var(--mono)';
+    document.body.append(probe); charW = probe.getBoundingClientRect().width / 10000; probe.remove();
+  }
+  const scr = $('dScreen');
+  const width = scr.clientWidth ? scr.clientWidth - 32 : $('panel').clientWidth - 72;
+  const height = scr.clientHeight || window.innerHeight - 320;
+  return { cols: Math.max(60, Math.floor(width / (13 * charW))), rows: Math.max(20, Math.floor(height / (13 * 1.45))) };
+}
+$('termFit').addEventListener('click', async () => {
+  if (!selected || !confirm(`Fit ${labelOf(selected)} to this panel at full text size?\n\nClaude Code redraws its screen and the scroll history in its terminal is lost (the conversation itself is kept).`)) return;
+  try { await api('POST', `/api/agents/${selected}/fit`, panelTermSize()); toast(`Fitted ${labelOf(selected)} to the panel`); } catch (err) { toast(err.message); }
+});
+document.fonts && document.fonts.ready.then(() => { charW = 0; fitTerm(); });
+try { if (localStorage.getItem('af:termview')) setTimeout(() => setTermView(true), 0); } catch {}
+
+// The instruction box grows with what you type, up to 40% of the screen.
+function growPrompt() { const t = $('promptText'); t.style.height = 'auto'; t.style.height = `${Math.min(t.scrollHeight, window.innerHeight * 0.4)}px`; }
+$('promptText').addEventListener('input', growPrompt);
+// ↑ / ↓ walk through what you sent this agent before, like a shell.
+const HIST_KEY = 'af:hist';
+const histAll = () => { try { return JSON.parse(localStorage.getItem(HIST_KEY) || '{}') || {}; } catch { return {}; } };
+function remember(name, text) {
+  const all = histAll(); const list = (all[name] || []).filter((x) => x !== text); list.push(text);
+  all[name] = list.slice(-50);
+  try { localStorage.setItem(HIST_KEY, JSON.stringify(all)); } catch {}
+}
+var histPos = -1, histDraft = '';
+$('promptText').addEventListener('keydown', (e) => {
+  if ((e.key !== 'ArrowUp' && e.key !== 'ArrowDown') || e.shiftKey || e.altKey || e.metaKey || e.ctrlKey) return;
+  const t = e.target, list = histAll()[selected] || [];
+  if (!list.length) return;
+  const firstLine = !t.value.slice(0, t.selectionStart).includes('\n'), lastLine = !t.value.slice(t.selectionEnd).includes('\n');
+  if (e.key === 'ArrowUp' && !firstLine) return;
+  if (e.key === 'ArrowDown' && (!lastLine || histPos < 0)) return;
+  e.preventDefault();
+  if (histPos < 0) histDraft = t.value;
+  histPos = e.key === 'ArrowUp' ? (histPos < 0 ? list.length - 1 : Math.max(0, histPos - 1)) : histPos + 1;
+  if (histPos >= list.length) { histPos = -1; t.value = histDraft; } else t.value = list[histPos];
+  growPrompt(); t.setSelectionRange(t.value.length, t.value.length);
+});
 
 let lastScreen = '';
 let screenFrozen = false;  // the user scrolled up: don't replace the text under them
-let screenHistory = null;  // full scrollback, loaded when they reach the top
 function resumeScreen() {
-  screenFrozen = false; screenHistory = null; lastScreen = '';
+  screenFrozen = false; lastScreen = '';
   $('screenBar').hidden = true;
   renderPanel();
 }
 $('screenLatest').addEventListener('click', resumeScreen);
-$('dScreen').addEventListener('scroll', async () => {
+$('dScreen').addEventListener('scroll', () => {
   const scr = $('dScreen');
-  if (scr.scrollHeight - scr.scrollTop - scr.clientHeight < 8 && screenFrozen && !screenHistory) { resumeScreen(); return; }
-  if (scr.scrollTop > 40 || screenHistory || !selected) return;
-  screenHistory = 'loading';
-  screenFrozen = true;
-  try {
-    const r = await (await fetch(`/api/agents/${encodeURIComponent(selected)}/screen?lines=5000`)).json();
-    const before = scr.scrollHeight - scr.scrollTop;
-    scr.textContent = r.screen || '';
-    scr.scrollTop = scr.scrollHeight - before; // keep the same lines in view
-    screenHistory = r.screen || '';
-    $('screenBar').hidden = false;
-    $('screenNote').textContent = 'Showing the full history. Live updates paused while you read.';
-  } catch { screenHistory = null; }
+  if (scr.scrollHeight - scr.scrollTop - scr.clientHeight < 8 && screenFrozen) resumeScreen();
 });
+// Claude Code runs full screen, so tmux keeps only what is on screen now. What scrolled off is rebuilt from the
+// transcript and drawn above the live screen; fetched when the transcript changes, at most every 3 seconds.
+var histFor = '', histStamp = -1, histText = '', histAt = 0, histBusy = false;
+async function loadHistory(a) {
+  if (histBusy || (histFor === a.name && histStamp === a.fileStamp) || (histFor === a.name && Date.now() - histAt < 3000)) return;
+  histBusy = true; histAt = Date.now();
+  try {
+    const r = await api('GET', `/api/agents/${encodeURIComponent(a.name)}/history-text`);
+    if (selected !== a.name) return;
+    const changed = histFor !== a.name || histText !== (r.text || '');
+    histFor = a.name; histStamp = a.fileStamp; histText = r.text || '';
+    if (changed) { lastScreen = ''; renderPanel(); }
+  } catch {} finally { histBusy = false; }
+}
+// ---------- terminal colours ----------
+// Draws tmux output with its colour codes (SGR: bold, dim, italic, underline, 16/256/true colours) as spans.
+// Text only ever goes in through textContent, so nothing in the output can become HTML.
+const ANSI16 = ['#1c1f26', '#ff6b6b', '#5fd068', '#f5c451', '#5c9cf5', '#c678dd', '#4fc1d6', '#c9ced8',
+  '#5c6370', '#ff8787', '#7ee08a', '#ffd877', '#82b6ff', '#da93ec', '#70d6e6', '#ffffff'];
+function ansiColor(n) {
+  if (n < 16) return ANSI16[n];
+  if (n < 232) { n -= 16; const v = (k) => (k ? k * 40 + 55 : 0); return `rgb(${v(Math.floor(n / 36))},${v(Math.floor(n / 6) % 6)},${v(n % 6)})`; }
+  const g = (n - 232) * 10 + 8; return `rgb(${g},${g},${g})`;
+}
+function renderAnsi(target, text, cursor) {
+  text = String(text || '').replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '').replace(/ +$/gm, '');
+  const frag = document.createDocumentFragment();
+  let st = {};
+  const re = /\x1b\[([0-9;:?]*)([A-Za-z])/g;
+  let last = 0, m;
+  const push = (chunk) => {
+    if (!chunk) return;
+    if (!st.fg && !st.bg && !st.b && !st.d && !st.i && !st.u && !st.s) { frag.append(chunk); return; }
+    const sp = document.createElement('span');
+    sp.className = ['b', 'd', 'i', 'u', 's'].filter((k) => st[k]).join(' ');
+    let fg = st.fg, bg = st.bg;
+    if (st.inv) [fg, bg] = [bg || '#0f1218', fg || '#d7dce5'];
+    if (fg) sp.style.color = fg;
+    if (bg) sp.style.backgroundColor = bg;
+    sp.textContent = chunk; frag.append(sp);
+  };
+  while ((m = re.exec(text))) {
+    push(text.slice(last, m.index).replace(/\x1b./g, ''));
+    last = re.lastIndex;
+    if (m[2] !== 'm') continue; // only colours matter in a captured screen
+    const p = m[1] === '' ? [0] : m[1].split(/[;:]/).map(Number);
+    for (let i = 0; i < p.length; i++) {
+      const c = p[i];
+      if (c === 0) st = {};
+      else if (c === 1) st.b = true; else if (c === 2) st.d = true; else if (c === 3) st.i = true; else if (c === 4) st.u = true;
+      else if (c === 7) st.inv = true; else if (c === 9) st.s = true;
+      else if (c === 22) { st.b = false; st.d = false; } else if (c === 23) st.i = false; else if (c === 24) st.u = false; else if (c === 27) st.inv = false; else if (c === 29) st.s = false;
+      else if (c >= 30 && c <= 37) st.fg = ANSI16[c - 30]; else if (c >= 90 && c <= 97) st.fg = ANSI16[c - 82];
+      else if (c >= 40 && c <= 47) st.bg = ANSI16[c - 40]; else if (c >= 100 && c <= 107) st.bg = ANSI16[c - 92];
+      else if (c === 39) st.fg = null; else if (c === 49) st.bg = null;
+      else if ((c === 38 || c === 48) && p[i + 1] === 5) { st[c === 38 ? 'fg' : 'bg'] = ansiColor(p[i + 2] || 0); i += 2; }
+      else if ((c === 38 || c === 48) && p[i + 1] === 2) { st[c === 38 ? 'fg' : 'bg'] = `rgb(${p[i + 2] || 0},${p[i + 3] || 0},${p[i + 4] || 0})`; i += 4; }
+    }
+  }
+  push(text.slice(last).replace(/\x1b./g, ''));
+  if (cursor) frag.append(el('span', 'cur'));
+  target.replaceChildren(frag);
+}
+
 let lastScreenFor = null;
 function renderPanel() {
   const a = agents.find((x) => x.name === selected);
@@ -717,7 +1096,11 @@ function renderPanel() {
   $('dPath').textContent = `${a.cwd}  ·  ${a.session}`;
   $('dActivity').textContent = a.detail || '';
   $('dError').hidden = !a.error; $('dError').textContent = a.error || '';
-  $('dNeeds').hidden = a.state !== 'waiting';
+  $('dNeeds').hidden = a.state !== 'waiting' || !!a.trust;
+  $('dTrust').hidden = !(a.state === 'waiting' && a.trust);
+  $('dApproval').hidden = !a.approval || !!a.diff; if ($('dApproval').textContent !== (a.approval || '')) $('dApproval').textContent = a.approval || '';
+  $('dDiff').hidden = !a.diff || a.state !== 'waiting';
+  if (a.diff && !sameAs($('dDiff'), a.diff)) $('dDiff').replaceChildren(diffView(a.diff));
   renderQuestion(a); renderHealth(a); renderStatus(a); renderHelpers(a);
   if (a.state !== 'stopped') renderCompose(a);
   renderQueue(a);
@@ -739,21 +1122,25 @@ function renderPanel() {
   } else $('dLastPrompt').hidden = true;
 
   const scr = $('dScreen');
-  const text = a.screen || '';
+  const text = a.screenAnsi || a.screen || '';
+  $('termTitle').textContent = `${a.label || a.name} — ${a.session || 'claude'}`;
+  if ($('dScreen').dataset.cols !== String(a.cols || '')) { $('dScreen').dataset.cols = String(a.cols || ''); fitTerm(); }
   const switched = lastScreenFor !== a.name;
-  if (switched) { screenHistory = null; screenFrozen = false; }
+  if (switched) screenFrozen = false;
+  loadHistory(a);
+  const hist = histFor === a.name && histText ? `${histText}\n\x1b[90m──── live screen ${'─'.repeat(40)}\x1b[0m\n` : '';
   const atBottom = scr.scrollHeight - scr.scrollTop - scr.clientHeight < 24;
   // While you're reading further up, the live view holds still (otherwise every update would move the text).
   if (!switched && !atBottom && lastScreen !== '') screenFrozen = true;
   if (screenFrozen) {
     $('screenBar').hidden = false;
-    $('screenNote').textContent = screenHistory ? 'Showing the full history. Live updates paused while you read.' : 'Live updates paused while you read. Scroll to the top for older output.';
-  } else if (text !== lastScreen || switched) {
+    $('screenNote').textContent = 'Live updates paused while you read. Scroll to the bottom or press Jump to latest.';
+  } else if (hist + text !== lastScreen || switched) {
     $('screenBar').hidden = true;
-    scr.textContent = text;
+    renderAnsi(scr, hist + text);
     // A different agent starts at the bottom, whatever the previous one was scrolled to.
     scr.scrollTop = scr.scrollHeight;
-    lastScreen = text;
+    lastScreen = hist + text;
     lastScreenFor = a.name;
   }
 }
@@ -834,6 +1221,17 @@ function renderStatus(a) {
     dd.append(sel);
     rows.push(['Context', dd]);
   }
+  if (a.todos && a.todos.length) {
+    const done = a.todos.filter((t) => t.status === 'completed').length, now = a.todos.find((t) => t.status === 'in_progress');
+    const dd = el('dd', '', `${done}/${a.todos.length} done${now ? ` · now: ${now.text}` : ''}`);
+    dd.title = a.todos.map((t) => `${t.status === 'completed' ? '☑' : t.status === 'in_progress' ? '▸' : '☐'} ${t.text}`).join('\n');
+    rows.push(['Plan', dd]);
+  }
+  if (a.tokens && a.tokens.total) {
+    const dd = el('dd', '', `${fmtTok(a.tokens.total)} tokens · ${fmtTok(a.tokens.output)} written`);
+    dd.title = tokenTip(a.tokens, `${labelOf(a.name)} and its helpers`);
+    rows.push(['Today', dd]);
+  }
   const r = a.lastResult;
   if (r) {
     const dd = el('dd');
@@ -864,7 +1262,7 @@ function renderStatus(a) {
   }
   box.hidden = !rows.length;
   if (document.activeElement && box.contains(document.activeElement)) return; // don't rebuild under an open select
-  if (sameAs(box, [a.name, c, r, g])) return;
+  if (sameAs(box, [a.name, c, r, g, a.tokens, a.todos])) return;
   box.replaceChildren(...rows.flatMap(([k, dd]) => [el('dt', '', k), dd]));
 }
 
@@ -872,10 +1270,14 @@ function renderHelpers(a) {
   const box = $('dHelpers');
   const hs = a.helpers || [];
   box.hidden = !hs.length;
-  if (sameAs(box, hs.map((h) => [h.id, h.state, h.kind, h.detail]))) return;
+  if (sameAs(box, hs.map((h) => [h.id, h.state, h.kind, h.detail, hv && hv.agent === a.name && hv.id]))) return;
   box.replaceChildren(el('h3', '', `Helpers (${hs.length})`));
   for (const h of hs) {
-    const row = el('div', 'helper');
+    const row = el('div', `helper pick ${hv && hv.agent === a.name && hv.id === h.id ? 'on' : ''}`);
+    row.title = 'Watch what this helper is doing';
+    row.tabIndex = 0;
+    row.addEventListener('click', () => openHelper(a.name, h.id));
+    row.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openHelper(a.name, h.id); } });
     const st = h.state === 'working' ? h.kind : h.state;
     const chip = el('span', `chip ${chipClass(st)}`, LABEL[st] || st);
     const body = el('div');
@@ -884,8 +1286,64 @@ function renderHelpers(a) {
     row.append(chip, body);
     box.append(row);
   }
-  box.append(el('p', 'hint', "Helpers can't be typed into; interrupt the agent to stop them."));
+  box.append(el('p', 'hint', "Click a helper to watch what it's doing. Helpers can't be typed into; interrupt the agent to stop them."));
 }
+
+// ---------- watching one helper ----------
+// Its task, then what it did step by step (commands, files, searches, what it said), refreshed while open.
+let hv = null; // { agent, id, timer }
+const STEP_ICON = { command: '▸', read: '📖', edit: '✎', write: '✎', search: '🔍', web: '🌐', plan: '☑', helper: '👥', say: '💬', tool: '•' };
+function openHelper(agent, id) {
+  if (hv) clearInterval(hv.timer);
+  hv = { agent, id, timer: setInterval(loadHelper, 2500) };
+  $('dHelperView').hidden = false;
+  loadHelper();
+  const a = agents.find((x) => x.name === agent); if (a) { $('dHelpers').dataset.key = ''; renderHelpers(a); }
+}
+function closeHelper() {
+  if (hv) clearInterval(hv.timer);
+  hv = null; $('dHelperView').hidden = true;
+  const a = agents.find((x) => x.name === selected); if (a) { $('dHelpers').dataset.key = ''; renderHelpers(a); }
+}
+async function loadHelper() {
+  if (!hv || hv.agent !== selected) return closeHelper();
+  const want = hv;
+  let r;
+  try { r = await api('GET', `/api/agents/${encodeURIComponent(want.agent)}/helpers/${encodeURIComponent(want.id)}`); }
+  catch (err) { if (hv === want) { $('hName').textContent = 'Helper'; $('hState').textContent = err.message; $('hSteps').replaceChildren(); } return; }
+  if (hv !== want) return;
+  const list = (agents.find((x) => x.name === want.agent) || {}).helpers || [];
+  const k = list.findIndex((h) => h.id === want.id);
+  $('hName').textContent = r.description || r.name;
+  $('hState').textContent = [r.name, r.state === 'working' ? LABEL[r.kind] || 'Working' : r.state, list.length > 1 && k >= 0 ? `${k + 1} of ${list.length}` : ''].filter(Boolean).join(' · ');
+  $('hPrev').disabled = $('hNext').disabled = list.length < 2;
+  if ($('hTask').textContent !== r.task) $('hTask').textContent = r.task || '';
+  const box = $('hSteps');
+  const key = `${r.events.length}|${r.lastAt}`;
+  if (box.dataset.key === key) return;
+  const atEnd = box.scrollTop + box.clientHeight >= box.scrollHeight - 8;
+  box.dataset.key = key;
+  box.replaceChildren(...r.events.map((ev) => {
+    const li = el('li', [ev.kind === 'say' ? 'say' : '', ev.failed ? 'failed' : ''].join(' ').trim());
+    const body = el('div');
+    if (ev.kind === 'say') body.textContent = ev.text;
+    else { body.append(el('code', '', ev.text)); if (ev.note || ev.failed) body.append(el('small', '', [ev.note, ev.failed ? 'failed' : ''].filter(Boolean).join(' · '))); }
+    li.append(el('span', '', STEP_ICON[ev.kind] || '•'), body);
+    li.title = ev.at ? new Date(ev.at).toLocaleTimeString() : '';
+    return li;
+  }));
+  if (atEnd) box.scrollTop = box.scrollHeight; // follow along unless you scrolled up to read
+}
+function stepHelper(dir) {
+  if (!hv) return;
+  const list = (agents.find((x) => x.name === hv.agent) || {}).helpers || [];
+  const k = list.findIndex((h) => h.id === hv.id);
+  if (list.length < 2) return;
+  openHelper(hv.agent, list[(k + dir + list.length) % list.length].id);
+}
+$('hPrev').addEventListener('click', () => stepHelper(-1));
+$('hNext').addEventListener('click', () => stepHelper(1));
+$('hClose').addEventListener('click', closeHelper);
 
 // ---------- settings ----------
 let settingsLoaded = null;
@@ -962,19 +1420,20 @@ $('compose').addEventListener('submit', async (e) => {
   e.preventDefault();
   $('sendBtn').disabled = true;
   const a = agents.find((x) => x.name === selected);
-  // The primary button reads "Add to queue" while busy; the secondary one then sends right away.
-  if (await sendOrQueue($('promptText').value, !isBusy(a))) $('promptText').value = '';
+  // Enter and the primary button always send right away; queueing is only the "Add to queue" button.
+  const text = $('promptText').value;
+  if (await sendOrQueue(text, true)) { remember(selected, text.trim()); $('promptText').value = ''; histPos = -1; growPrompt(); }
   $('sendBtn').disabled = false;
 });
 $('queueBtn').addEventListener('click', async () => {
-  const a = agents.find((x) => x.name === selected);
-  if (await sendOrQueue($('promptText').value, isBusy(a))) $('promptText').value = '';
+  const text = $('promptText').value;
+  if (await sendOrQueue(text, false)) { remember(selected, text.trim()); $('promptText').value = ''; histPos = -1; growPrompt(); }
 });
 function renderCompose(a) {
   const busy = isBusy(a);
-  $('sendBtn').textContent = busy ? 'Add to queue' : 'Send';
-  $('queueBtn').textContent = busy ? 'Send now' : 'Add to queue';
-  $('composeHint').textContent = busy ? `⌘/Ctrl + Enter queues it. ${labelOf(a.name)} is busy; it goes out when it's idle.` : '⌘ or Ctrl + Enter sends';
+  $('sendBtn').textContent = busy ? 'Send now' : 'Send';
+  $('queueBtn').hidden = !busy; // queueing only means something while the agent is busy
+  $('composeHint').textContent = busy ? `Enter sends now · Shift + Enter for a new line. ${labelOf(a.name)} is busy: "Add to queue" waits until it's idle.` : 'Enter sends · Shift + Enter for a new line';
   const chips = $('chips');
   const prompts = settings.prompts || [];
   if (!sameAs(chips, prompts.map((p) => p.text))) {
@@ -1048,6 +1507,7 @@ $('broadcastForm').addEventListener('submit', async (e) => {
     const sent = Object.values(r.results).filter((v) => v === 'sent').length, queued = Object.values(r.results).filter((v) => v === 'queued').length;
     $('broadcastDialog').close(); $('bText').value = '';
     toast(`Sent to ${sent}, queued for ${queued}`);
+    if (use3d && window.Floor3D.standup) window.Floor3D.standup(names); // everyone it went to gathers for a quick standup
   } catch (err) { $('bError').textContent = err.message; $('bError').hidden = false; }
 });
 
@@ -1157,6 +1617,353 @@ $('srForm').addEventListener('submit', async (e) => {
   } catch (err) { $('srStatus').textContent = err.message; }
 });
 
+// ---------- diff preview: what an Edit / Write waiting for approval would change ----------
+function diffView(d) {
+  const box = el('div', 'diff');
+  const head = el('div', 'diff-head');
+  head.append(el('b', '', d.file.split('/').slice(-3).join('/')), el('span', 'diff-add', ` +${d.added}`), el('span', 'diff-del', ` −${d.removed}`),
+    el('span', '', d.kind === 'new' ? ' · new file' : d.kind === 'write' ? ' · whole file rewritten' : ''));
+  head.title = d.file;
+  box.append(head);
+  const body = el('div', 'diff-body');
+  d.hunks.forEach((h, i) => {
+    if (i) body.append(el('div', 'diff-line gap', '⋯'));
+    if (h.located === false) body.append(el('div', 'diff-line gap', "(couldn't find this text in the file; showing the edit alone)"));
+    for (const l of h.lines) {
+      if (l.t === '…') { body.append(el('div', 'diff-line gap', '⋯')); continue; }
+      const row = el('div', `diff-line ${l.t === '+' ? 'add' : l.t === '-' ? 'del' : ''}`);
+      row.append(el('i', '', l.n ? String(l.n) : ''), el('span', '', `${l.t === ' ' ? ' ' : l.t} ${l.s}`));
+      body.append(row);
+    }
+  });
+  if (d.truncated) body.append(el('div', 'diff-line gap', '… more not shown'));
+  box.append(body);
+  return box;
+}
+
+// ---------- inbox: everything waiting on you, oldest first ----------
+const keyTo = (name, k) => api('POST', `/api/agents/${name}/key`, { key: k });
+function inboxItems() {
+  const out = [];
+  for (const a of agents) {
+    if (needsYou(a)) out.push({ a, kind: a.trust ? 'trust' : a.state === 'waiting' ? 'approve' : 'question', since: a.needSince || 0 });
+    const ck = a.git && a.git.pr && a.git.pr.checks;
+    if (ck && ck.state === 'fail') out.push({ a, kind: 'checks', since: Infinity });
+    if (a.stuck || a.looping) out.push({ a, kind: 'stuck', since: Infinity });
+  }
+  return out.sort((x, y) => x.since - y.since);
+}
+function renderInboxCount() {
+  const n = inboxItems().length;
+  $('inboxCount').hidden = !n; $('inboxCount').textContent = String(n);
+  if ($('inboxDialog').open) renderInbox();
+}
+function inboxActions(it) {
+  const { a } = it, row = el('div', 'row');
+  const btn = (text, cls, fn) => { const b = el('button', `btn ${cls || ''}`, text); b.type = 'button'; b.addEventListener('click', async () => { try { await fn(); } catch (err) { toast(err.message); } }); row.append(b); return b; };
+  if (it.kind === 'approve') { btn('Approve (a)', 'warn', () => keyTo(a.name, 'Enter')); btn('Option 2', '', () => keyTo(a.name, '2')); btn('Decline (d)', '', () => keyTo(a.name, 'Escape')); }
+  if (it.kind === 'trust') { btn('Trust this folder', 'warn', async () => { await keyTo(a.name, 'Down'); await keyTo(a.name, 'Enter'); }); btn('Exit', '', () => keyTo(a.name, 'Escape')); }
+  if (it.kind === 'checks') {
+    btn('Send to agent to fix', 'warn', async () => { const r = await api('POST', `/api/agents/${a.name}/ci-fix`); toast(r.sent === 'sent' ? `Sent the failure to ${labelOf(a.name)}` : `Queued for ${labelOf(a.name)} (it's busy)`); });
+    const show = btn('Show log', '', async () => {
+      show.disabled = true; show.textContent = 'Loading…';
+      try {
+        const r = await api('GET', `/api/agents/${a.name}/ci-log`);
+        const pre = el('pre', 'approval ci-log', r.log || '(no log: these checks are not GitHub Actions runs)');
+        row.after(pre); pre.scrollTop = pre.scrollHeight; show.remove();
+      } catch (err) { show.disabled = false; show.textContent = 'Show log'; throw err; }
+    });
+    if (a.git.pr.url) btn('Open PR', '', () => window.open(a.git.pr.url, '_blank', 'noopener'));
+  }
+  if (it.kind === 'stuck') btn('Interrupt (Esc)', '', () => keyTo(a.name, 'Escape'));
+  btn('Open agent', '', () => { $('inboxDialog').close(); select(a.name); });
+  return row;
+}
+function renderInbox() {
+  const list = $('inboxList'), items = inboxItems();
+  $('inboxEmpty').hidden = items.length > 0;
+  const key = JSON.stringify(items.map((it) => [it.a.name, it.kind, it.a.approval, it.a.diff, it.a.question, it.a.state, it.kind === 'checks' && it.a.git.pr.checks]));
+  if (list.dataset.key === key) return; // don't rebuild under someone typing a reply
+  list.dataset.key = key;
+  list.replaceChildren(...items.map((it) => {
+    const { a } = it, li = el('li');
+    const title = { approve: 'Needs your approval', trust: 'Trust this folder?', question: 'Has a question', checks: `PR #${a.git && a.git.pr && a.git.pr.number}: checks failing`, stuck: a.looping ? `Same command failed ${a.looping.count}× in a row` : `No change for ${a.stuck && a.stuck.minutes} min` }[it.kind];
+    const head = el('div', 'ih'); head.append(el('b', '', labelOf(a.name)), el('span', '', title));
+    if (it.since && it.since !== Infinity) head.append(el('time', '', `waiting ${ago(it.since).replace(' ago', '')}`));
+    li.append(head);
+    if (it.kind === 'checks') {
+      const list = el('ul', 'ci-checks');
+      for (const c of (a.git.pr.checks.failedChecks || [])) {
+        const item = el('li');
+        if (c.url) { const link = el('a', '', `✗ ${c.name}`); link.href = c.url; link.target = '_blank'; link.rel = 'noopener'; item.append(link); } else item.append(`✗ ${c.name}`);
+        list.append(item);
+      }
+      li.append(list);
+    }
+    if (it.kind === 'approve' && a.diff) li.append(diffView(a.diff));
+    else if (it.kind === 'approve' && a.approval) li.append(el('pre', 'approval', a.approval));
+    if (it.kind === 'question' && a.question) {
+      if (a.question.kind === 'prose') {
+        li.append(el('blockquote', '', a.question.text));
+        const ta = el('textarea'); ta.placeholder = 'Reply (Enter sends)';
+        ta.addEventListener('keydown', async (e) => {
+          if (e.key !== 'Enter' || e.shiftKey || !ta.value.trim()) return;
+          e.preventDefault();
+          try { await api('POST', `/api/agents/${a.name}/prompt`, { text: ta.value }); toast(`Sent to ${labelOf(a.name)}`); ta.value = ''; } catch (err) { toast(err.message); }
+        });
+        li.append(ta);
+      } else {
+        const q = a.question.questions[0] || {};
+        li.append(el('p', '', q.question || ''));
+        const opts = el('div', 'row');
+        (q.options || []).slice(0, 9).forEach((o, i) => { const b = el('button', 'btn', `${i + 1}. ${o.label}`); b.type = 'button'; b.title = o.description || ''; b.addEventListener('click', () => keyTo(a.name, String(i + 1)).then(() => toast(`Answered: ${o.label}`)).catch((err) => toast(err.message))); opts.append(b); });
+        li.append(opts);
+      }
+    }
+    li.append(inboxActions(it));
+    return li;
+  }));
+}
+function openInbox() { renderInbox(); if (!$('inboxDialog').open) $('inboxDialog').showModal(); }
+$('inboxBtn').addEventListener('click', openInbox);
+$('inboxClose').addEventListener('click', () => $('inboxDialog').close());
+// a / d / 1–9 act on the top item while the inbox is open
+$('inboxDialog').addEventListener('keydown', (e) => {
+  if (e.target.closest('textarea, input') || e.metaKey || e.ctrlKey || e.altKey) return;
+  const it = inboxItems()[0]; if (!it) return;
+  const { a } = it;
+  if (e.key === 'a' && it.kind === 'approve') keyTo(a.name, 'Enter');
+  else if (e.key === 'a' && it.kind === 'trust') keyTo(a.name, 'Down').then(() => keyTo(a.name, 'Enter'));
+  else if (e.key === 'd' && (it.kind === 'approve' || it.kind === 'trust')) keyTo(a.name, 'Escape');
+  else if (/^[1-9]$/.test(e.key) && it.kind === 'question' && a.question && a.question.kind === 'tool') keyTo(a.name, e.key);
+  else return;
+  e.preventDefault();
+});
+
+// ---------- permissions: Claude Code's allow / ask / deny rules for an agent's project ----------
+let perm = null; // { name, view, draft: { allow, ask, deny } }
+const PERM_SECTIONS = [
+  ['allow', 'Runs without asking', 'Commands and tools this agent may use straight away.'],
+  ['ask', 'Always ask', 'Asks you every time, even if something above would allow it. Good for pushes, deletes and deploys.'],
+  ['deny', 'Blocked', 'Never allowed.'],
+];
+async function openPermissions() {
+  if (!selected) return;
+  try {
+    const v = await api('GET', `/api/agents/${selected}/permissions`);
+    const local = v.files.find((f) => f.scope === 'local');
+    perm = { name: selected, view: v, draft: { allow: [...local.allow], ask: [...local.ask], deny: [...local.deny] } };
+    renderPermissions();
+    $('permDialog').showModal();
+  } catch (err) { toast(err.message); }
+}
+function renderPermissions() {
+  const { view: v, draft } = perm;
+  const local = v.files.find((f) => f.scope === 'local');
+  $('permWhere').textContent = local.path.replace(/\/\.claude\/settings\.local\.json$/, '');
+  $('permIgnore').hidden = v.ignored !== false;
+  $('permIgnore').textContent = 'This file is not ignored by git: add .claude/settings.local.json to .gitignore so your personal rules are not committed.';
+  $('permError').hidden = true;
+  // warnings are worked out by the server from the saved files; they refresh after Save
+  const risky = new Set(v.warnings.filter((w) => !w.secret).map((w) => w.rule));
+  const secret = new Set(v.warnings.filter((w) => w.secret).map((w) => w.rule));
+  const short = (r) => (r.length > 70 ? `${r.slice(0, 40)}…` : r); // don't spell a whole secret out in the warning
+  $('permWarn').hidden = !v.warnings.length;
+  $('permWarn').replaceChildren(el('p', '', 'Worth a look:'), ...v.warnings.filter((w) => !w.secret).map((w) => el('p', '', `${w.rule}: ${w.why}.`)));
+  const mine = ['allow', 'ask', 'deny'].flatMap((k) => draft[k].filter((r) => secret.has(r)));
+  if (secret.size) {
+    $('permWarn').append(el('p', '', `${secret.size} saved rule${secret.size > 1 ? 's' : ''} contain what looks like a password or token (marked red). Remove them, and change those passwords: they sit in a plain file.`));
+    if (mine.length) {
+      const b = el('button', 'btn warn', `Remove the ${mine.length} rule${mine.length > 1 ? 's' : ''} with secrets from this file`); b.type = 'button';
+      b.addEventListener('click', () => { for (const k of ['allow', 'ask', 'deny']) draft[k] = draft[k].filter((r) => !secret.has(r)); renderPermissions(); });
+      $('permWarn').append(b);
+    }
+  }
+  const body = $('permBody'); body.replaceChildren();
+  for (const [k, title, help] of PERM_SECTIONS) {
+    const sec = el('section', 'perm-sec'); sec.append(el('h3', '', `${title} (${draft[k].length})`), el('p', '', help));
+    const list = el('div', 'perm-list');
+    draft[k].forEach((r, i) => {
+      const chip = el('span', `perm-rule ${secret.has(r) ? 'secret' : k === 'allow' && risky.has(r) ? 'warn' : ''}`, secret.has(r) ? short(r) : r);
+      if (!secret.has(r)) chip.title = r;
+      const x = el('button', '', '×'); x.type = 'button'; x.title = 'Remove'; x.addEventListener('click', () => { draft[k].splice(i, 1); renderPermissions(); });
+      chip.append(x); list.append(chip);
+    });
+    const add = el('form', 'perm-add'); const inp = el('input'); inp.placeholder = k === 'allow' ? 'Bash(npm test:*)' : k === 'ask' ? 'Bash(git push:*)' : 'Bash(rm -rf /:*)';
+    const b = el('button', 'btn', 'Add'); add.append(inp, b);
+    add.addEventListener('submit', (e) => { e.preventDefault(); const r = inp.value.trim(); if (r && !draft[k].includes(r)) draft[k].push(r); renderPermissions(); });
+    sec.append(list, add);
+    const presets = el('div', 'perm-presets');
+    const preset = (label, rules) => { const pb = el('button', 'btn', `＋ ${label}`); pb.type = 'button'; pb.title = rules.join('\n'); pb.addEventListener('click', () => { for (const r of rules) if (!draft[k].includes(r)) draft[k].push(r); renderPermissions(); }); presets.append(pb); };
+    if (k === 'allow') for (const p of v.presets) preset(p.label, p.rules);
+    if (k === 'ask') preset('Guardrails: force push, deletes, deploys, publish', v.guardrails.rules);
+    if (presets.childElementCount) sec.append(presets);
+    body.append(sec);
+  }
+  const other = $('permOther'); other.replaceChildren();
+  for (const f of v.files.filter((x) => x.scope !== 'local')) {
+    other.append(el('h4', '', `${f.label}${f.exists ? '' : ' (no file)'}`));
+    if (f.error) other.append(el('p', 'error', f.error));
+    for (const k of ['allow', 'ask', 'deny']) if (f[k].length) { const l = el('div', 'perm-list'); l.append(el('span', '', `${k}: `), ...f[k].map((r) => el('span', 'perm-rule', r))); other.append(l); }
+  }
+}
+$('permBtn').addEventListener('click', openPermissions);
+$('permClose').addEventListener('click', () => $('permDialog').close());
+$('permSave').addEventListener('click', async () => {
+  if (!perm) return;
+  try {
+    const v = await api('POST', `/api/agents/${perm.name}/permissions`, perm.draft);
+    perm.view = v; toast('Permissions saved'); $('permDialog').close();
+  } catch (err) { $('permError').hidden = false; $('permError').textContent = err.message; }
+});
+
+// ---------- hand-offs: when one agent finishes, pass its result to another ----------
+var handoffs = []; // var: select() may run before this line
+function renderHandoffs(list) {
+  if (list) handoffs = list;
+  const box = $('dHandoffs'), a = agents.find((x) => x.name === selected);
+  const mine = a ? handoffs.filter((r) => r.from === a.name || r.to === a.name) : [];
+  box.hidden = !mine.length;
+  if (!mine.length || sameAs(box, [a.name, mine])) return;
+  box.replaceChildren(el('h3', '', 'Hand-offs'), ...mine.map((r) => {
+    const line = el('p', '', r.from === a.name
+      ? `When this finishes → ${labelOf(r.to)}${r.every ? ' (every time)' : ''}`
+      : `Takes over when ${labelOf(r.from)} finishes${r.every ? ' (every time)' : ''}`);
+    if (r.note) line.title = r.note;
+    const x = el('button', '', '×'); x.type = 'button'; x.title = 'Cancel this hand-off';
+    x.addEventListener('click', () => api('DELETE', `/api/handoffs/${r.id}`).catch((err) => toast(err.message)));
+    line.append(x); return line;
+  }));
+}
+$('handoffBtn').addEventListener('click', () => {
+  if (!selected) return;
+  $('hoFrom').textContent = labelOf(selected);
+  $('hoTo').replaceChildren(...agents.filter((x) => x.name !== selected).map((x) => { const o = el('option', '', labelOf(x.name) + (x.state === 'stopped' ? ' (stopped)' : '')); o.value = x.name; return o; }));
+  $('hoError').hidden = true; $('hoNote').value = ''; $('hoEvery').checked = false;
+  $('handoffDialog').showModal();
+});
+$('hoCancel').addEventListener('click', () => $('handoffDialog').close());
+$('handoffForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('POST', '/api/handoffs', { from: selected, to: $('hoTo').value, note: $('hoNote').value, every: $('hoEvery').checked });
+    $('handoffDialog').close(); toast(`${labelOf($('hoTo').value)} takes over when ${labelOf(selected)} finishes`);
+  } catch (err) { $('hoError').hidden = false; $('hoError').textContent = err.message; }
+});
+
+// ---------- replay: scrub through an agent's day while the floor acts it out ----------
+var replay = null; // { name, events, from, to, t, playing }
+function replayStep(name) {
+  if (!replay || replay.name !== name) return null;
+  let cur = null;
+  for (const e of replay.events) { if (e.at > replay.t) break; cur = e; }
+  return cur || { state: 'idle', text: 'Before the first step today' };
+}
+async function openReplay() {
+  if (!selected) return;
+  try {
+    const r = await api('GET', `/api/agents/${selected}/replay`);
+    if (!r.events.length) { toast(`${labelOf(selected)} has no steps today`); return; }
+    const from = r.events[0].at - 30000, to = r.events[r.events.length - 1].at + 30000;
+    replay = { name: selected, events: r.events, from, to, t: from, playing: true };
+    $('replayBar').hidden = false;
+    if (document.body.classList.contains('termview')) setTermView(false); // the floor has to be visible
+    if (use3d && window.Floor3D.focus) window.Floor3D.focus(selected);
+    drawReplay();
+  } catch (err) { toast(err.message); }
+}
+function drawReplay() {
+  if (!replay) return;
+  const step = replayStep(replay.name);
+  $('rpSlider').value = String(Math.round(((replay.t - replay.from) / (replay.to - replay.from)) * 1000));
+  $('rpTime').textContent = `${labelOf(replay.name)} · ${new Date(replay.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`;
+  $('rpStep').textContent = step.text;
+  $('rpStep').title = step.text;
+  $('rpPlay').textContent = replay.playing ? '⏸' : '▶';
+  $('rpPlay').setAttribute('aria-label', replay.playing ? 'Pause' : 'Play');
+}
+// advanced from the frame loop
+function tickReplay(dt) {
+  if (!replay || !replay.playing) return;
+  replay.t = Math.min(replay.to, replay.t + dt * 1000 * Number($('rpSpeed').value));
+  if (replay.t >= replay.to) replay.playing = false;
+  drawReplay();
+}
+function closeReplay() { replay = null; $('replayBar').hidden = true; }
+$('replayBtn').addEventListener('click', openReplay);
+$('rpClose').addEventListener('click', closeReplay);
+$('rpPlay').addEventListener('click', () => { if (!replay) return; if (replay.t >= replay.to) replay.t = replay.from; replay.playing = !replay.playing; drawReplay(); });
+$('rpSlider').addEventListener('input', () => { if (!replay) return; replay.playing = false; replay.t = replay.from + (Number($('rpSlider').value) / 1000) * (replay.to - replay.from); drawReplay(); });
+
+// ---------- task board ----------
+let tasks = [];
+const COLUMNS = [['todo', 'To do'], ['working', 'Working'], ['review', 'In review'], ['merged', 'Merged'], ['done', 'Done']];
+const base = (p) => String(p || '').replace(/\/+$/, '').split('/').pop();
+async function taskCall(method, url, body) { try { return await api(method, url, body); } catch (err) { toast(err.message); return null; } }
+function taskCard(t) {
+  const c = el('div', 'card');
+  c.append(el('b', '', t.title));
+  const ag = t.agent && agents.find((a) => a.name === t.agent);
+  c.append(el('small', '', [base(t.cwd), t.agent ? `${labelOf(t.agent)}${ag ? ` · ${displayState(ag) === 'idle' ? 'idle' : LABEL[displayState(ag)] || ag.state}` : ' · gone'}` : '', t.branch].filter(Boolean).join(' · ')));
+  c.title = t.text;
+  const row = el('div', 'row');
+  const btn = (text, fn, cls = '') => { const b = el('button', `btn ${cls}`, text); b.type = 'button'; b.addEventListener('click', fn); row.append(b); return b; };
+  if (t.status === 'todo') {
+    btn('Assign', async () => {
+      const r = await api('POST', `/api/tasks/${t.id}/assign`, { mode: 'auto' }).catch((err) => err);
+      if (r instanceof Error) {
+        if (confirm(`${r.message}\n\nStart a new agent for "${t.title}" on its own branch?`)) {
+          const n = await taskCall('POST', `/api/tasks/${t.id}/assign`, { mode: 'new', size: panelTermSize() });
+          if (n) toast(`Started ${n.agent}; it gets the task once Claude Code is ready`);
+        }
+      } else toast(`${labelOf(r.agent)} ${r.sent === 'sent' ? 'is on it' : 'will get it when idle'}`);
+    }, 'primary');
+    btn('New agent', async () => { const n = await taskCall('POST', `/api/tasks/${t.id}/assign`, { mode: 'new', size: panelTermSize() }); if (n) toast(`Started ${n.agent} on its own branch`); });
+    const pick = el('select'); pick.append(el('option', '', 'Give to…'));
+    for (const a of agents.filter((x) => x.state !== 'stopped')) { const o = el('option', '', labelOf(a.name)); o.value = a.name; pick.append(o); }
+    pick.addEventListener('change', async () => { if (!pick.value) return; const r = await taskCall('POST', `/api/tasks/${t.id}/assign`, { mode: 'agent', agent: pick.value }); if (r) toast(`${labelOf(r.agent)} ${r.sent === 'sent' ? 'is on it' : 'will get it when idle'}`); });
+    row.append(pick);
+  } else {
+    if (t.agent && ag) btn('Open', () => { $('boardDialog').close(); select(t.agent); });
+    if (t.pr && t.pr.url) btn(`PR #${t.pr.number}`, () => window.open(t.pr.url, '_blank', 'noopener'));
+    if (t.status !== 'done') btn('Done', () => taskCall('POST', `/api/tasks/${t.id}`, { status: 'done' }));
+    btn('Back to To do', () => taskCall('POST', `/api/tasks/${t.id}`, { status: 'todo' }));
+  }
+  btn('×', () => { if (confirm(`Delete "${t.title}"?`)) taskCall('DELETE', `/api/tasks/${t.id}`); }).title = 'Delete task';
+  c.append(row);
+  return c;
+}
+function renderBoard(list) {
+  if (list) tasks = list;
+  const open = tasks.filter((t) => t.status === 'todo' || t.status === 'working' || t.status === 'review').length;
+  $('boardCount').hidden = !open; $('boardCount').textContent = String(open);
+  if (!$('boardDialog').open) return;
+  if (sameAs($('boardCols'), [tasks, agents.map((a) => [a.name, a.state])])) return;
+  $('boardCols').replaceChildren(...COLUMNS.map(([k, label]) => {
+    const col = el('div', 'board-col'); const items = tasks.filter((t) => t.status === k);
+    col.append(el('h3', '', `${label} (${items.length})`), ...items.map(taskCard));
+    return col;
+  }));
+}
+function openBoard() {
+  const dirs = [...new Set(agents.map((a) => a.cwd).filter(Boolean))];
+  $('bdCwds').replaceChildren(...dirs.map((d) => { const o = el('option'); o.value = d; return o; }));
+  const a = agents.find((x) => x.name === selected);
+  if (!$('bdCwd').value && a) $('bdCwd').value = a.cwd || '';
+  $('boardCols').dataset.key = '';
+  if (!$('boardDialog').open) $('boardDialog').showModal();
+  renderBoard();
+}
+$('boardBtn').addEventListener('click', openBoard);
+$('boardClose').addEventListener('click', () => $('boardDialog').close());
+$('boardAdd').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  $('bdError').hidden = true;
+  try { await api('POST', '/api/tasks', { cwd: $('bdCwd').value, text: $('bdText').value }); $('bdText').value = ''; toast('Task added'); }
+  catch (err) { $('bdError').hidden = false; $('bdError').textContent = err.message; }
+});
+$('bdText').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('boardAdd').requestSubmit(); } });
+
 // ---------- keyboard shortcuts ----------
 document.addEventListener('keydown', (e) => {
   if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -1174,8 +1981,14 @@ document.addEventListener('keydown', (e) => {
     const n = idx < 0 ? 0 : (idx + (e.key === 'j' ? 1 : -1) + agents.length) % agents.length;
     select(agents[n].name);
   } else if (e.key === '/') { e.preventDefault(); $('promptText').focus(); }
+  else if (e.key === 't' && a) setTermView(!document.body.classList.contains('termview'));
+  else if (e.key === 'Escape' && document.body.classList.contains('termview')) setTermView(false);
   else if (e.key === '?') $('keysDialog').showModal();
-  else if (e.key === 'a' && a && a.state === 'waiting') key('Enter');
+  else if (e.key === 'i') openInbox();
+  else if (e.key === 'b') openBoard();
+  else if (e.key === 'm') Sound.toggle();
+  else if (e.key === 'f') setWalk(!(window.Floor3D && window.Floor3D.walking && window.Floor3D.walking()));
+  else if (e.key === 'a' && a && a.state === 'waiting') { if (a.trust) $('trustYes').click(); else key('Enter'); } // Enter would pick "No, exit" on the trust screen
   else if (e.key === 'd' && a && a.state === 'waiting') key('Escape');
   else if (/^[1-9]$/.test(e.key) && a && a.state === 'asking' && a.question && a.question.kind === 'tool') key(e.key);
   else return;
@@ -1183,13 +1996,19 @@ document.addEventListener('keydown', (e) => {
 });
 $('keysClose').addEventListener('click', () => $('keysDialog').close());
 $('promptText').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); $('compose').requestSubmit(); }
+  if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.isComposing) { e.preventDefault(); $('compose').requestSubmit(); }
 });
 document.querySelectorAll('[data-key]').forEach((btn) => btn.addEventListener('click', async () => {
   if (!selected) return;
   try { await api('POST', `/api/agents/${selected}/key`, { key: btn.dataset.key }); }
   catch (err) { toast(err.message); }
 }));
+// The trust menu has "No, exit" highlighted and no numbers: move to "Yes" first, then confirm.
+$('trustYes').addEventListener('click', async () => {
+  if (!selected) return;
+  try { await api('POST', `/api/agents/${selected}/key`, { key: 'Down' }); await api('POST', `/api/agents/${selected}/key`, { key: 'Enter' }); }
+  catch (err) { toast(err.message); }
+});
 $('copyAttach').addEventListener('click', async () => {
   const a = agents.find((x) => x.name === selected); if (!a) return;
   try { await navigator.clipboard.writeText(a.attach); toast(`Copied: ${a.attach}`); }
@@ -1201,7 +2020,7 @@ $('stopBtn').addEventListener('click', async () => {
 });
 $('startBtn').addEventListener('click', async () => {
   const name = selected;
-  try { await api('POST', `/api/agents/${name}/start`, { conversation: $('dConv').value }); toast(`Started ${labelOf(name)}`); }
+  try { await api('POST', `/api/agents/${name}/start`, { conversation: $('dConv').value, size: panelTermSize() }); toast(`Started ${labelOf(name)}`); }
   catch (err) { toast(err.message); }
 });
 
@@ -1349,7 +2168,7 @@ $('addForm').addEventListener('submit', async (e) => {
   try {
     const worktree = $('fWt').checked ? { branch: $('fBranch').value.trim(), base: $('fBase').value.trim() } : undefined;
     if (worktree && !worktree.branch) throw new Error('Give the new branch a name.');
-    await api('POST', '/api/agents', { name, label, cwd: $('fCwd').value, conversation: worktree ? '' : $('fConv').value, worktree });
+    await api('POST', '/api/agents', { name, label, cwd: $('fCwd').value, conversation: worktree ? '' : $('fConv').value, worktree, size: panelTermSize() });
     $('addDialog').close(); select(name); toast(`Started ${label}`);
   } catch (err) { $('fError').textContent = err.message; $('fError').hidden = false; }
 });
@@ -1718,7 +2537,9 @@ function helperFigure(c, x, y, h, look, t, P) {
 
 let lastT = performance.now();
 function frame(now) {
+  if (document.body.classList.contains('termview')) { lastT = now; requestAnimationFrame(frame); return; } // floor is hidden
   const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+  tickReplay(dt);
   const t = now / 1000;
   const P = palette();
   const rows = rowsFor(agents.length);
@@ -1735,14 +2556,14 @@ function frame(now) {
   const phase = phaseOf(date);
   const tod = { date, hour: hourOf(date), phase, sky: SKY_FOR[phase] };
   const vec = theme.kind === 'vector';
-  if (!vec) drawRoom(ctx, P, t, counts, tod);
+  if (!vec && !use3d) drawRoom(ctx, P, t, counts, tod);
 
   // selected slot highlight
   const selIdx = agents.findIndex((a) => a.name === selected);
-  if (selIdx >= 0) { const s = slot(selIdx); ctx.globalAlpha = 0.18; px(ctx, '#FFFFFF', s.sx + 2, s.sy + 2, 64, 44); ctx.globalAlpha = 1; }
+  if (selIdx >= 0 && !use3d) { const s = slot(selIdx); ctx.globalAlpha = 0.18; px(ctx, '#FFFFFF', s.sx + 2, s.sy + 2, 64, 44); ctx.globalAlpha = 1; }
 
   // chairs (always behind people)
-  if (!vec) agents.forEach((a, i) => { const s = slot(i); px(ctx, P.chair, s.seatX - 6, s.sy + 12, 12, 13); });
+  if (!vec && !use3d) agents.forEach((a, i) => { const s = slot(i); px(ctx, P.chair, s.seatX - 6, s.sy + 12, 12, 13); });
 
   // move characters
   let idleIdx = 0;
@@ -1760,9 +2581,21 @@ function frame(now) {
     if (d > 0.6) { const step = Math.min(d, 42 * dt); ch.x += (dx / d) * step; ch.y += (dy / d) * step; ch.pose = 'walk'; }
     else { ch.x = tgt.x; ch.y = tgt.y; ch.pose = tgt.pose; if (tgt.leave) { chars.delete(a.name); live.delete(a.name); } }
   });
-  for (const k of [...chars.keys()]) if (!live.has(k)) chars.delete(k);
+  for (const k of [...chars.keys()]) if (!live.has(k)) { chars.delete(k); seated.delete(k); }
   if (!firstSnapshot) firstFrameDone = true;
 
+  if (use3d) {
+    const st = { W, H, WALL, DX: DX(), rows, cols: COLS, slot, phase, hour: hourOf(localNow()), t, dt, motion: !reducedMotion.matches, agents: floorAgents() };
+    try { if (window.Floor3D.render(st)) renderTags(); positionTags3d(); }
+    catch (err) { console.error(err); use3d = false; window.Floor3D.setVisible(false); $('vlayer').hidden = false; canvas.style.height = ''; no3d(`it crashed (${err.message})`); requestAnimationFrame(frame); return; }
+    // let the stage take the 3D room's shape instead of the flat floor's
+    const r3 = window.Floor3D.ratio();
+    if (r3) { const want = Math.round(canvas.clientWidth * r3 * 1.04); if (Math.abs(canvas.clientHeight - want) > 2) canvas.style.height = `${want}px`; }
+    confetti.length = 0;
+    for (const [name, c] of cheering) if (t > c.until) cheering.delete(name);
+    requestAnimationFrame(frame);
+    return;
+  }
   if (vec) {
     renderVector(rows);
     drawEvening(phase);
@@ -1851,6 +2684,7 @@ async function loadThemes() {
   const sel = $('themeSel');
   sel.replaceChildren(...themesAvail.map((t) => { const o = el('option', '', t.name); o.value = t.id; o.title = t.description || ''; return o; }));
   sel.value = theme.id;
+  if (theme.id === 'pixel') setup3d(); // Pixel's 3D view needs the Office theme from this list
 }
 // Stardate: year, then day of the year (e.g. 2026.293).
 function stardate(d) {
@@ -1883,6 +2717,8 @@ function applyHeader(t) {
   }
   for (const [k, v] of Object.entries(vars)) { if (v) bar.style.setProperty(k, v); else bar.style.removeProperty(k); }
   $('appTitle').textContent = (h && h.title) || 'Agent floor';
+  document.documentElement.style.setProperty('--feed-font', h && h.font ? `"${h.font}", var(--sans)` : 'var(--sans)');
+  if (typeof renderFeed === 'function') { feedShown = ''; renderFeed(); }
   lastClock = ''; tickClock(); renderSummary();
 }
 function useTheme(id) {
@@ -1906,7 +2742,311 @@ function useTheme(id) {
     layer.style.backgroundImage = t.room.floor ? `url("${themeUrl(t.room.floor)}")` : '';
     layer.style.backgroundColor = t.room.floorColor || '';
   }
+  setup3d();
   renderTags();
+}
+// In the 3D office, name tags ride above each agent's head.
+function positionTags3d() {
+  const F = window.Floor3D;
+  for (const [name, b] of tagEls) {
+    let p;
+    if (F.headScreen) p = F.headScreen(name);
+    else { const i = agents.findIndex((a) => a.name === name); const s = i >= 0 && slot(i); p = s && F.project(s.seatX - 2, s.seatY + 18); } // the simple floor: tags under the desks
+    if (!p) { b.style.visibility = 'hidden'; continue; }
+    b.style.visibility = '';
+    b.style.left = `${p.left}px`; b.style.top = `${p.top}px`;
+  }
+}
+
+// Declared before the feed, which draws saved lines while the page is still starting up.
+let use3d = false;
+let theme3d = null; // what the 3D floor is drawing (the theme, or Office standing in for Pixel)
+
+// ---------- activity feed ----------
+// Built here from the live updates: each change worth knowing about becomes a line. Lines keep the raw facts
+// and are worded when shown, by the current theme (theme.feed), so switching theme re-tells the history.
+const FEED_TEXT = {
+  start: '{hero} started on: {detail}', waiting: '{hero} needs your approval: {detail}', asking: '{hero} has a question: {detail}',
+  done: '{hero} finished. {detail}', tests_pass: '{hero}: tests passed ({summary})', tests_fail: '{hero}: tests failed ({summary})',
+  build_pass: '{hero}: build passed', build_fail: '{hero}: build failed ({summary})', push: '{hero} pushed {branch}', pr: '{hero} opened PR #{number}',
+  checks_pass: 'PR #{number}: checks passed', checks_fail: 'PR #{number}: checks failing', helpers: '{hero} handed off to {count} helpers',
+  stuck: '{hero} may be stuck ({detail})', joined: '{agent} joined the floor', left: '{agent} left the floor',
+};
+const FEED_TONE = { tests_pass: 'good', build_pass: 'good', checks_pass: 'good', done: 'good', tests_fail: 'bad', build_fail: 'bad', checks_fail: 'bad', stuck: 'bad' };
+let feed = (() => { try { return JSON.parse(localStorage.getItem('af:feed') || '[]'); } catch { return []; } })();
+const feedSeen = new Map(); // agent name -> what we last saw
+let feedFresh = 0;
+const clip = (t, n = 90) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
+function addFeed(a, ev, role, data = {}) {
+  feed.unshift({ at: Date.now(), agent: a.name, label: a.label || a.name, ev, role, data });
+  if (!firstSnapshot) Sound.event(ev);
+  feed = feed.slice(0, 200); feedFresh++;
+  try { localStorage.setItem('af:feed', JSON.stringify(feed)); } catch {}
+}
+function recordFeed(list) {
+  const names = new Set();
+  for (const a of list) {
+    names.add(a.name);
+    const st = displayState(a);
+    const res = a.lastResult ? `${a.lastResult.kind}|${a.lastResult.outcome}|${a.lastResult.at || a.lastResult.summary}` : '';
+    const pr = a.git && a.git.pr, checks = pr && pr.checks ? pr.checks.state : '';
+    const working = (a.helpers || []).filter((h) => h.state === 'working').length;
+    const now = { st, res, checks, working, stuck: !!a.stuck };
+    const was = feedSeen.get(a.name);
+    feedSeen.set(a.name, now);
+    if (!was) { if (!firstSnapshot) addFeed(a, 'joined', st); continue; }
+    if (was.st !== st) {
+      const q = isProse(a) ? a.question.text : a.question && (a.question.questions[0] || {}).question;
+      if (st === 'waiting') addFeed(a, 'waiting', 'waiting', { detail: clip(a.detail), full: clip(a.detail, 600) });
+      else if (st === 'asking') addFeed(a, 'asking', 'asking', { detail: clip(q), full: clip(q, 1200) });
+      else if (st === 'done') addFeed(a, 'done', 'done', { detail: clip(a.lastReply, 120), full: clip(a.lastReply, 2000) });
+      else if (WORKING.has(st) && !WORKING.has(was.st)) addFeed(a, 'start', st, { detail: clip(a.lastPrompt), full: clip(a.lastPrompt, 1200) });
+    }
+    if (res && res !== was.res) { const r = a.lastResult; addFeed(a, `${r.kind === 'build' ? 'build' : 'tests'}_${r.outcome === 'pass' ? 'pass' : 'fail'}`, r.kind === 'build' ? 'build' : 'tests', { summary: clip(r.summary, 60), full: clip(r.summary, 400), command: clip(r.command, 300) }); }
+    if (checks !== was.checks && (checks === 'pass' || checks === 'fail')) addFeed(a, `checks_${checks}`, 'git', { number: pr.number, url: pr.url });
+    if (working > was.working) addFeed(a, 'helpers', 'delegating', { count: working });
+    if (now.stuck && !was.stuck) addFeed(a, 'stuck', 'thinking', { detail: `${a.stuck.minutes} min` });
+  }
+  for (const [n] of feedSeen) if (!names.has(n)) { feedSeen.delete(n); addFeed({ name: n, label: (feed.find((f) => f.agent === n) || {}).label || n }, 'left', 'idle'); }
+  if (feedFresh) renderFeed();
+}
+function feedLine(f) {
+  const names = theme.names || {};
+  const own = use3d && window.Floor3D.characterName ? window.Floor3D.characterName(f.agent) : '';
+  const vars = { ...f.data, agent: f.label, hero: own || names[f.role] || (theme.id === 'pixel' ? f.label : names.default) || f.label };
+  const tpl = (theme.feed && theme.feed[f.ev]) || FEED_TEXT[f.ev] || f.ev;
+  return tpl.replace(/\{(\w+)\}/g, (m, k) => (vars[k] === undefined || vars[k] === null ? '' : String(vars[k])))
+    .replace(/\(\s*\)/g, '').replace(/\s*[:—]\s*$/, '').replace(/\s+\./g, '.').trim();
+}
+let feedShown = '';
+let feedOpen = ''; // the expanded line (at|agent|event), if any
+function renderFeed() {
+  const list = $('feedList');
+  const items = feed.slice(0, 60);
+  const key = `${theme.id}|${items.length}|${items[0] ? items[0].at : 0}`;
+  $('feedEmpty').hidden = items.length > 0;
+  if (key === feedShown) return;
+  const fresh = feedShown.split('|')[0] === theme.id ? feedFresh : 0;
+  feedShown = key; feedFresh = 0;
+  list.replaceChildren(...items.map((f, i) => {
+    const li = el('li', [FEED_TONE[f.ev] || '', i < fresh ? 'new' : ''].join(' ').trim());
+    const tm = el('time', '', hhmm(f.at)); tm.dateTime = new Date(f.at).toISOString();
+    const text = el('span', 'fx', feedLine(f));
+    if (f.data && /^https:\/\//.test(f.data.url || '')) { const a = el('a', '', ' ↗'); a.href = f.data.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = 'Open on GitHub'; a.addEventListener('click', (e) => e.stopPropagation()); text.append(a); }
+    li.append(tm, text, el('span', 'who', f.label));
+    li.title = `${f.label} · ${new Date(f.at).toLocaleString()}`;
+    li.tabIndex = 0;
+    if (feedOpen === `${f.at}|${f.agent}|${f.ev}`) { li.classList.add('open'); li.append(feedDetail(f)); }
+    const toggle = () => { feedOpen = feedOpen === `${f.at}|${f.agent}|${f.ev}` ? '' : `${f.at}|${f.agent}|${f.ev}`; feedShown = ''; renderFeed(); if (feedOpen) showAgent(f.agent, false); };
+    li.addEventListener('click', (e) => { if (!e.target.closest('.fd')) toggle(); });
+    li.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && e.target === li) { e.preventDefault(); toggle(); } });
+    return li;
+  }));
+}
+// The open line shows the whole story and what you can do about it.
+function showAgent(name, andSelect = true) {
+  if (!agents.some((a) => a.name === name)) return false;
+  if (andSelect) select(name);
+  if (use3d && window.Floor3D.focus) window.Floor3D.focus(name); // fly the camera there
+  return true;
+}
+function feedDetail(f) {
+  const box = el('div', 'fd');
+  const d = f.data || {};
+  const here = agents.some((a) => a.name === f.agent);
+  if (d.command) { const c = el('code', '', d.command); box.append(c); }
+  const body = d.full || d.detail || d.summary || '';
+  if (body) box.append(el('p', '', body));
+  if (f.ev === 'helpers') box.append(el('p', '', `${d.count} helper${d.count > 1 ? 's' : ''} took on part of the work.`));
+  if (f.ev === 'pr' || f.ev === 'push') box.append(el('p', '', [d.repo, d.branch, d.number ? `PR #${d.number}` : ''].filter(Boolean).join(' · ')));
+  const acts = el('div', 'fd-acts');
+  const btn = (label, fn, primary) => { const b = el('button', `btn${primary ? ' primary' : ''}`, label); b.type = 'button'; b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); acts.append(b); };
+  if (here && (f.ev === 'waiting' || f.ev === 'asking')) btn('Answer', () => { showAgent(f.agent); setTimeout(() => { const q = $('dQuestion'); const t = !q.hidden ? q : $('promptText'); t.scrollIntoView({ behavior: 'smooth', block: 'center' }); (t.querySelector('button, textarea') || t).focus(); }, 60); }, true);
+  if (here && f.ev === 'helpers') btn('Watch helpers', () => { showAgent(f.agent); const a = agents.find((x) => x.name === f.agent); const h = a && (a.helpers || [])[0]; if (h) openHelper(f.agent, h.id); else toast('Those helpers have finished'); }, true);
+  if (/^https:\/\//.test(d.url || '')) btn(f.ev === 'push' ? 'View branch' : 'Open PR', () => window.open(d.url, '_blank', 'noopener'), !here);
+  if (here) btn('Show agent', () => showAgent(f.agent));
+  else box.append(el('p', 'fd-gone', `${f.label} isn't on the floor any more.`));
+  btn('Copy', () => navigator.clipboard.writeText([feedLine(f), d.command, body].filter(Boolean).join('\n')).then(() => toast('Copied'), () => toast('Could not copy')));
+  box.append(acts);
+  return box;
+}
+renderFeed();
+
+// ---------- 3D floor (floor3d.js) ----------
+// Vector themes that ship a model.json can be shown in 3D. The flat floor stays as the fallback and as a choice.
+
+const want3d = () => { try { return localStorage.getItem('af:3d') !== 'off'; } catch { return true; } };
+let why3d = '';
+function no3d(reason) {
+  // Say once per reason why the 3D floor isn't on, so a flat floor is never a mystery.
+  if (reason && reason !== why3d) toast(`3D floor off: ${reason}`);
+  why3d = reason; $('viewBtn').title = reason ? `3D floor off: ${reason}` : 'Switch between the 3D and flat floor';
+}
+window.addEventListener('error', (e) => { if (String(e.filename || '').match(/floor3d|vendor/)) no3d(`the 3D code failed to load (${e.message})`); });
+setTimeout(() => { if (!window.Floor3D) no3d('the 3D code did not load (check the browser console)'); }, 4000);
+async function setup3d() {
+  const F = window.Floor3D;
+  // The Pixel office has no 3D data of its own; in 3D it borrows the Office theme's cast and room.
+  const office = themesAvail.find((x) => x.id === 'office');
+  const src = theme.kind === 'vector' ? theme : theme.id === 'pixel' && office ? { ...office, id: 'pixel' } : null;
+  const srcUrl = (f) => (src && src.id === 'pixel' ? `/themes/office/${f.split('/').map(encodeURIComponent).join('/')}` : themeUrl(f));
+  if (F && !F.supported) no3d('this browser has WebGL turned off (check hardware acceleration)');
+  if (F && src && !src.model) no3d('this theme has no model.json');
+  const can = !!(F && F.supported && src && src.model);
+  $('viewBtn').hidden = !can;
+  use3d = false;
+  canvas.style.height = '';
+  if (F && F.supported) {
+    F.init(document.querySelector('.stage'), { onSelect: (name) => { const m = /^(.+):h:(.+)$/.exec(name); if (m) { select(m[1]); openHelper(m[1], m[2]); } else select(name); }, onStandup: (text) => { const c = document.querySelector('.o3d-hud .chip'); if (c) c.textContent = text; },
+      onWalk: (on) => setWalk(on),
+      claimHero: (name, hero) => { if (hero) api('POST', `/api/agents/${name}/hero`, { hero }).catch(() => {}); } });
+    F.setVisible(false);
+  }
+  showHud(false);
+  if (!can || !want3d()) { $('viewBtn').textContent = '3D'; $('viewBtn').setAttribute('aria-pressed', 'false'); $('vlayer').hidden = theme.kind !== 'vector'; return; }
+  const t = theme;
+  theme3d = src;
+  const ok = await F.setTheme(src, srcUrl);
+  if (theme !== t) return;
+  no3d(ok ? '' : `could not load ${t.model}`);
+  use3d = ok;
+  F.setVisible(ok);
+  showHud(ok);
+  $('vlayer').hidden = ok || theme.kind !== 'vector';
+  $('viewBtn').textContent = ok ? '2D' : '3D';
+  $('viewBtn').setAttribute('aria-pressed', String(ok));
+  renderTags();
+}
+$('viewBtn').addEventListener('click', () => {
+  try { localStorage.setItem('af:3d', use3d ? 'off' : 'on'); } catch {}
+  setup3d();
+});
+window.addEventListener('floor3d-ready', setup3d);
+// Camera presets, standup and quality, floating over the 3D office.
+function showHud(on) {
+  const stage = document.querySelector('.stage');
+  stage.classList.toggle('o3d', on && !!(window.Floor3D && window.Floor3D.office));
+  let hud = stage.querySelector('.o3d-hud'), help = stage.querySelector('.o3d-help');
+  if (!on || !(window.Floor3D && window.Floor3D.office)) { if (hud) hud.hidden = true; if (help) help.hidden = true; return; }
+  if (!hud) {
+    hud = el('div', 'o3d-hud');
+    for (const [k, label] of [['overview', 'Overview'], ['desks', 'Desks'], ['meeting', 'Meeting'], ['kitchen', 'Kitchen'], ['lounge', 'Lounge']]) {
+      const b = el('button', '', label); b.type = 'button'; b.addEventListener('click', () => window.Floor3D.preset(k)); hud.append(b);
+    }
+    const su = el('button', '', 'Standup'); su.type = 'button'; su.title = 'Gather everyone at the meeting table; each says what they are on';
+    su.addEventListener('click', () => { if (!window.Floor3D.standup(agents.filter((a) => a.state !== 'stopped').map((a) => a.name))) toast('Nobody to gather yet'); });
+    const q = el('select'); q.title = 'Graphics quality';
+    for (const v of ['low', 'balanced', 'high']) { const o = el('option', '', `${v[0].toUpperCase()}${v.slice(1)} graphics`); o.value = v; q.append(o); }
+    q.value = (() => { try { return localStorage.getItem('af:quality') || window.Floor3D.quality || 'balanced'; } catch { return 'balanced'; } })();
+    window.Floor3D.setQuality(q.value);
+    q.addEventListener('change', () => { window.Floor3D.setQuality(q.value); try { localStorage.setItem('af:quality', q.value); } catch {} });
+    const snd = el('button', '', Sound.on ? '🔊' : '🔇'); snd.type = 'button'; snd.id = 'soundBtn';
+    snd.title = 'Office sounds: typing, a chime when an agent needs you, test results, pushes (m)';
+    snd.addEventListener('click', () => Sound.toggle());
+    const walk = el('button', '', 'Walk'); walk.type = 'button'; walk.id = 'walkBtn'; walk.title = 'Walk around the office yourself (f)';
+    walk.addEventListener('click', () => setWalk(!window.Floor3D.walking()));
+    hud.append(su, walk, q, snd, el('span', 'chip'));
+    help = el('div', 'o3d-help', HELP_ORBIT);
+    stage.append(hud, help);
+  }
+  hud.hidden = false; help.hidden = false;
+}
+// ---------- sound: synthesized with Web Audio (no files), off until you turn it on ----------
+const Sound = (() => {
+  let ctx = null, master = null, hum = null, on = false, typingTimer = 0;
+  try { on = localStorage.getItem('af:sound') === 'on'; } catch {}
+  function start() {
+    if (ctx) { ctx.resume(); return; }
+    ctx = new AudioContext();
+    master = ctx.createGain(); master.gain.value = 0.6; master.connect(ctx.destination);
+    // office hum: brown noise through a low-pass, very quiet
+    const len = ctx.sampleRate * 4, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    let last = 0; for (let i = 0; i < len; i++) { last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02; d[i] = last * 3.5; }
+    hum = ctx.createBufferSource(); hum.buffer = buf; hum.loop = true;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380;
+    const g = ctx.createGain(); g.gain.value = 0.05;
+    hum.connect(lp).connect(g).connect(master); hum.start();
+  }
+  function tone(freq, at, dur, vol = 0.12, type = 'sine') {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(vol, at + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    o.connect(g).connect(master); o.start(at); o.stop(at + dur + 0.05);
+  }
+  function noise(at, dur, vol, from, to) {
+    const n = Math.ceil(ctx.sampleRate * dur), b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = b;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.2; f.frequency.setValueAtTime(from, at); f.frequency.exponentialRampToValueAtTime(to, at + dur);
+    const g = ctx.createGain(); g.gain.setValueAtTime(vol, at); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+    src.connect(f).connect(g).connect(master); src.start(at);
+  }
+  const click = () => { const t = ctx.currentTime; noise(t, 0.025, 0.05 + Math.random() * 0.04, 2400 + Math.random() * 1800, 1800); };
+  // keyboard clicks: busier the more agents are working (heard from up to three)
+  function typing() {
+    clearTimeout(typingTimer);
+    if (!on || !ctx) return;
+    const n = Math.min(3, agents.filter((a) => WORKING.has(a.state) && a.state !== 'delegating').length);
+    if (n && !document.hidden) click();
+    typingTimer = setTimeout(typing, n ? 70 + Math.random() * (420 / n) : 800);
+  }
+  const SOUNDS = {
+    waiting: (t) => { tone(880, t, 0.35); tone(1318.5, t + 0.16, 0.5); },
+    asking: (t) => { tone(1046.5, t, 0.3); tone(1318.5, t + 0.14, 0.45); },
+    tests_pass: (t) => { tone(523.3, t, 0.2, 0.1); tone(659.3, t + 0.1, 0.2, 0.1); tone(784, t + 0.2, 0.35, 0.1); },
+    build_pass: (t) => SOUNDS.tests_pass(t), checks_pass: (t) => SOUNDS.tests_pass(t),
+    tests_fail: (t) => { tone(392, t, 0.25, 0.1, 'triangle'); tone(311.1, t + 0.18, 0.45, 0.1, 'triangle'); },
+    build_fail: (t) => SOUNDS.tests_fail(t), checks_fail: (t) => SOUNDS.tests_fail(t),
+    push: (t) => noise(t, 0.45, 0.25, 300, 3000), pr: (t) => { noise(t, 0.45, 0.25, 300, 3000); tone(784, t + 0.35, 0.4, 0.08); },
+    done: (t) => tone(659.3, t, 0.4, 0.07),
+  };
+  function toggle(want = !on) {
+    on = want;
+    try { localStorage.setItem('af:sound', on ? 'on' : 'off'); } catch {}
+    if (on) { start(); typing(); } else if (ctx) ctx.suspend();
+    const b = document.getElementById('soundBtn'); if (b) b.textContent = on ? '🔊' : '🔇';
+    toast(on ? 'Office sounds on' : 'Office sounds off');
+  }
+  // browsers only allow sound after a click or key press, so a saved "on" starts at the first one
+  if (on) addEventListener('pointerdown', () => { start(); typing(); }, { once: true });
+  return { get on() { return on; }, toggle, event(ev) { if (on && ctx && SOUNDS[ev]) SOUNDS[ev](ctx.currentTime + 0.02); } };
+})();
+
+const HELP_ORBIT = 'Drag to turn · right-drag to move · scroll to zoom · double-click someone to follow · Esc to reset';
+const HELP_WALK = 'Walking: W A S D or arrows to move · Shift to run · drag to look · click someone to open them · Esc to stop';
+function setWalk(on) {
+  if (!use3d || !window.Floor3D.walk) return;
+  on = window.Floor3D.walk(on);
+  const b = document.getElementById('walkBtn'); if (b) { b.textContent = on ? 'Stop walking' : 'Walk'; b.classList.toggle('on', on); }
+  const h = document.querySelector('.o3d-help'); if (h) h.textContent = on ? HELP_WALK : HELP_ORBIT;
+  if (on) document.activeElement && document.activeElement.blur && document.activeElement.blur(); // keys go to walking, not a focused box
+}
+
+// What the 3D floor needs to know about each agent this frame.
+function floorAgents() {
+  const out = [];
+  agents.forEach((a, i) => {
+    const ch = chars.get(a.name) || { x: 0, y: 0, pose: 'sit' };
+    let st = displayState(a);
+    const rp = replayStep(a.name); // replaying this agent's day: act out that moment instead of now
+    if (rp) st = rp.state;
+    const party = cheering.get(a.name);
+    const file = party && theme3d && theme3d.celebration && theme3d.celebration[party.kind];
+    out.push({
+      name: a.name, label: a.label || a.name, state: st, detail: rp ? rp.text : a.detail, lastPrompt: a.lastPrompt, lastReply: a.lastReply, sessionId: a.sessionId,
+      question: a.question ? (isProse(a) ? a.question.text : (a.question.questions[0] || {}).question) : '', pr: !!(a.git && a.git.pr), stuck: !!a.stuck,
+      slot: i, x: ch.x, y: ch.y, pose: ch.pose, selected: a.name === selected, done: st === 'done',
+      role: ch.pose === 'sit' ? st : st === 'done' ? 'done' : 'idle',
+      party: file ? { kind: party.kind, file } : null,
+      helpers: helpersShown(a).map((h, k) => ({ id: h.id || String(k), state: h.state })),
+      hero: a.hero, // the server's pick (undefined from an older server)
+      screen: a.screen, // plain screen text, shown on its desk monitor
+      cwd: a.cwd, // agents busy in one project meet for a sync now and then
+      result: a.lastResult ? { kind: a.lastResult.kind, outcome: a.lastResult.outcome, at: a.lastResult.at } : null, // a hero powers up when tests pass
+      todos: a.todos, dirty: (a.git && a.git.dirty) || 0, // the plan board and the paper pile on its desk
+    });
+  });
+  return out;
 }
 $('themeSel').addEventListener('change', async () => {
   const id = $('themeSel').value;
@@ -1925,6 +3065,14 @@ function vImg(key, src, x, y, w, z, cls = '', filter = '') {
   img.dataset.live = '1';
 }
 function roleAsset(st) { return theme.roles[st] || theme.roles.default; }
+// When an agent sits down, give it a small landing hop for a moment.
+const seated = new Map();
+function landing(name, pose) {
+  const was = seated.get(name);
+  if (!was || was.pose !== pose) seated.set(name, { pose, at: was && pose === 'sit' ? performance.now() : 0 });
+  const at = seated.get(name).at;
+  return at && performance.now() - at < 450 ? 'land' : '';
+}
 function renderVector(rows) {
   const t = theme;
   for (const img of vEls.values()) img.dataset.live = '';
@@ -1945,7 +3093,7 @@ function renderVector(rows) {
     const role = ch.pose === 'sit' ? st : st === 'done' ? 'done' : 'idle';
     const w = ch.pose === 'sit' ? sit : sit * 0.9, h = w * aspect;
     const tint = t.tint ? `hue-rotate(${hash(a.name) % 360}deg)` : '';
-    vImg(`p:${a.name}`, themeUrl(roleAsset(role)), ch.x - w / 2, ch.y - h, w, ch.y, ch.pose === 'walk' ? 'walk' : party && !reducedMotion.matches ? 'hop' : '', tint);
+    vImg(`p:${a.name}`, themeUrl(roleAsset(role)), ch.x - w / 2, ch.y - h, w, ch.y, ch.pose === 'walk' ? 'walk' : party && !reducedMotion.matches ? 'hop' : landing(a.name, ch.pose), tint);
     if (party) {
       const cel = t.celebration[party.kind];
       if (cel) vImg(`c:${a.name}`, themeUrl(cel), ch.x + w * 0.2, ch.y - h - 10, 14, 999, 'cel');
@@ -1972,18 +3120,30 @@ function renderTags() {
       const meter = el('i', 'tm'); meter.append(el('b'));
       b.append(el('span', 'nm'), el('small', 'st'), el('span', 'meta'), meter);
       b.addEventListener('click', () => select(a.name));
+      b.addEventListener('animationend', () => b.classList.remove('bump'));
       box.append(b); tagEls.set(a.name, b);
     }
     const s = slot(i);
     const st = displayState(a);
-    b.className = `tag ${st === 'waiting' ? 'waiting' : st === 'asking' && needsYou(a) ? 'asking' : st === 'done' ? 'done' : ''} ${a.name === selected ? 'selected' : ''}`;
-    b.style.left = `${s.tagX * scale}px`;
-    b.style.top = `${s.tagY * scale}px`;
-    b.style.maxWidth = `${(SLOT_W - 4) * scale}px`;
+    // Bounce the name tag when the agent's state changes (not on first paint).
+    const bump = (b.dataset.st && b.dataset.st !== st) || (b.classList.contains('bump') && b.dataset.st === st);
+    b.dataset.st = st;
+    b.className = `tag ${st === 'waiting' ? 'waiting' : st === 'asking' && needsYou(a) ? 'asking' : st === 'done' ? 'done' : ''} ${a.name === selected ? 'selected' : ''}${bump ? ' bump' : ''}`;
+    if (use3d) {
+      b.style.maxWidth = '200px';
+    } else {
+      b.style.left = `${s.tagX * scale}px`;
+      b.style.top = `${s.tagY * scale}px`;
+      b.style.maxWidth = `${(SLOT_W - 4) * scale}px`;
+    }
     b.setAttribute('aria-pressed', String(a.name === selected));
     b.title = `${a.label || a.name}: ${a.detail || LABEL[st]}`;
     b.querySelector('.nm').textContent = a.label || a.name;
-    b.querySelector('.st').textContent = (theme.labels && theme.labels[st]) || LABEL[st] || st;
+    // Theme labels may name a character per state ("Tony Stark · Off duty"); in 3D each agent plays one
+    // character, so keep only the state words and put that agent's own character in front.
+    const stLabel = (theme.labels && theme.labels[st]) || LABEL[st] || st;
+    const own = use3d && window.Floor3D.characterName ? window.Floor3D.characterName(a.name) : '';
+    b.querySelector('.st').textContent = own ? `${own} · ${stLabel.includes(' · ') ? stLabel.split(' · ').slice(1).join(' · ') : stLabel}` : stLabel;
     // Compact badges: last tests/build, PR checks, stuck/looping.
     const badges = [];
     if (a.lastResult) badges.push([a.lastResult.outcome === 'pass' ? 'bd-pass' : 'bd-fail', a.lastResult.outcome === 'pass' ? '✓' : '✗', `${a.lastResult.kind === 'build' ? 'Build' : 'Tests'}: ${a.lastResult.summary}`]);
@@ -2003,7 +3163,8 @@ function renderTags() {
 }
 canvas.addEventListener('click', (e) => {
   const r = canvas.getBoundingClientRect();
-  const x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+  let x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+  if (use3d) { const f = window.Floor3D.pick(e.clientX - r.left, e.clientY - r.top); if (!f) return; x = f.x; y = f.y; }
   for (const [name, ch] of chars) if (Math.abs(x - ch.x) < 7 && y > ch.y - 22 && y < ch.y + 2) return select(name);
   const rows = rowsFor(agents.length);
   for (let i = 0; i < rows * COLS; i++) {
@@ -2015,9 +3176,13 @@ new ResizeObserver(renderTags).observe(canvas);
 dark.addEventListener('change', renderTags);
 
 // Tell the server when this dashboard is on screen, so it doesn't notify you about what you can already see.
-function reportVisible() { if (!document.hidden) api('POST', '/api/visible', { visible: true }).catch(() => {}); }
+// "On screen" means this window has focus, not just that its tab is open behind other windows.
+const onScreen = () => !document.hidden && document.hasFocus();
+function reportVisible() { api('POST', '/api/visible', { visible: onScreen() }).catch(() => {}); }
 document.addEventListener('visibilitychange', reportVisible);
-setInterval(reportVisible, 10000);
+window.addEventListener('focus', reportVisible);
+window.addEventListener('blur', reportVisible);
+setInterval(() => { if (onScreen()) reportVisible(); }, 10000);
 reportVisible();
 
 loadThemes();

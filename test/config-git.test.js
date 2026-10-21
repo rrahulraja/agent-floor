@@ -51,9 +51,30 @@ test('git: PR checks rollup', () => {
   assert.equal(G.summarizeChecks([{ status: 'COMPLETED', conclusion: 'SUCCESS' }, { state: 'SUCCESS' }]).state, 'pass');
   assert.equal(G.summarizeChecks([{ status: 'IN_PROGRESS' }, { status: 'COMPLETED', conclusion: 'SUCCESS' }]).state, 'pending');
   const f = G.summarizeChecks([{ status: 'COMPLETED', conclusion: 'FAILURE' }, { status: 'QUEUED' }]);
-  assert.deepEqual(f, { state: 'fail', passed: 0, failed: 1, pending: 1, total: 2 });
+  assert.deepEqual(f, { state: 'fail', passed: 0, failed: 1, pending: 1, total: 2, failedChecks: [{ name: 'check', url: '', runId: '' }] });
   const pr = G.parsePr({ number: 7, url: 'https://github.com/a/b/pull/7', state: 'OPEN', isDraft: false, reviewDecision: 'APPROVED', statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'SUCCESS' }] });
   assert.equal(pr.checks.state, 'pass');
   assert.equal(pr.review, 'APPROVED');
   assert.equal(G.parsePr({}), null);
+});
+
+test('summarizeChecks lists failed checks with their Actions run ids', () => {
+  const s = G.summarizeChecks([
+    { name: 'build', status: 'COMPLETED', conclusion: 'SUCCESS' },
+    { name: 'unit tests', workflowName: 'CI', status: 'COMPLETED', conclusion: 'FAILURE', detailsUrl: 'https://github.com/o/r/actions/runs/123456/job/789' },
+    { context: 'sonar', state: 'ERROR', targetUrl: 'https://sonar.example/x' },
+  ]);
+  assert.equal(s.state, 'fail');
+  assert.deepEqual(s.failedChecks, [
+    { name: 'CI / unit tests', url: 'https://github.com/o/r/actions/runs/123456/job/789', runId: '123456' },
+    { name: 'sonar', url: 'https://sonar.example/x', runId: '' },
+  ]);
+});
+
+test('ciFixPrompt: which checks failed and the end of their logs, for the agent', () => {
+  const p = G.ciFixPrompt({ number: 42, failedChecks: [{ name: 'CI / unit tests' }] }, 'line\n'.repeat(5) + 'Error: expected 1 to be 2');
+  assert.match(p, /PR #42/);
+  assert.match(p, /CI \/ unit tests/);
+  assert.match(p, /Error: expected 1 to be 2/);
+  assert.match(p, /fix/i);
 });

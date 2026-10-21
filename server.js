@@ -18,6 +18,12 @@ const { createConfig } = require('./lib/config');
 const C = require('./lib/control');
 const N = require('./lib/notify');
 const Hist = require('./lib/history');
+const HelperLog = require('./lib/helperlog');
+const Usage = require('./lib/usage');
+const Diff = require('./lib/diffpreview');
+const Perms = require('./lib/permissions');
+const Tasks = require('./lib/tasks');
+const Handoff = require('./lib/handoff');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -32,6 +38,8 @@ const NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
 const SESSION_RE = /^[A-Za-z0-9-]{8,64}$/;
 const KEYS = new Set(['Enter', 'Escape', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'BTab', 'Up', 'Down']);
 const QUEUE = C.jsonStore(path.join(DATA_DIR, 'queue.json'), () => ({}));
+const TASKS = C.jsonStore(path.join(DATA_DIR, 'tasks.json'), () => []);
+const HANDOFFS = C.jsonStore(path.join(DATA_DIR, 'handoffs.json'), () => []);
 const PROMPTS = C.jsonStore(path.join(DATA_DIR, 'prompts.json'), () => C.cleanPrompts(C.DEFAULT_PROMPTS));
 const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
 const { short, textOf } = T;
@@ -85,28 +93,31 @@ function bindSession(a, id) {
 }
 function persist() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
-  const keep = ({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree }) =>
-    Object.fromEntries(Object.entries({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+  const keep = ({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree, hero }) =>
+    Object.fromEntries(Object.entries({ name, cwd, label, sessionId, sessions, contextWindow, repo, worktree, hero }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
   fs.writeFileSync(AGENTS_FILE, JSON.stringify(saved.map(keep), null, 2));
 }
 
 // ---------- tmux ----------
 async function listSessions() {
-  const r = await tmux('list-sessions', '-F', ['#{session_name}', '#{session_created}', '#{@cwd}', '#{pane_current_path}'].join(SEP));
+  const r = await tmux('list-sessions', '-F', ['#{session_name}', '#{session_created}', '#{@cwd}', '#{pane_current_path}', '#{window_width}'].join(SEP));
   const map = new Map();
   if (!r.ok) return map; // no tmux server running yet
   for (const line of r.stdout.split('\n')) {
     if (!line.startsWith(PREFIX)) continue;
-    const [session, created, optCwd, paneCwd] = line.split(SEP);
-    map.set(session.slice(PREFIX.length), { created: Number(created) * 1000, cwd: optCwd || paneCwd });
+    const [session, created, optCwd, paneCwd, cols] = line.split(SEP);
+    map.set(session.slice(PREFIX.length), { created: Number(created) * 1000, cwd: optCwd || paneCwd, cols: Number(cols) || 0 });
   }
   return map;
 }
 
-async function capture(name, lines = 120) {
-  const r = await tmux('capture-pane', '-p', '-J', '-t', target(name), '-S', `-${lines}`);
+// ansi: keep the colour codes (for the terminal view in the panel). Without it, plain text.
+async function capture(name, lines = 120, ansi = false) {
+  const r = await tmux('capture-pane', '-p', '-J', ...(ansi ? ['-e'] : []), '-t', target(name), '-S', `-${lines}`);
   return r.ok ? r.stdout.replace(/\s+$/, '') : '';
 }
+// Terminal escape sequences (colours, OSC titles/links) removed: what the screen says, as plain text.
+const stripAnsi = (s) => s.replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '').replace(/\x1b\[[0-9;?]*[ -\/]*[@-~]/g, '').replace(/\x1b[()][A-Z0-9]/g, '').replace(/[ \t]+$/gm, '').replace(/\s+$/, '');
 
 // Agents started here get a status line that records plan usage (5-hour and weekly limits) for the header.
 // It is passed with --settings, so the user's own ~/.claude/settings.json is never touched.
@@ -123,14 +134,22 @@ function statuslineArgs() {
 // conversation: '' = start fresh, 'latest' = the newest conversation in the folder, otherwise a session id.
 // Every start pins a known session id, so each agent reads its own transcript even when agents share a folder.
 // Returns that session id.
-async function startAgent(name, cwd, conversation) {
+// size: { cols, rows } to start at (the page's panel width), so the agent never needs resizing later:
+// resizing a running Claude Code makes it redraw and wipe its scrollback.
+async function startAgent(name, cwd, conversation, size) {
   let cmd = `'${CLAUDE_BIN}'`;
   let sessionId;
+  // A conversation can only be open in one agent: two Claudes on one transcript show up as twins and
+  // write over each other. Which conversations do other running agents have open?
+  const live = await listSessions(); // tmux session name (without prefix) -> info
+  const openIn = (id) => saved.find((o) => o.name !== name && o.sessionId === id && live.has(o.name));
   if (conversation === 'latest') {
-    const newest = await newestTranscript(cwd);
-    const id = newest && path.basename(newest.path, '.jsonl');
-    if (id && SESSION_RE.test(id)) conversation = id;
-    else conversation = '';
+    const free = (await transcriptsIn(path.join(PROJECTS_DIR, encodeCwd(cwd)))).filter((f) => !openIn(f.id)).sort((x, y) => y.mtimeMs - x.mtimeMs)[0];
+    conversation = free ? free.id : '';
+  }
+  if (conversation && openIn(conversation)) {
+    const o = openIn(conversation);
+    throw new Error(`That conversation is already open in ${o.label || o.name}. Pick another one, or start fresh.`);
   }
   if (conversation) {
     if (!SESSION_RE.test(conversation) || !fs.existsSync(path.join(PROJECTS_DIR, encodeCwd(cwd), `${conversation}.jsonl`))) {
@@ -143,7 +162,7 @@ async function startAgent(name, cwd, conversation) {
     cmd += ` --session-id ${sessionId}`;
   }
   cmd += statuslineArgs();
-  const r = await tmux('new-session', '-d', '-s', PREFIX + name, '-c', cwd, '-x', '160', '-y', '48',
+  const r = await tmux('new-session', '-d', '-s', PREFIX + name, '-c', cwd, '-x', String((size && size.cols) || 160), '-y', String((size && size.rows) || 48),
     '-e', `PATH=${process.env.PATH}`, cmd);
   if (!r.ok) throw new Error(r.stderr || 'tmux could not start the session');
   await tmux('set-option', '-t', `=${PREFIX}${name}`, '@cwd', cwd);
@@ -309,13 +328,7 @@ function celebrate(name, entries, since) {
   return cs.recent;
 }
 
-function paneSignals(text) {
-  // Only the bottom of the screen matters: Claude Code redraws its status line and dialogs there.
-  const tail = text.split('\n').filter((l) => l.trim()).slice(-12).join('\n');
-  const waiting = /(Do you want to|Would you like to)/i.test(tail) && /^\s*(❯\s*)?1\.\s/m.test(tail);
-  const busy = /esc to interrupt/i.test(tail);
-  return { waiting, busy };
-}
+const paneSignals = C.paneSignals;
 
 // ---------- which transcript belongs to which agent ----------
 // First entries of a transcript (cached; the head of a file never changes).
@@ -443,10 +456,79 @@ async function refreshGit(cwd, c) {
   } finally { c.busy = false; }
 }
 
+// The failing part of a PR's GitHub Actions logs (gh run view --log-failed), cached per run for 5 minutes.
+const ciLogCache = new Map(); // runId -> { at, text }
+async function ciLog(cwd, pr) {
+  const runs = [...new Set((pr.checks.failedChecks || []).map((c) => c.runId).filter(Boolean))].slice(0, 3);
+  const parts = [];
+  for (const id of runs) {
+    let c = ciLogCache.get(id);
+    if (!c || Date.now() - c.at > 300000) {
+      const r = await run(GH_BIN, ['run', 'view', id, '--log-failed'], { cwd, timeout: 30000 });
+      c = { at: Date.now(), text: r.ok ? r.stdout.split('\n').slice(-400).join('\n') : `(could not read run ${id}: ${r.stderr.slice(0, 200)})` };
+      ciLogCache.set(id, c);
+    }
+    parts.push(c.text);
+  }
+  return parts.join('\n\n').slice(-60000);
+}
+
+// ---------- Claude Code permission rules (the rules editor) ----------
+// Three files apply to an agent's project; the dashboard only ever writes the personal one.
+function permissionFiles(cwd) {
+  return [
+    { scope: 'global', label: 'All projects (~/.claude/settings.json)', path: path.join(HOME, '.claude', 'settings.json') },
+    { scope: 'shared', label: 'This project, shared with the team (.claude/settings.json)', path: path.join(cwd, '.claude', 'settings.json') },
+    { scope: 'local', label: 'This project, just you (.claude/settings.local.json)', path: path.join(cwd, '.claude', 'settings.local.json') },
+  ];
+}
+function readSettings(file) {
+  let text; try { text = fs.readFileSync(file, 'utf8'); } catch { return { exists: false, json: {} }; }
+  try { return { exists: true, json: JSON.parse(text) }; } catch (e) { return { exists: true, json: null, error: `Not valid JSON: ${e.message}` }; }
+}
+async function permissionsView(cwd) {
+  const files = permissionFiles(cwd).map((f) => {
+    const r = readSettings(f.path), p = (r.json && r.json.permissions) || {};
+    return { ...f, exists: r.exists, error: r.error || '', allow: p.allow || [], ask: p.ask || [], deny: p.deny || [], defaultMode: p.defaultMode || '' };
+  });
+  const all = (k) => files.flatMap((f) => f[k]);
+  const local = files[2];
+  // Is the personal file kept out of git? (null: not in a git repo)
+  const inRepo = await run('git', ['-C', cwd, 'rev-parse', '--is-inside-work-tree'], { timeout: 5000 });
+  const ignored = !inRepo.ok ? null : (await run('git', ['-C', cwd, 'check-ignore', '-q', local.path], { timeout: 5000 })).ok;
+  return { files, warnings: Perms.warnings({ allow: all('allow'), ask: all('ask'), deny: all('deny') }), presets: Perms.PRESETS, guardrails: Perms.GUARDRAILS, ignored };
+}
+function savePermissions(cwd, lists) {
+  const file = permissionFiles(cwd)[2].path;
+  const cur = readSettings(file);
+  if (cur.error) throw new Error(`${file} is not valid JSON, so it was left alone. Fix it first.`);
+  const next = Perms.withRules(cur.json, lists);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (cur.exists) fs.copyFileSync(file, `${file}.bak`);
+  const tmp = `${file}.tmp-${process.pid}`;
+  fs.writeFileSync(tmp, `${JSON.stringify(next, null, 2)}\n`);
+  fs.renameSync(tmp, file);
+}
+
 // ---------- polling ----------
 const memory = new Map();
 const startedAt = new Map();
 let snapshot = { agents: [], tmux: true, claude: CLAUDE_BIN, settings: {} };
+const needSince = new Map(); // agent name -> when it started waiting on you
+// The change an Edit / Write waiting for approval would make (built once per tool call).
+const diffCache = new Map();
+function diffFor(tool) {
+  if (!tool || !['Edit', 'MultiEdit', 'Write'].includes(tool.name)) return null;
+  if (diffCache.has(tool.id)) return diffCache.get(tool.id);
+  const read = (f) => {
+    if (!f || !path.isAbsolute(f)) return null;
+    try { const st = fs.statSync(f); return st.isFile() && st.size <= 2 * 1024 * 1024 ? fs.readFileSync(f, 'utf8') : null; } catch { return null; }
+  };
+  let d = null; try { d = Diff.preview(tool, read); } catch (e) { console.warn('diff preview failed:', e.message); }
+  diffCache.set(tool.id, d);
+  if (diffCache.size > 50) diffCache.delete(diffCache.keys().next().value);
+  return d;
+}
 let snapshotJson = '';
 const clients = new Set();
 const WORKING_KINDS = new Set(['thinking', 'reading', 'writing', 'running', 'delegating', 'browsing', 'planning', 'tests', 'build', 'deploy', 'data', 'review', 'git']);
@@ -465,6 +547,77 @@ function contextFor(a, info) {
 
 // Plan usage saved by bin/statusline.js (account-wide, so one reading covers every agent).
 let usageCache = { mtimeMs: 0, value: null };
+// ---------- tokens used today (per agent, and across every Claude Code transcript) ----------
+// Each transcript is read once and then only its new bytes; a background pass every 15 s keeps the poll fast.
+const tallies = new Map(); // .jsonl path -> { tally, offset }
+const agentFiles = new Map(); // agent name -> Set of transcript paths it has written (main + helpers)
+let tokensToday = { day: '', all: null, agents: {} };
+async function feedTally(file) {
+  let st; try { st = await fsp.stat(file); } catch { return null; }
+  let t = tallies.get(file);
+  if (!t || st.size < t.offset) { t = { tally: Usage.createTally(), offset: 0 }; tallies.set(file, t); }
+  if (st.size > t.offset) {
+    const fh = await fsp.open(file, 'r');
+    try {
+      const CHUNK = 4 * 1024 * 1024;
+      while (t.offset < st.size) {
+        const buf = Buffer.alloc(Math.min(CHUNK, st.size - t.offset));
+        const { bytesRead } = await fh.read(buf, 0, buf.length, t.offset);
+        if (!bytesRead) break;
+        t.tally.add(buf.toString('utf8', 0, bytesRead)); // transcripts are ASCII-safe JSON per line; a split char only touches one line
+        t.offset += bytesRead;
+      }
+    } finally { await fh.close(); }
+  }
+  return t.tally;
+}
+async function transcriptsTouchedSince(since) {
+  const out = [];
+  let projects; try { projects = await fsp.readdir(PROJECTS_DIR); } catch { return out; }
+  for (const proj of projects) {
+    const dir = path.join(PROJECTS_DIR, proj);
+    let names; try { names = await fsp.readdir(dir); } catch { continue; }
+    for (const n of names) {
+      const f = path.join(dir, n);
+      if (n.endsWith('.jsonl')) { try { if ((await fsp.stat(f)).mtimeMs >= since) out.push(f); } catch {} continue; }
+      const sub = path.join(f, 'subagents');
+      let subs; try { subs = await fsp.readdir(sub); } catch { continue; }
+      for (const m of subs) if (m.endsWith('.jsonl')) { const g = path.join(sub, m); try { if ((await fsp.stat(g)).mtimeMs >= since) out.push(g); } catch {} }
+    }
+  }
+  return out;
+}
+let countingTokens = false;
+async function countTokens() {
+  if (countingTokens) return;
+  countingTokens = true;
+  try {
+    const day = Usage.dayKey(Date.now());
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    const files = await transcriptsTouchedSince(midnight.getTime());
+    const all = [];
+    for (const f of files) { const t = await feedTally(f); if (t) all.push(t.day(day)); }
+    const per = {};
+    for (const [name, set] of agentFiles) {
+      const list = [];
+      for (const f of set) { const t = await feedTally(f); if (t) list.push(t.day(day)); }
+      per[name] = Usage.sum(list);
+    }
+    tokensToday = { day, all: Usage.sum(all), agents: per };
+  } catch (e) { console.warn('token count failed:', e.message); }
+  finally { countingTokens = false; }
+}
+setInterval(countTokens, 15000);
+setTimeout(countTokens, 2000);
+// The transcripts an agent has written: its session file and its helpers' files.
+async function noteAgentFiles(name, file) {
+  if (!file) return;
+  let set = agentFiles.get(name); if (!set) { set = new Set(); agentFiles.set(name, set); }
+  set.add(file.path);
+  const dir = path.join(file.path.slice(0, -6), 'subagents');
+  try { for (const n of await fsp.readdir(dir)) if (n.endsWith('.jsonl')) set.add(path.join(dir, n)); } catch {}
+}
+
 function planUsage() {
   const file = path.join(DATA_DIR, 'usage.json');
   try {
@@ -499,7 +652,7 @@ async function poll() {
   for (const a of saved) {
     const s = sessions.get(a.name);
     const prev = memory.get(a.name) || {};
-    const item = { name: a.name, label: a.label || a.name, cwd: a.cwd, session: PREFIX + a.name, attach: `tmux attach -t ${PREFIX}${a.name}` };
+    const item = { name: a.name, label: a.label || a.name, cwd: a.cwd, session: PREFIX + a.name, attach: `tmux attach -t ${PREFIX}${a.name}`, hero: a.hero || '' };
     if (!s) {
       item.state = 'stopped';
       item.detail = 'Not running';
@@ -508,7 +661,8 @@ async function poll() {
         item.error = 'Claude exited right after starting. If you picked a conversation to continue, try another one or start fresh.';
       }
     } else {
-      const screen = await capture(a.name);
+      const screenAnsi = await capture(a.name, 120, true);
+      const screen = stripAnsi(screenAnsi);
       const sig = paneSignals(screen);
       const { file, unknown } = await resolveTranscript(a, s, sessions);
       let info = { kind: 'thinking', detail: '', lastPrompt: '', lastReply: '', ended: false, question: null, usage: null, lastResult: null, looping: null };
@@ -527,6 +681,7 @@ async function poll() {
       const waiting = !toolQuestion && sig.waiting && !info.ended;
 
       item.helpers = file ? await listHelpers(file, s.created - 2000) : [];
+      await noteAgentFiles(a.name, file);
       const helpersWorking = item.helpers.filter((h) => h.state === 'working').length;
 
       if (toolQuestion || proseQuestion) {
@@ -534,7 +689,9 @@ async function poll() {
         item.question = toolQuestion ? { kind: 'tool', questions: info.question.questions } : { kind: 'prose', text: info.question.text, mode: proseMode };
         item.detail = toolQuestion ? 'Has a question for you' : 'May have a question';
       } else if (waiting) {
-        item.state = 'waiting'; item.detail = 'Needs your approval';
+        item.state = 'waiting'; item.detail = sig.trust ? 'Asks whether to trust this folder' : 'Needs your approval';
+        if (sig.trust) item.trust = true;
+        else { item.approval = C.approvalText(screen); item.diff = diffFor(Diff.pendingTool(entries)); }
       } else if (busy) {
         item.state = info.kind === 'asking' ? 'thinking' : info.kind; item.detail = info.detail || 'Working';
       } else if (helpersWorking) {
@@ -543,8 +700,11 @@ async function poll() {
         item.state = 'idle'; item.detail = info.lastReply ? 'Finished, ready for more' : 'Ready for instructions';
       }
       item.lastPrompt = info.lastPrompt;
+      item.todos = info.todos;
       item.lastReply = info.lastReply;
       item.screen = screen;
+      item.screenAnsi = screenAnsi;
+      item.cols = s.cols; // the terminal width Claude Code lays out for
       item.sessionId = a.sessionId || (file ? path.basename(file.path, '.jsonl') : '');
       if (unknown) item.sessionUnknown = true;
       item.context = contextFor(a, info);
@@ -588,7 +748,30 @@ async function poll() {
     const { fileStamp, lastChangeAt, screenAt, lastDispatchAt, ...pub } = item;
     agents.push(pub);
   }
-  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage() };
+  for (const it of agents) it.tokens = tokensToday.agents[it.name] || null;
+  // How long each agent has been waiting on you (for the inbox, oldest first).
+  for (const it of agents) {
+    const needs = it.state === 'waiting' || it.state === 'asking';
+    if (!needs) needSince.delete(it.name);
+    else { if (!needSince.has(it.name)) needSince.set(it.name, now); it.needSince = needSince.get(it.name); }
+  }
+  // Task board: move each task along from what its agent is doing.
+  const byName = new Map(agents.map((it) => [it.name, it]));
+  let tasksChanged = false;
+  const tasks = TASKS.get().map((t) => { const n = Tasks.progress(t, byName.get(t.agent)); if (n !== t) tasksChanged = true; return n; });
+  if (tasksChanged) TASKS.set(tasks);
+  // Hand-offs: when an agent finishes, queue its final reply (with the note) for the next agent.
+  let rules = HANDOFFS.get(), rulesChanged = false;
+  rules = rules.map((r) => {
+    const it = byName.get(r.from);
+    if (!Handoff.fires(r, it) || !saved.find((a) => a.name === r.to)) return r;
+    QUEUE.set(C.enqueue(QUEUE.get(), r.to, Handoff.promptFor(r, it)).all);
+    console.log(`hand-off: ${r.from} -> ${r.to}`);
+    rulesChanged = true;
+    return Handoff.afterFiring(r, it.finishedAt);
+  });
+  if (rulesChanged) HANDOFFS.set(rules);
+  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage(), tokens: tokensToday.all, tasks, handoffs: rules.filter((r) => !r.done) };
   const json = JSON.stringify(snapshot);
   if (json !== snapshotJson) {
     snapshotJson = json;
@@ -697,6 +880,18 @@ function readThemes() {
   const pixel = { id: 'pixel', name: 'Pixel office', description: 'The built-in pixel-art office.', builtin: true, ok: true, kind: 'pixel' };
   return [pixel, ...Themes.listThemes(themeFolders()).map((t) => ({ ...t.theme, builtin: t.builtin, ok: t.ok, problems: t.problems }))];
 }
+// The 3D floor's code and assets: /floor3d.js plus whatever is under public/vendor and public/office (and only
+// these file types). Nothing else under public/ is served.
+const STATIC_DIRS = ['vendor', 'office'];
+const STATIC_TYPES = { '.js': 'text/javascript; charset=utf-8', '.glb': 'model/gltf-binary', '.png': 'image/png', '.jpg': 'image/jpeg', '.txt': 'text/plain; charset=utf-8', '.json': 'application/json' };
+function staticFile(p) {
+  if (p === '/floor3d.js') return path.join(__dirname, 'public', 'floor3d.js');
+  const parts = p.split('/').filter(Boolean);
+  if (parts.length < 2 || !STATIC_DIRS.includes(parts[0]) || parts.some((x) => x === '..' || x.startsWith('.'))) return null;
+  if (!STATIC_TYPES[path.extname(p).toLowerCase()]) return null;
+  const full = path.join(__dirname, 'public', ...parts);
+  return full.startsWith(path.join(__dirname, 'public') + path.sep) ? full : null;
+}
 const THEME_TYPES = { '.svg': 'image/svg+xml', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.css': 'text/css; charset=utf-8', '.json': 'application/json' };
 function serveThemeFile(res, id, file) {
   if (!Themes.ID_RE.test(id) || !Themes.safeFile(file)) { res.writeHead(404); return res.end(); }
@@ -722,7 +917,7 @@ const notifyOnce = N.createDeduper();
 async function deliver(msg) {
   const results = {};
   if (CONFIG.get('notify.desktop')) {
-    const cmd = N.desktopCommand(process.platform, msg.title, msg.detail);
+    const cmd = N.desktopCommand(process.platform, msg.title, msg.detail, CONFIG.get('notify.sound'));
     if (cmd) { const r = await run(cmd[0], cmd[1], { timeout: 10000 }); results.desktop = r.ok ? 'sent' : r.stderr || 'failed'; }
   }
   const slack = CONFIG.get('notify.slackWebhookUrl');
@@ -749,6 +944,29 @@ function notifyFor(prev, item, now) {
     if (!CONFIG.get(`notify.events.${ev.event}`) || !notifyOnce(`${item.name}:${ev.key}`, now)) continue;
     deliver(ev).catch((e) => console.warn(`notify failed: ${e.message}`));
   }
+}
+
+// Add an agent and start it (also used by the task board). Returns { error, status } on a problem.
+async function addAgent({ name, cwd, conversation, label, worktree, size }) {
+  if (!NAME_RE.test(name || '')) return { status: 400, error: 'Use 1–32 letters, numbers, dashes or underscores for the name.' };
+  if (saved.find((a) => a.name === name)) return { status: 409, error: `There is already an agent called ${name}.` };
+  const dir = path.resolve(expandHome(String(cwd || '').trim()));
+  let st; try { st = await fsp.stat(dir); } catch {}
+  if (!st || !st.isDirectory()) return { status: 400, error: `Folder not found: ${dir}` };
+  let agentDir = dir, repoRoot;
+  if (worktree && worktree.branch) {
+    const wt = await createWorktree(dir, String(worktree.branch).trim(), String(worktree.base || '').trim());
+    if (wt.error) return { status: 400, error: wt.error };
+    agentDir = wt.path; repoRoot = wt.repo;
+  }
+  // Save first: a poll running while tmux starts would otherwise adopt cc-<name> and we'd add it twice.
+  saved.push({ name, cwd: agentDir, label: cleanLabel(label) || undefined, repo: repoRoot, worktree: repoRoot ? true : undefined });
+  try { bindSession(saved.find((a) => a.name === name), await startAgent(name, agentDir, repoRoot ? '' : conversation || '', C.cleanSize(size))); }
+  catch (e) { saved = saved.filter((a) => a.name !== name); throw e; }
+  startedAt.set(name, Date.now());
+  persist();
+  await poll();
+  return { name, cwd: agentDir };
 }
 
 // ---------- worktrees ----------
@@ -812,6 +1030,13 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return fs.createReadStream(INDEX_FILE).pipe(res);
     }
+    const sf = req.method === 'GET' && staticFile(decodeURIComponent(p));
+    if (sf) {
+      let st; try { st = fs.statSync(sf); } catch {}
+      if (!st || !st.isFile()) { res.writeHead(404); return res.end(); }
+      res.writeHead(200, { 'Content-Type': STATIC_TYPES[path.extname(sf).toLowerCase()], 'Cache-Control': 'no-cache', 'X-Content-Type-Options': 'nosniff' });
+      return fs.createReadStream(sf).pipe(res);
+    }
     if (req.method === 'GET' && p === '/api/state') return send(res, 200, snapshot);
     if (req.method === 'GET' && p === '/api/config') return send(res, 200, { schema: CONFIG.schema(), values: CONFIG.all(), problems: CONFIG.problems() });
     if (req.method === 'GET' && p === '/api/themes') return send(res, 200, { themes: themeList(), current: CONFIG.get('theme'), userDir: USER_THEMES });
@@ -827,7 +1052,30 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && sc) {
       if (!saved.find((a) => a.name === sc[1])) return send(res, 404, { error: `No agent called ${sc[1]}.` });
       const lines = Math.max(200, Math.min(20000, Number(url.searchParams.get('lines')) || 5000));
-      return send(res, 200, { screen: await capture(sc[1], lines), lines });
+      const ansi = url.searchParams.get('ansi') === '1';
+      return send(res, 200, { screen: await capture(sc[1], lines, ansi), ansi, lines });
+    }
+    // What one helper (subagent) is doing: its task, recent steps and answer, read from its transcript.
+    const hl = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})\/helpers\/([A-Za-z0-9_-]{1,64})$/);
+    if (req.method === 'GET' && hl) {
+      const item = snapshot.agents.find((a) => a.name === hl[1]);
+      if (!item || !item.sessionId || !SESSION_RE.test(item.sessionId)) return send(res, 404, { error: `No running conversation for ${hl[1]}.` });
+      const file = path.join(PROJECTS_DIR, encodeCwd(item.cwd), item.sessionId, 'subagents', `agent-${hl[2]}.jsonl`);
+      let text;
+      try {
+        const st = await fsp.stat(file), fd = await fsp.open(file, 'r');
+        const len = Math.min(st.size, 1024 * 1024), buf = Buffer.alloc(len);
+        await fd.read(buf, 0, len, st.size - len); await fd.close();
+        text = buf.toString('utf8');
+        if (len < st.size) {
+          // the task is at the very start; read it separately when the file is longer than the tail we keep
+          const head = Buffer.alloc(Math.min(st.size, 64 * 1024)), fh = await fsp.open(file, 'r');
+          await fh.read(head, 0, head.length, 0); await fh.close();
+          text = head.toString('utf8').split('\n').slice(0, 3).join('\n') + '\n' + text.slice(text.indexOf('\n') + 1);
+        }
+      } catch { return send(res, 404, { error: 'That helper has no transcript yet.' }); }
+      const h = (item.helpers || []).find((x) => x.id === hl[2]) || {};
+      return send(res, 200, { id: hl[2], name: h.name || 'helper', description: h.description || '', state: h.state || 'done', kind: h.kind || '', ...HelperLog.parse(text) });
     }
     const tl = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})\/timeline$/);
     if (req.method === 'GET' && tl) {
@@ -862,7 +1110,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && p === '/api/visible') {
-      if ((await readBody(req)).visible) lastVisibleAt = Date.now();
+      // visible: the dashboard window has focus. false: you just switched away, so alerts may go out at once.
+      lastVisibleAt = (await readBody(req)).visible ? Date.now() : 0;
       return send(res, 200, { ok: true });
     }
     if (req.method === 'POST' && p === '/api/notify/test') {
@@ -892,29 +1141,75 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && p === '/api/agents') {
-      const { name, cwd, conversation, label, worktree } = await readBody(req);
-      if (!NAME_RE.test(name || '')) return send(res, 400, { error: 'Use 1–32 letters, numbers, dashes or underscores for the name.' });
-      if (saved.find((a) => a.name === name)) return send(res, 409, { error: `There is already an agent called ${name}.` });
-      const dir = path.resolve(expandHome(String(cwd || '').trim()));
-      let st; try { st = await fsp.stat(dir); } catch {}
-      if (!st || !st.isDirectory()) return send(res, 400, { error: `Folder not found: ${dir}` });
-      let agentDir = dir, repoRoot;
-      if (worktree && worktree.branch) {
-        const wt = await createWorktree(dir, String(worktree.branch).trim(), String(worktree.base || '').trim());
-        if (wt.error) return send(res, 400, { error: wt.error });
-        agentDir = wt.path; repoRoot = wt.repo;
-      }
-      // Save first: a poll running while tmux starts would otherwise adopt cc-<name> and we'd add it twice.
-      saved.push({ name, cwd: agentDir, label: cleanLabel(label) || undefined, repo: repoRoot, worktree: repoRoot ? true : undefined });
-      try { bindSession(saved.find((a) => a.name === name), await startAgent(name, agentDir, repoRoot ? '' : conversation || '')); }
-      catch (e) { saved = saved.filter((a) => a.name !== name); throw e; }
-      startedAt.set(name, Date.now());
-      persist();
-      await poll();
+      const r = await addAgent(await readBody(req));
+      if (r.error) return send(res, r.status, { error: r.error });
       return send(res, 201, { ok: true });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
+    // ---------- hand-offs ----------
+    if (req.method === 'POST' && p === '/api/handoffs') {
+      const b = await readBody(req);
+      if (!saved.find((a) => a.name === b.from) || !saved.find((a) => a.name === b.to)) return send(res, 400, { error: 'Pick two agents on the floor.' });
+      let rule; try { rule = Handoff.newRule(b); } catch (e) { return send(res, 400, { error: e.message }); }
+      HANDOFFS.set([...HANDOFFS.get().filter((r) => !r.done), rule]);
+      await poll();
+      return send(res, 201, { ok: true, rule });
+    }
+    const hm = p.match(/^\/api\/handoffs\/([a-f0-9]{8})$/);
+    if (hm && req.method === 'DELETE') { HANDOFFS.set(HANDOFFS.get().filter((r) => r.id !== hm[1])); await poll(); return send(res, 200, { ok: true }); }
+
+    // ---------- task board ----------
+    if (req.method === 'POST' && p === '/api/tasks') {
+      const b = await readBody(req);
+      const dir = path.resolve(expandHome(String(b.cwd || '').trim()));
+      let st; try { st = await fsp.stat(dir); } catch {}
+      if (!st || !st.isDirectory()) return send(res, 400, { error: `Folder not found: ${dir}` });
+      let task; try { task = Tasks.newTask({ title: b.title, text: b.text, cwd: dir }); } catch (e) { return send(res, 400, { error: e.message }); }
+      TASKS.set([...TASKS.get(), task]);
+      await poll();
+      return send(res, 201, { ok: true, task });
+    }
+    const tm = p.match(/^\/api\/tasks\/([a-f0-9]{8})(?:\/(assign))?$/);
+    if (tm) {
+      const [, id, act] = tm;
+      const task = TASKS.get().find((t) => t.id === id);
+      if (!task) return send(res, 404, { error: 'No such task.' });
+      const save = (patch) => TASKS.set(TASKS.get().map((t) => (t.id === id ? { ...t, ...patch } : t)));
+      if (req.method === 'DELETE' && !act) { TASKS.set(TASKS.get().filter((t) => t.id !== id)); await poll(); return send(res, 200, { ok: true }); }
+      if (req.method === 'POST' && !act) {
+        const b = await readBody(req);
+        const patch = {};
+        if (Tasks.STATUSES.includes(b.status)) patch.status = b.status;
+        if (b.status === 'todo') { patch.agent = ''; patch.pr = null; } // back to the pile: unassign
+        if (typeof b.title === 'string' && b.title.trim()) patch.title = b.title.trim().slice(0, 120);
+        save(patch); await poll(); return send(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && act === 'assign') {
+        const b = await readBody(req);
+        const sessions = await listSessions();
+        let name = '', branch = '';
+        if (b.mode === 'new') {
+          // a fresh agent on its own branch in its own worktree
+          branch = Tasks.branchFor(task);
+          name = `task-${task.id}`;
+          const r = await addAgent({ name, cwd: task.cwd, label: task.title.slice(0, 60), worktree: { branch }, size: b.size });
+          if (r.error) return send(res, r.status, { error: r.error });
+        } else {
+          name = b.mode === 'agent' ? String(b.agent || '') : Tasks.pickAgent(task, snapshot.agents, TASKS.get());
+          if (!name) return send(res, 409, { error: 'No idle agent is working in this folder. Start a new one for this task, or pick an agent.', noAgent: true });
+          if (!saved.find((a) => a.name === name) || !sessions.has(name)) return send(res, 409, { error: `${name} is not running.` });
+        }
+        // New agents get it from the queue once Claude Code is ready; an idle one gets it now.
+        const idle = b.mode !== 'new' && (memory.get(name) || {}).state === 'idle';
+        if (idle) await sendPrompt(name, task.text); else QUEUE.set(C.enqueue(QUEUE.get(), name, task.text).all);
+        save({ agent: name, branch, status: 'working', startedAt: Date.now() });
+        await poll();
+        return send(res, 200, { ok: true, agent: name, sent: idle ? 'sent' : 'queued' });
+      }
+      return send(res, 404, { error: 'Not found' });
+    }
+
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit|permissions|history-text|replay))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
       const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
@@ -934,6 +1229,83 @@ const server = http.createServer(async (req, res) => {
         if (!running) return send(res, 409, { error: `${name} is stopped.` });
         await tmux('send-keys', '-t', target(name), key);
         return send(res, 200, { ok: true });
+      }
+      // The hero this agent plays in the heroes theme, so every browser shows the same one. First claim wins.
+      if (req.method === 'POST' && action === 'hero') {
+        const hero = String((await readBody(req)).hero || '');
+        if (!/^[a-z0-9_-]{1,40}$/i.test(hero)) return send(res, 400, { error: 'Unknown hero.' });
+        if (!agent.hero) { agent.hero = hero; persist(); await poll(); }
+        return send(res, 200, { ok: true, hero: agent.hero });
+      }
+      // CI watch: the failing logs of this agent's PR, and handing them to the agent to fix.
+      if (action === 'ci-log' || action === 'ci-fix') {
+        const g = gitCache.get(agent.cwd), pr = g && g.pr;
+        if (!pr || !pr.checks || pr.checks.state !== 'fail') return send(res, 409, { error: 'This agent has no PR with failing checks.' });
+        if (!GH_BIN) return send(res, 409, { error: 'The gh CLI is needed to read CI logs.' });
+        const log = await ciLog(agent.cwd, pr);
+        if (req.method === 'GET' && action === 'ci-log') return send(res, 200, { ok: true, checks: pr.checks.failedChecks, log });
+        if (req.method === 'POST' && action === 'ci-fix') {
+          if (!running) return send(res, 409, { error: `${name} is stopped. Start it first.` });
+          const text = G.ciFixPrompt({ number: pr.number, failedChecks: pr.checks.failedChecks }, log);
+          const idle = (memory.get(name) || {}).state === 'idle';
+          if (idle) await sendPrompt(name, text); else QUEUE.set(C.enqueue(QUEUE.get(), name, text).all);
+          await poll();
+          return send(res, 200, { ok: true, sent: idle ? 'sent' : 'queued' });
+        }
+      }
+      // Fit a running agent to the panel, on request only: Claude Code redraws and its scroll history is lost.
+      // Afterwards tmux follows whichever terminal attaches next, as usual.
+      if (req.method === 'POST' && action === 'fit') {
+        const size = C.cleanSize(await readBody(req));
+        if (!size) return send(res, 400, { error: 'Give the size in columns and rows.' });
+        if (!running) return send(res, 409, { error: `${name} is stopped.` });
+        await tmux('resize-window', '-t', target(name), '-x', String(size.cols), '-y', String(size.rows));
+        await tmux('set-option', '-w', '-t', target(name), 'window-size', 'latest');
+        await poll();
+        return send(res, 200, { ok: true });
+      }
+      // The conversation so far, drawn like Claude Code prints it: the scrollback that full-screen Claude Code
+      // doesn't leave in tmux. Read from the last 3 MB of the agent's current transcript.
+      if (req.method === 'GET' && action === 'history-text') {
+        const sid = (memory.get(name) || {}).sessionId || agent.sessionId;
+        if (!sid || !SESSION_RE.test(sid)) return send(res, 200, { ok: true, text: '', stamp: 0 });
+        const file = path.join(PROJECTS_DIR, encodeCwd(agent.cwd), `${sid}.jsonl`);
+        let st; try { st = await fsp.stat(file); } catch { return send(res, 200, { ok: true, text: '', stamp: 0 }); }
+        const want = Math.min(st.size, 3 * 1024 * 1024);
+        const fh = await fsp.open(file, 'r');
+        let raw; try { const buf = Buffer.alloc(want); await fh.read(buf, 0, want, st.size - want); raw = buf.toString('utf8'); } finally { await fh.close(); }
+        const lines = raw.split('\n'); if (want < st.size) lines.shift(); // the first line is cut
+        const entries = []; for (const l of lines) { if (!l.trim()) continue; try { entries.push(JSON.parse(l)); } catch {} }
+        return send(res, 200, { ok: true, text: Hist.terminalText(entries), stamp: st.mtimeMs });
+      }
+      // Replay: what the agent did today, step by step, from its main transcripts (helpers left out).
+      if (req.method === 'GET' && action === 'replay') {
+        const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+        const from = midnight.getTime(), to = Date.now();
+        const files = new Set([...(agentFiles.get(name) || [])].filter((f) => !f.includes(`${path.sep}subagents${path.sep}`)));
+        const sid = (memory.get(name) || {}).sessionId || agent.sessionId;
+        if (sid && SESSION_RE.test(sid)) files.add(path.join(PROJECTS_DIR, encodeCwd(agent.cwd), `${sid}.jsonl`));
+        const entries = [];
+        for (const f of files) {
+          let st; try { st = await fsp.stat(f); } catch { continue; }
+          if (st.mtimeMs < from) continue;
+          const want = Math.min(st.size, 8 * 1024 * 1024);
+          const fh = await fsp.open(f, 'r');
+          let raw; try { const buf = Buffer.alloc(want); await fh.read(buf, 0, want, st.size - want); raw = buf.toString('utf8'); } finally { await fh.close(); }
+          const lines = raw.split('\n'); if (want < st.size) lines.shift();
+          for (const l of lines) { if (!l.trim()) continue; try { entries.push(JSON.parse(l)); } catch {} }
+        }
+        entries.sort((x, y) => (Date.parse(x.timestamp) || 0) - (Date.parse(y.timestamp) || 0));
+        return send(res, 200, { ok: true, from, to, events: Hist.replayEvents(entries, from, to) });
+      }
+      if (action === 'permissions') {
+        if (req.method === 'GET') return send(res, 200, { ok: true, ...(await permissionsView(agent.cwd)) });
+        if (req.method === 'POST') {
+          const b = await readBody(req);
+          const lists = { allow: Array.isArray(b.allow) ? b.allow : [], ask: Array.isArray(b.ask) ? b.ask : [], deny: Array.isArray(b.deny) ? b.deny : [] };
+          try { savePermissions(agent.cwd, lists); } catch (e) { return send(res, 400, { error: e.message }); }
+          return send(res, 200, { ok: true, ...(await permissionsView(agent.cwd)) });
+        }
       }
       if (req.method === 'POST' && action === 'label') {
         const label = cleanLabel((await readBody(req)).label);
@@ -969,9 +1341,9 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { ok: true });
       }
       if (req.method === 'POST' && action === 'start') {
-        const { conversation } = await readBody(req);
+        const { conversation, size } = await readBody(req);
         if (running) return send(res, 409, { error: `${name} is already running.` });
-        bindSession(agent, await startAgent(name, agent.cwd, conversation || ''));
+        bindSession(agent, await startAgent(name, agent.cwd, conversation || '', C.cleanSize(size)));
         persist();
         startedAt.set(name, Date.now());
         await poll();

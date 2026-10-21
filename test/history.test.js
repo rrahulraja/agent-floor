@@ -63,3 +63,42 @@ test('searchEntry finds prompts, replies, commands and edits', () => {
   assert.equal(H.searchEntry(entries[8], 'pr #9').role, 'claude');
   assert.equal(H.searchEntry(entries[0], 'nothing-like-this'), null);
 });
+
+test('terminalText: the conversation drawn like Claude Code prints it', () => {
+  const ts = '2026-10-21T10:00:00Z';
+  const entries = [
+    { type: 'user', timestamp: ts, message: { content: 'Run the tests and fix failures' } },
+    { type: 'assistant', timestamp: ts, message: { content: [{ type: 'text', text: 'Running them now.' }, { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'npm test' } }] } },
+    { type: 'user', timestamp: ts, message: { content: [{ type: 'tool_result', tool_use_id: 't1', content: 'line 1\nline 2\nline 3\nline 4\nline 5' }] } },
+    { type: 'assistant', timestamp: ts, message: { content: [{ type: 'tool_use', id: 't2', name: 'Edit', input: { file_path: '/repo/src/a.js' } }] } },
+    { type: 'user', timestamp: ts, message: { content: [{ type: 'tool_result', tool_use_id: 't2', is_error: true, content: 'old_string not found' }] } },
+    { type: 'assistant', timestamp: ts, message: { content: [{ type: 'text', text: 'All green now.' }] } },
+  ];
+  const plain = H.terminalText(entries).replace(/\x1b\[[0-9;]*m/g, '');
+  assert.equal(plain, [
+    '> Run the tests and fix failures', '',
+    '● Running them now.', '',
+    '● Bash(npm test)', '  ⎿  line 1', '     line 2', '     line 3', '     … +2 lines', '',
+    '● Edit(src/a.js)', '  ⎿  old_string not found', '',
+    '● All green now.', '',
+  ].join('\n'));
+});
+
+test('replayEvents: what the agent was doing, step by step, inside a time window', () => {
+  const at = (m) => `2026-10-21T10:${String(m).padStart(2, '0')}:00Z`;
+  const entries = [
+    { type: 'user', timestamp: at(0), message: { content: 'Fix the flaky test' } },
+    { type: 'assistant', timestamp: at(1), message: { content: [{ type: 'tool_use', id: 'a', name: 'Read', input: { file_path: '/r/test/a.test.js' } }] } },
+    { type: 'assistant', timestamp: at(3), message: { content: [{ type: 'tool_use', id: 'b', name: 'Bash', input: { command: 'npm test' } }] } },
+    { type: 'assistant', timestamp: at(6), message: { content: [{ type: 'text', text: 'Fixed: the test waited on a timer.' }] } },
+    { type: 'assistant', timestamp: at(7), isSidechain: true, message: { content: [{ type: 'tool_use', id: 'c', name: 'Bash', input: { command: 'ls' } }] } },
+  ];
+  const ev = H.replayEvents(entries, Date.parse(at(0)), Date.parse(at(59)));
+  assert.deepEqual(ev.map((e) => [e.state, e.text]), [
+    ['planning', 'You: Fix the flaky test'],
+    ['reading', 'Read a.test.js'],
+    ['tests', '$ npm test'],
+    ['idle', 'Fixed: the test waited on a timer.'],
+  ]);
+  assert.equal(H.replayEvents(entries, Date.parse(at(2)), Date.parse(at(4))).length, 1);
+});

@@ -15,7 +15,6 @@ const STYLE = `
 .trunk{animation:trunk 3s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:top}@keyframes trunk{to{transform:rotate(-8deg)}}
 .notes text{animation:note 3s ease-out infinite;opacity:0}.notes text:nth-child(2){animation-delay:1s}.notes text:nth-child(3){animation-delay:2s}
 @keyframes note{15%{opacity:1}100%{opacity:0;transform:translate(8px,-22px)}}
-.pull{animation:pull 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:right}@keyframes pull{50%{transform:translateX(-3px)}}
 .spark{animation:spark 1s steps(2) infinite}@keyframes spark{50%{opacity:.25}}
 .glow{animation:glow 2s ease-in-out infinite}@keyframes glow{50%{opacity:.55}}
 .flicker{animation:flick 2.2s steps(3) infinite}@keyframes flick{40%{opacity:.75}60%{opacity:.95}}
@@ -23,7 +22,30 @@ const STYLE = `
 .dots circle{animation:dot 1.2s infinite;opacity:.2}.dots circle:nth-child(2){animation-delay:.2s}.dots circle:nth-child(3){animation-delay:.4s}@keyframes dot{40%{opacity:1}}
 .scribble{stroke-dasharray:18;stroke-dashoffset:18;animation:scr 2.4s linear infinite}@keyframes scr{60%,100%{stroke-dashoffset:0}}
 .zz text{animation:zz 2.6s ease-out infinite;opacity:0}.zz text:nth-child(2){animation-delay:1.3s}@keyframes zz{20%{opacity:1}100%{opacity:0;transform:translate(6px,-14px)}}
-@media (prefers-reduced-motion: reduce){*{animation:none!important}.notes text,.zz text{opacity:0}.scribble{stroke-dashoffset:0}}`;
+.blink{animation:blink 4.6s infinite;transform-box:fill-box;transform-origin:center}@keyframes blink{0%,93%,100%{transform:none}95.5%{transform:scaleY(.1)}}
+.breathe{animation:breathe 3.4s ease-in-out infinite;transform-box:fill-box;transform-origin:bottom}@keyframes breathe{50%{transform:scale(1.012,1.03)}}
+.tilt{animation:tilt 3.2s ease-in-out infinite alternate;transform-origin:30px 34px}@keyframes tilt{from{transform:rotate(-5deg)}to{transform:rotate(4deg)}}
+.hopc{animation:hopc 1.3s ease-in-out infinite;transform-origin:30px 80px}@keyframes hopc{0%,62%,100%{transform:none}22%{transform:translateY(-5px)}42%{transform:scale(1.04,.95)}}
+.cheer{animation:cheer 1.3s ease-in-out infinite;transform-origin:30px 44px}@keyframes cheer{22%{transform:scale(1.06,1.1)}}
+.conf rect{animation:conf 2.4s ease-in infinite;opacity:0}.conf rect:nth-child(2){animation-delay:.5s}.conf rect:nth-child(3){animation-delay:1s}.conf rect:nth-child(4){animation-delay:1.5s}.conf rect:nth-child(5){animation-delay:1.9s}
+@keyframes conf{10%{opacity:1}100%{opacity:0;transform:translateY(30px) rotate(200deg)}}
+.urgent{animation:urgent 5s ease-in-out infinite;transform-origin:44px 44px}
+@keyframes urgent{0%,20%,40%,50%,58%,66%,74%,82%,90%,100%{transform:none}10%,30%{transform:rotate(14deg)}54%,62%,70%,78%,86%{transform:rotate(22deg)}}
+.pop.urg{animation:popu 5s ease-in-out infinite;transform-box:fill-box;transform-origin:center}@keyframes popu{0%,40%,100%{transform:none}10%,30%{transform:translateY(-2px)}50%,62%,74%,86%{transform:scale(1.18) translateY(-2px)}56%,68%,80%,92%{transform:none}}
+.steam path{animation:steam 2.6s ease-out infinite;opacity:0}.steam path:nth-child(2){animation-delay:.9s}.steam path:nth-child(3){animation-delay:1.7s}@keyframes steam{20%{opacity:.7}100%{opacity:0;transform:translateY(-9px) scaleX(1.4)}}
+.flip{animation:flip 3.8s ease-in-out infinite;transform-origin:30px 58px}@keyframes flip{0%,55%{transform:none;opacity:1}80%{transform:scaleX(-1);opacity:1}81%,100%{transform:scaleX(-1);opacity:0}}
+.drawn{animation:drawn 2.2s ease-in infinite;transform-box:fill-box;transform-origin:right}@keyframes drawn{70%{transform:translateX(-4px)}73%,100%{transform:none}}
+.fly{animation:fly 2.2s linear infinite;opacity:0}@keyframes fly{0%,71%{opacity:0;transform:none}72%{opacity:1}100%{opacity:0;transform:translate(-40px,6px)}}
+.swing{animation:swing 2.4s ease-in-out infinite;transform-origin:50px 58px}@keyframes swing{0%,100%{transform:none}38%{transform:rotate(-16deg)}52%{transform:rotate(7deg)}64%{transform:none}}
+.hit{animation:hit 2.4s infinite;opacity:0}@keyframes hit{0%,50%,62%,100%{opacity:0}53%{opacity:1}}
+.jit{animation:jit 3.1s steps(1) infinite}@keyframes jit{0%,86%{transform:none}88%{transform:translateX(1.2px)}91%{transform:translateX(-1px)}94%{transform:skewX(8deg)}}
+.scan{animation:scan 1.8s linear infinite}@keyframes scan{from{transform:translateY(0)}to{transform:translateY(-15px)}}
+.spin{animation:spin 1.4s linear infinite;transform-box:fill-box;transform-origin:center}@keyframes spin{to{transform:rotate(360deg)}}
+.cape{animation:cape 3s ease-in-out infinite alternate;transform-origin:30px 40px}@keyframes cape{from{transform:skewX(-3deg)}to{transform:skewX(4deg) scaleX(1.04)}}
+.emb{animation:emb 2.4s ease-in-out infinite}@keyframes emb{50%{opacity:.7}}
+.glint{animation:glint 2.8s infinite;opacity:0}@keyframes glint{0%,70%,100%{opacity:0}80%{opacity:1}}
+.wobble{animation:wobble 4s ease-out infinite;transform-origin:30px 57px}@keyframes wobble{0%{transform:rotate(-28deg)}18%{transform:rotate(20deg)}36%{transform:rotate(-11deg)}54%{transform:rotate(6deg)}72%{transform:rotate(-2deg)}90%,100%{transform:none}}
+@media (prefers-reduced-motion: reduce){*{animation:none!important}.notes text,.zz text,.conf rect,.fly,.glint{opacity:0}.steam path{opacity:.5}.scribble{stroke-dashoffset:0}}`;
 
 function shade(hex, f) {
   const n = parseInt(hex.slice(1), 16);
@@ -54,17 +76,22 @@ function arms(pose, o, skin) {
   const hand = (x, y) => `<circle cx="${x}" cy="${y}" r="3.4" fill="${skin}"/>`;
   switch (pose) {
     case 'typing': return arm('M16 44 q-4 10 6 16', 'tl') + arm('M44 44 q4 10 -6 16', 'tr');
-    case 'raise': return arm('M16 44 q-6 10 -2 20') + `<g class="wave">${arm('M44 44 q10 -8 8 -22')}${hand(52, 20)}</g>`;
+    case 'raise': return arm('M16 44 q-6 10 -2 20') + `<g class="${o.urgent ? 'urgent' : 'wave'}">${arm('M44 44 q10 -8 8 -22')}${hand(52, 20)}</g>`;
+    case 'cheer': return `<g class="cheer">${arm('M16 44 q-10 -6 -8 -22')}${arm('M44 44 q10 -6 8 -22')}${hand(8, 22)}${hand(52, 22)}</g>`;
     case 'hold': return arm('M16 44 q-5 10 8 14') + arm('M44 44 q5 10 -8 14') + hand(24, 58) + hand(36, 58);
     case 'flute': return arm('M16 44 q-3 -6 10 -14') + arm('M44 44 q8 -4 0 -16') + hand(27, 30) + hand(43, 28);
     case 'blow': return arm('M16 44 q-2 -4 8 -12') + arm('M44 44 q2 -4 -8 -12') + hand(25, 32) + hand(35, 32);
-    case 'bow': return arm('M16 44 q-6 -2 -10 -8') + hand(6, 36) + `<g class="pull">${arm('M44 44 q-8 -4 -16 -8')}${hand(28, 32)}</g>`;
+    case 'bow': return arm('M16 44 q-6 -2 -10 -8') + hand(6, 36) + `<g class="drawn">${arm('M44 44 q-8 -4 -16 -8')}${hand(28, 32)}</g>`;
     case 'staff': return arm('M16 44 q-5 10 -1 20') + arm('M44 44 q6 8 6 14') + hand(50, 58);
-    case 'mug': return arm('M16 44 q-6 10 -2 20') + arm('M44 44 q2 10 -8 13') + '<rect x="28" y="50" width="8" height="9" rx="1.5" fill="#F4F1E8" stroke="#8A6A4E" stroke-width=".9"/><path d="M36 52 q3.5 1.5 0 4.5" fill="none" stroke="#8A6A4E" stroke-width=".9"/>' + hand(36, 57);
+    case 'mug': return arm('M16 44 q-6 10 -2 20') + arm('M44 44 q2 10 -8 13') + '<rect x="28" y="50" width="8" height="9" rx="1.5" fill="#F4F1E8" stroke="#8A6A4E" stroke-width=".9"/><path d="M36 52 q3.5 1.5 0 4.5" fill="none" stroke="#8A6A4E" stroke-width=".9"/>' + STEAM(32, 48) + hand(36, 57);
     case 'chin': return arm('M16 44 q-6 10 -2 20') + arm('M44 44 q4 -2 -10 -12') + hand(34, 33);
     default: return arm('M16 44 q-6 10 -2 20') + arm('M44 44 q6 10 2 20');
   }
 }
+
+// Small rising wisps of steam above (x, y), and a flash where a swung weapon lands.
+const STEAM = (x, y) => `<g class="steam" fill="none" stroke="#FFFFFF" stroke-width="1" stroke-linecap="round"><path d="M${x} ${y} q-1.5 -2 0 -4"/><path d="M${x + 2.5} ${y} q1.5 -2 0 -4"/><path d="M${x + 1.2} ${y - 1} q-1.5 -2 0 -4"/></g>`;
+const HIT = (x, y) => `<g class="hit" stroke="#FFE27A" stroke-width="1" stroke-linecap="round"><path d="M${x - 5} ${y} h-3 M${x - 4} ${y - 4} l-2 -2 M${x - 4} ${y + 4} l-2 2"/></g>`;
 
 // ---------- props, placed for the pose ----------
 function prop(p) {
@@ -72,19 +99,19 @@ function prop(p) {
   const c = p.color;
   switch (p.type) {
     case 'flute': return `<line x1="20" y1="31" x2="56" y2="27" stroke="${c || '#9A5B2A'}" stroke-width="3" stroke-linecap="round"/><g fill="#3E2412"><circle cx="46" cy="28" r=".8"/><circle cx="50" cy="27.6" r=".8"/></g><g class="notes" fill="#3B5FAF" font-size="7" font-family="serif"><text x="52" y="22">♪</text><text x="55" y="25">♫</text><text x="50" y="24">♪</text></g>`;
-    case 'bow': return `<path d="M6 14 Q-2 36 6 58" fill="none" stroke="${c || '#7A4A26'}" stroke-width="2.2"/><line x1="6" y1="14" x2="6" y2="58" stroke="#E8DCC0" stroke-width=".8"/><line x1="6" y1="36" x2="30" y2="32" stroke="#5A3A20" stroke-width="1.2"/>`;
-    case 'mace': return `<line x1="50" y1="58" x2="56" y2="26" stroke="#8B5A2B" stroke-width="2.5"/><circle cx="56" cy="22" r="6" fill="${c || '#E8B830'}"/><circle cx="56" cy="22" r="2" fill="${shade(c || '#E8B830', -0.3)}"/>`;
+    case 'bow': return `<path d="M6 14 Q-2 36 6 58" fill="none" stroke="${c || '#7A4A26'}" stroke-width="2.2"/><line x1="6" y1="14" x2="6" y2="58" stroke="#E8DCC0" stroke-width=".8"/><line x1="6" y1="36" x2="30" y2="32" stroke="#5A3A20" stroke-width="1.2"/><g class="fly"><line x1="12" y1="35" x2="26" y2="32.6" stroke="#5A3A20" stroke-width="1.2"/><path d="M10 35.4 l3 -2 v3z" fill="#9AA0B5"/></g>`;
+    case 'mace': return `<g class="swing"><line x1="50" y1="58" x2="56" y2="26" stroke="#8B5A2B" stroke-width="2.5"/><circle cx="56" cy="22" r="6" fill="${c || '#E8B830'}"/><circle cx="56" cy="22" r="2" fill="${shade(c || '#E8B830', -0.3)}"/></g>${HIT(56, 30)}`;
     case 'spear': return `<line x1="50" y1="80" x2="52" y2="4" stroke="#8B5A2B" stroke-width="2.2" stroke-linecap="round"/><path d="M52 -6 l3.5 9 h-7z" fill="#C7CCD8" stroke="#8A90A6" stroke-width=".6"/><path d="M49 5 h6" stroke="#E8B830" stroke-width="1.6"/>`;
     case 'staff': return `<line x1="50" y1="80" x2="52" y2="8" stroke="${c || '#7A4A26'}" stroke-width="2.4" stroke-linecap="round"/>${p.top === 'orb' ? '<circle class="glow" cx="52" cy="7" r="4" fill="#9FD3F2"/>' : ''}`;
     case 'scroll': return `<rect x="18" y="55" width="24" height="7" rx="2" fill="#EAD7A2"/><line class="scribble" x1="21" y1="58.5" x2="39" y2="58.5" stroke="#6B4A2A" stroke-width=".9"/>`;
-    case 'book': return `<path d="M18 54 h12 v9 h-12z M30 54 h12 v9 h-12z" fill="${c || '#C8352E'}"/><path d="M19 55 h10 v7 h-10z M31 55 h10 v7 h-10z" fill="#F4F1E8"/>`;
+    case 'book': return `<path d="M18 54 h12 v9 h-12z M30 54 h12 v9 h-12z" fill="${c || '#C8352E'}"/><path d="M19 55 h10 v7 h-10z M31 55 h10 v7 h-10z" fill="#F4F1E8"/><path class="flip" d="M31 55 h10 v7 h-10z" fill="#FFFDF5" stroke="#D9CFBA" stroke-width=".4"/>`;
     case 'quill': return `<path d="M38 58 q8 -12 14 -18 q-4 8 -12 18z" fill="#F4F1E8" stroke="#8A8F9E" stroke-width=".6"/><rect x="18" y="56" width="20" height="6" rx="1" fill="#EAD7A2"/><line class="scribble" x1="20" y1="59" x2="35" y2="59" stroke="#3E2412" stroke-width=".8"/>`;
     case 'conch': return `<path d="M24 26 q6 -6 14 -2 q2 5 -4 9 q-7 2 -10 -7z" fill="#F7F2E4" stroke="#C9BFA8" stroke-width=".8"/><path d="M28 27 q4 -2 7 0" stroke="#D8A27A" fill="none" stroke-width=".8"/><g class="notes" fill="#D8A27A" font-size="8" font-family="sans-serif"><text x="44" y="22">)</text><text x="47" y="24">)</text><text x="50" y="26">)</text></g>`;
     case 'wand': return `<line x1="36" y1="58" x2="54" y2="40" stroke="${c || '#5A3A20'}" stroke-width="1.6" stroke-linecap="round"/><g class="spark" fill="#FFE27A"><circle cx="55" cy="38" r="2"/><circle cx="58" cy="34" r="1"/><circle cx="52" cy="35" r="1"/></g>`;
     case 'crystal': return `<circle class="glow" cx="30" cy="54" r="7" fill="${c || '#9FC8F2'}"/><circle cx="27" cy="51" r="2" fill="#fff" opacity=".7"/><rect x="24" y="60" width="12" height="3" rx="1" fill="#8B5A2B"/>`;
-    case 'cauldron': return `<path d="M17 58 h26 q0 10 -13 10 q-13 0 -13 -10z" fill="#3A3F55"/><ellipse cx="30" cy="58" rx="13" ry="2.5" fill="${c || '#5CC793'}"/><g class="notes" fill="${c || '#5CC793'}" font-size="7"><text x="26" y="54">○</text><text x="32" y="52">○</text><text x="29" y="50">○</text></g>`;
-    case 'hammer': return `<line x1="50" y1="58" x2="52" y2="36" stroke="#8B5A2B" stroke-width="2.4"/><rect x="45" y="31" width="14" height="6" rx="1" fill="${c || '#8A90A6'}"/>`;
-    case 'beam': return `<rect x="26" y="52" width="4" height="9" rx="1" fill="#8A90A6"/><rect class="glow" x="27" y="18" width="2.4" height="34" rx="1.2" fill="${c || '#5CC7F2'}"/>`;
+    case 'cauldron': return `<path d="M17 58 h26 q0 10 -13 10 q-13 0 -13 -10z" fill="#3A3F55"/><ellipse cx="30" cy="58" rx="13" ry="2.5" fill="${c || '#5CC793'}"/><g class="notes" fill="${c || '#5CC793'}" font-size="7"><text x="26" y="54">○</text><text x="32" y="52">○</text><text x="29" y="50">○</text></g>${STEAM(26, 46)}`;
+    case 'hammer': return `<g class="swing"><line x1="50" y1="58" x2="52" y2="36" stroke="#8B5A2B" stroke-width="2.4"/><rect x="45" y="31" width="14" height="6" rx="1" fill="${c || '#8A90A6'}"/></g>${HIT(46, 38)}`;
+    case 'beam': return `<rect x="26" y="52" width="4" height="9" rx="1" fill="#8A90A6"/><rect class="glow jit" x="27" y="18" width="2.4" height="34" rx="1.2" fill="${c || '#5CC7F2'}"/>`;
     case 'walkie': return `<rect x="31" y="22" width="7" height="12" rx="1.5" fill="#3A3F55"/><line x1="33" y1="22" x2="33" y2="15" stroke="#3A3F55" stroke-width="1.4"/><circle class="spark" cx="35" cy="27" r="1" fill="#F2B825"/>`;
     case 'map': return `<path d="M17 52 l8 -2 l8 2 l9 -2 v12 l-9 2 l-8 -2 l-8 2z" fill="#EAD7A2" stroke="#B89A5A" stroke-width=".6"/><path class="scribble" d="M20 58 q6 -4 10 0 t10 -2" stroke="#C8352E" stroke-width=".9" fill="none" stroke-dasharray="2 1.5"/>`;
     case 'flask': return `<path d="M26 46 h8 M27.5 46 v5 l-5 9 h15 l-5 -9 v-5" fill="#E9F6EE" stroke="#3A3F55" stroke-width="1"/><path d="M24 58 h12 l-1.5 -3 h-9z" fill="${c || '#5CC793'}" class="glow"/>`;
@@ -96,16 +123,47 @@ function prop(p) {
     case 'sandals': return `<g fill="#B07650"><ellipse cx="24" cy="58" rx="4" ry="6"/><ellipse cx="36" cy="58" rx="4" ry="6"/></g>`;
     case 'bowlfood': return `<path d="M20 57 h20 q0 7 -10 7 q-10 0 -10 -7z" fill="#B0603A"/><g fill="#FFF3DC"><circle cx="26" cy="56" r="2.5"/><circle cx="31" cy="55" r="2.8"/><circle cx="35" cy="56.5" r="2.3"/></g>`;
     case 'garland': return `<g fill="#F2B825"><circle cx="18" cy="56" r="2"/><circle cx="23" cy="60" r="2"/><circle cx="30" cy="62" r="2"/><circle cx="37" cy="60" r="2"/><circle cx="42" cy="56" r="2"/></g>`;
-    case 'compass': return `<circle cx="30" cy="57" r="6" fill="#E8B830"/><circle cx="30" cy="57" r="4.5" fill="#F4F1E8"/><path class="sway" d="M30 53 l1.2 4 l-1.2 4 l-1.2 -4z" fill="#C8352E"/>`;
+    case 'compass': return `<circle cx="30" cy="57" r="6" fill="#E8B830"/><circle cx="30" cy="57" r="4.5" fill="#F4F1E8"/><path class="wobble" d="M30 53 l1.2 4 l-1.2 4 l-1.2 -4z" fill="#C8352E"/>`;
     case 'medal': return `<path d="M26 40 l4 8 l4 -8" fill="#3B6FD8"/><circle class="glow" cx="30" cy="51" r="4" fill="#E8B830"/>`;
-    case 'bike': return `<g fill="none" stroke="#3A3F55" stroke-width="1.6"><circle cx="16" cy="70" r="7"/><circle cx="44" cy="70" r="7"/><path d="M16 70 l10 -10 h10 l8 10 M26 60 l4 10"/></g>`;
+    case 'bike': return `<g fill="none" stroke="#3A3F55" stroke-width="1.6"><circle cx="16" cy="70" r="7"/><circle cx="44" cy="70" r="7"/><path d="M16 70 l10 -10 h10 l8 10 M26 60 l4 10"/></g><g stroke="#8A90A6" stroke-width=".7"><path class="spin" d="M10 70 h12 M16 64 v12 M11.8 65.8 l8.4 8.4 M20.2 65.8 l-8.4 8.4"/><path class="spin" d="M38 70 h12 M44 64 v12 M39.8 65.8 l8.4 8.4 M48.2 65.8 l-8.4 8.4"/></g>`;
     case 'joystick': return `<rect x="20" y="58" width="20" height="7" rx="2" fill="#3A3F55"/><line class="sway" x1="27" y1="58" x2="27" y2="50" stroke="#1E2235" stroke-width="1.6"/><circle cx="27" cy="50" r="2" fill="#F2545B"/><circle class="spark" cx="35" cy="61" r="1.3" fill="#5CC793"/>`;
-    case 'holo': return `<path class="flicker" d="M18 62 l12 -16 l12 16z" fill="#5CC7F2" opacity=".35"/><circle class="flicker" cx="30" cy="54" r="4" fill="#5CC7F2" opacity=".6"/>`;
+    case 'holo': return `<clipPath id="hc"><path d="M18 62 l12 -16 l12 16z"/></clipPath><g class="jit"><path class="flicker" d="M18 62 l12 -16 l12 16z" fill="#5CC7F2" opacity=".35"/><circle class="flicker" cx="30" cy="54" r="4" fill="#5CC7F2" opacity=".6"/><g clip-path="url(#hc)"><rect class="scan" x="18" y="60" width="24" height="1.2" fill="#E6F8FF" opacity=".8"/></g></g>`;
     case 'wrench': return `<path d="M44 58 l8 -16 a4 4 0 1 1 3 2 l-8 16z" fill="${c || '#8A90A6'}"/>`;
     case 'thali': return `<ellipse cx="30" cy="60" rx="12" ry="3.5" fill="#E8B830"/><path class="glow" d="M30 52 q-2 3 0 5 q2 -2 0 -5z" fill="#FFB347"/>`;
     case 'arrows': return `<g stroke="#7A4A26" stroke-width="1.1"><line x1="8" y1="70" x2="18" y2="40"/><line x1="52" y1="70" x2="42" y2="38"/><line x1="4" y1="64" x2="20" y2="46"/><line x1="56" y1="64" x2="40" y2="44"/></g><g fill="#9AA0B5"><path d="M18 40 l-2 3 h4z"/><path d="M42 38 l-2 3 h4z"/></g>`;
+    case 'shield': return `<circle cx="30" cy="58" r="9" fill="${c || '#C8352E'}"/><circle cx="30" cy="58" r="6.5" fill="#F4F1E8"/><circle cx="30" cy="58" r="4.5" fill="${c || '#C8352E'}"/><path class="emb" d="M30 54.6 l1 2.2 l2.4 .2 l-1.8 1.6 l.6 2.4 l-2.2 -1.3 l-2.2 1.3 l.6 -2.4 l-1.8 -1.6 l2.4 -.2z" fill="#F2B825"/>`;
+    case 'magnifier': return `<line x1="34" y1="60" x2="40" y2="52" stroke="#6B4426" stroke-width="2.4" stroke-linecap="round"/><circle cx="43" cy="48" r="5" fill="#CFE8F7" fill-opacity=".55" stroke="${c || '#8A90A6'}" stroke-width="1.6"/><path class="glint" d="M40.5 46 q1.5 -2 3.5 -2" stroke="#fff" stroke-width="1" fill="none" stroke-linecap="round"/>`;
     default: return '';
   }
+}
+
+// ---------- heroes: cape behind, eye mask, chest emblem ----------
+function cape(k) {
+  if (!k) return '';
+  const c = k.color || '#C8352E';
+  return `<g class="cape"><path d="M15 40 Q4 60 0 80 H60 Q56 60 45 40 Z" fill="${c}"/><path d="M15 40 Q6 60 3 80 H10 Q11 62 18 43Z M45 40 Q54 60 57 80 H50 Q49 62 42 43Z" fill="${shade(c, -0.22)}"/></g>`;
+}
+// The cape's clasps sit on the shoulders, in front of the body.
+function clasp(k) {
+  if (!k) return '';
+  const c = k.color || '#C8352E';
+  return `<path d="M13 47 Q14 40 21 39 L19 45z M47 47 Q46 40 39 39 L41 45z" fill="${c}"/><circle cx="20" cy="42" r="1.5" fill="#F2B825"/><circle cx="40" cy="42" r="1.5" fill="#F2B825"/>`;
+}
+function mask(m) {
+  if (!m) return '';
+  return `<path d="M18.5 19.5 q11.5 -3 23 0 q.5 3 -1.5 5 q-4 1.5 -7 -.5 q-2 -1.2 -4 0 q-3 2 -7 .5 q-2 -2 -1.5 -5z" fill="${m.color || '#1E2235'}"/>`;
+}
+function emblem(e) {
+  if (!e) return '';
+  const c = e.color || '#F2B825';
+  const shape = {
+    star: `<path d="M30 46.5 l1.6 3.3 l3.6 .4 l-2.7 2.4 l.8 3.6 l-3.3 -1.9 l-3.3 1.9 l.8 -3.6 l-2.7 -2.4 l3.6 -.4z" fill="${c}"/>`,
+    bolt: `<path d="M31.5 46 l-5 7 h3.5 l-1.5 5.5 l5.5 -7.5 h-3.6z" fill="${c}"/>`,
+    circle: `<circle cx="30" cy="52" r="4.4" fill="${c}"/><circle cx="30" cy="52" r="2.2" fill="${shade(c, -0.35)}"/>`,
+    diamond: `<path d="M30 46.5 l5 5.5 l-5 5.5 l-5 -5.5z" fill="${c}"/><path d="M30 49 l2.6 3 l-2.6 3 l-2.6 -3z" fill="${shade(c, 0.4)}"/>`,
+  }[e.shape || 'star'] || '';
+  // Drawn high on the chest, above anything held in the lap.
+  return `<g transform="translate(0 -6)"><g class="emb">${shape}</g></g>`;
 }
 
 // ---------- heads ----------
@@ -124,13 +182,14 @@ function hair(h, skin) {
   }
 }
 
+const blink = (eyes) => `<g class="blink">${eyes}</g>`;
 function face(f, skin, extra = {}) {
   const eyes = {
-    smile: '<circle cx="26" cy="22" r="1.4" class="ink"/><circle cx="34" cy="22" r="1.4" class="ink"/>',
+    smile: blink('<circle cx="26" cy="22" r="1.4" class="ink"/><circle cx="34" cy="22" r="1.4" class="ink"/>'),
     closed: '<path d="M24.5 22 q1.5 1.2 3 0" class="line"/><path d="M32.5 22 q1.5 1.2 3 0" class="line"/>',
-    focus: '<circle cx="26" cy="23" r="1.3" class="ink"/><circle cx="34" cy="23" r="1.3" class="ink"/><path d="M24 19.5 h4 M32 19.5 h4" class="line"/>',
-    stern: '<circle cx="26" cy="23" r="1.3" class="ink"/><circle cx="34" cy="23" r="1.3" class="ink"/><path d="M23.5 19 l4 1.5 M36.5 19 l-4 1.5" class="line"/>',
-    wide: '<circle cx="26" cy="22" r="2" fill="#fff"/><circle cx="26" cy="22" r="1.2" class="ink"/><circle cx="34" cy="22" r="2" fill="#fff"/><circle cx="34" cy="22" r="1.2" class="ink"/>',
+    focus: blink('<circle cx="26" cy="23" r="1.3" class="ink"/><circle cx="34" cy="23" r="1.3" class="ink"/>') + '<path d="M24 19.5 h4 M32 19.5 h4" class="line"/>',
+    stern: blink('<circle cx="26" cy="23" r="1.3" class="ink"/><circle cx="34" cy="23" r="1.3" class="ink"/>') + '<path d="M23.5 19 l4 1.5 M36.5 19 l-4 1.5" class="line"/>',
+    wide: blink('<circle cx="26" cy="22" r="2" fill="#fff"/><circle cx="26" cy="22" r="1.2" class="ink"/><circle cx="34" cy="22" r="2" fill="#fff"/><circle cx="34" cy="22" r="1.2" class="ink"/>'),
   }[f.eyes || 'smile'];
   const mouth = { smile: '<path d="M26.5 27 q3.5 3 7 0" class="line"/>', flat: '<path d="M27 28 h6" class="line"/>', o: '<circle cx="30" cy="28" r="1.5" class="ink"/>', none: '' }[f.mouth || 'smile'];
   let out = eyes + mouth;
@@ -192,23 +251,23 @@ function headInner(c) {
       `<circle cx="30" cy="22" r="13" fill="${skin}"/>` +
       `<g class="trunk"><path d="M30 26 Q28 40 33 46 Q38 51 42 46" fill="none" stroke="${shade(skin, -0.22)}" stroke-width="9" stroke-linecap="round"/><path d="M30 26 Q28 40 33 46 Q38 51 42 46" fill="none" stroke="${shade(skin, 0.08)}" stroke-width="7" stroke-linecap="round"/><path d="M28 32 h5 M29 37 h5 M31 42 h4" stroke="${shade(skin, -0.15)}" stroke-width=".8"/></g>` +
       `<path d="M35 30 q5 2 6 -3" stroke="#FFFDF5" stroke-width="2.6" fill="none" stroke-linecap="round"/><path d="M25 30 q-2 1 -2.5 -0.5" stroke="#FFFDF5" stroke-width="2.6" fill="none" stroke-linecap="round"/>` +
-      `<ellipse cx="25" cy="21" rx="1.5" ry="1.8" class="ink"/><ellipse cx="35" cy="21" rx="1.5" ry="1.8" class="ink"/>`;
+      blink('<ellipse cx="25" cy="21" rx="1.5" ry="1.8" class="ink"/><ellipse cx="35" cy="21" rx="1.5" ry="1.8" class="ink"/>');
   }
   if (kind === 'monkey') {
     const fur = c.fur || '#B5733A', muzzle = c.muzzle || '#F2C9A0';
     return `<circle cx="16" cy="22" r="5" fill="${fur}"/><circle cx="44" cy="22" r="5" fill="${fur}"/><circle cx="16" cy="22" r="2.6" fill="${muzzle}"/><circle cx="44" cy="22" r="2.6" fill="${muzzle}"/>` +
       `<circle cx="30" cy="21" r="12" fill="${fur}"/><path d="M21 22 q0 -8 9 -8 q9 0 9 8 q0 10 -9 10 q-9 0 -9 -10z" fill="${muzzle}"/>` +
-      `<circle cx="26" cy="20" r="1.4" class="ink"/><circle cx="34" cy="20" r="1.4" class="ink"/><path d="M26.5 27 q3.5 2.5 7 0" class="line"/><ellipse cx="30" cy="24" rx="2" ry="1" class="ink"/>`;
+      blink('<circle cx="26" cy="20" r="1.4" class="ink"/><circle cx="34" cy="20" r="1.4" class="ink"/>') + `<path d="M26.5 27 q3.5 2.5 7 0" class="line"/><ellipse cx="30" cy="24" rx="2" ry="1" class="ink"/>`;
   }
   if (kind === 'bear') {
     const fur = c.fur || '#4A3426';
     return `<circle cx="19" cy="11" r="5" fill="${fur}"/><circle cx="41" cy="11" r="5" fill="${fur}"/><circle cx="30" cy="22" r="13" fill="${fur}"/>` +
-      `<ellipse cx="30" cy="27" rx="7" ry="5.5" fill="#C9A27A"/><ellipse cx="30" cy="25" rx="2.4" ry="1.6" class="ink"/><circle cx="25" cy="20" r="1.4" class="ink"/><circle cx="35" cy="20" r="1.4" class="ink"/>`;
+      `<ellipse cx="30" cy="27" rx="7" ry="5.5" fill="#C9A27A"/><ellipse cx="30" cy="25" rx="2.4" ry="1.6" class="ink"/>` + blink('<circle cx="25" cy="20" r="1.4" class="ink"/><circle cx="35" cy="20" r="1.4" class="ink"/>');
   }
   if (kind === 'bird') {
     const feathers = c.fur || '#5A4A3A';
     return `<circle cx="30" cy="22" r="12" fill="${feathers}"/>${c.bald ? '<circle cx="30" cy="18" r="8" fill="#E8A27A"/>' : ''}` +
-      `<circle cx="25" cy="19" r="4" fill="#fff"/><circle cx="35" cy="19" r="4" fill="#fff"/><circle cx="25" cy="19" r="2" class="ink"/><circle cx="35" cy="19" r="2" class="ink"/>` +
+      blink('<circle cx="25" cy="19" r="4" fill="#fff"/><circle cx="35" cy="19" r="4" fill="#fff"/><circle cx="25" cy="19" r="2" class="ink"/><circle cx="35" cy="19" r="2" class="ink"/>') +
       `<path d="M27 24 l3 6 l3 -6z" fill="#E8B830"/>${c.tufts ? `<path d="M19 12 l-3 -8 l7 5z M41 12 l3 -8 l-7 5z" fill="${feathers}"/>` : ''}`;
   }
   if (kind === 'dome') {
@@ -226,7 +285,7 @@ function headInner(c) {
   // human
   const h = hair(c.hair, skin), w = headwear(c.wear);
   return w.back + h.back + `<rect x="26" y="30" width="8" height="9" fill="${shade(skin, -0.08)}"/><circle cx="30" cy="22" r="11" fill="${skin}"/>` +
-    h.front + beard(c.beard) + face(c.face || {}, skin) + w.front + feather(c.feather) +
+    h.front + mask(c.mask) + beard(c.beard) + face(c.face || {}, skin) + w.front + feather(c.feather) +
     (c.earrings ? `<circle cx="19" cy="27" r="1.6" fill="${c.earrings}"/><circle cx="41" cy="27" r="1.6" fill="${c.earrings}"/>` : '');
 }
 
@@ -236,7 +295,7 @@ function bubble(kind) {
   const b = { waiting: ['#F29E1F', '!'], asking: ['#3B6FD8', '?'], done: ['#fff', '✓'] }[kind];
   if (!b) return '';
   const [fill, ch] = b;
-  return `<g class="pop"><rect x="40" y="-2" width="18" height="14" rx="5" fill="${fill}" stroke="#1E2235" stroke-width="1"/><text x="49" y="9" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="10" fill="${fill === '#fff' ? '#23845A' : '#fff'}">${ch}</text></g>`;
+  return `<g class="pop${kind === 'waiting' ? ' urg' : ''}"><rect x="40" y="-2" width="18" height="14" rx="5" fill="${fill}" stroke="#1E2235" stroke-width="1"/><text x="49" y="9" text-anchor="middle" font-family="Arial,sans-serif" font-weight="700" font-size="10" fill="${fill === '#fff' ? '#23845A' : '#fff'}">${ch}</text></g>`;
 }
 
 function character(c) {
@@ -249,14 +308,24 @@ function character(c) {
     body = '';
   } else {
     body = torso(o, c.head === 'human' || !c.head ? skin : c.bodySkin || c.fur || skin) + (c.necklace ? `<path d="M22 40 q8 10 16 0" fill="none" stroke="${c.necklace}" stroke-width="2.2"/>` : '') +
-      (c.thread ? '<path d="M18 42 Q30 56 44 70" stroke="#FFF7E8" stroke-width="1.2" fill="none"/>' : '');
+      (c.thread ? '<path d="M18 42 Q30 56 44 70" stroke="#FFF7E8" stroke-width="1.2" fill="none"/>' : '') + emblem(c.emblem) + clasp(c.cape);
   }
-  const front = c.head === 'dome' || c.head === 'hat-only' ? '' : arms(c.pose || 'down', o, c.head && c.head !== 'human' ? (c.handSkin || c.fur || skin) : skin);
+  const done = c.bubble === 'done';
+  // Finishing with free hands (or a medal on the chest): throw both arms up.
+  const pose = done && (!c.prop || c.prop.type === 'medal') && ['hold', 'down', undefined].includes(c.pose) ? 'cheer' : c.pose || 'down';
+  const front = c.head === 'dome' || c.head === 'hat-only' ? '' : arms(pose, { ...o, urgent: c.bubble === 'waiting' }, c.head && c.head !== 'human' ? (c.handSkin || c.fur || skin) : skin);
   const p = prop(c.prop);
   const behindProps = c.prop && ['bow', 'staff', 'spear', 'arrows', 'lights', 'bike'].includes(c.prop.type);
   const sleep = c.sleep ? '<g class="zz" fill="#3B5FAF" font-family="Arial,sans-serif" font-weight="700"><text x="44" y="10" font-size="8">z</text><text x="48" y="6" font-size="6">z</text></g>' : '';
   const think = c.think ? '<g class="dots"><circle cx="44" cy="6" r="1.6" fill="#3B5FAF"/><circle cx="49" cy="4" r="1.9" fill="#3B5FAF"/><circle cx="54" cy="2" r="2.2" fill="#3B5FAF"/></g>' : '';
-  const inner = `${behindProps ? p : ''}<g class="bob">${body}${head(c)}${front}${behindProps ? '' : p}</g>${sleep}${think}${bubble(c.bubble)}`;
+  const confetti = done ? '<g class="conf">' + [[10, 0, '#F2545B'], [22, -6, '#F2B825'], [36, -4, '#5CC793'], [48, 2, '#3B6FD8'], [16, -10, '#9B4DCA']].map(([x, y, f]) => `<rect x="${x}" y="${y}" width="2.4" height="1.4" fill="${f}"/>`).join('') + '</g>' : '';
+  // Each character breathes and blinks on its own clock, so a full floor never moves in lockstep.
+  const n = [...(c.title || c.name || '')].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) >>> 0, 7);
+  const breath = `animation-duration:${(3 + (n % 9) / 10).toFixed(1)}s`;
+  const hd = c.think ? `<g class="tilt">${head(c)}</g>` : head(c);
+  const fig = `${cape(c.cape)}${behindProps ? p : ''}<g class="bob"><g class="breathe" style="${breath}">${body}</g>${hd}${front}${behindProps ? '' : p}</g>`;
+  const inner = `${done ? `<g class="hopc">${fig}</g>` : fig}${sleep}${think}${bubble(c.bubble)}${confetti}`
+    .replace(/class="blink"/g, `class="blink" style="animation-delay:-${(n % 41) / 10}s"`);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -16 60 96"><title>${esc(c.title || '')}</title><style>${STYLE}</style>${inner}</svg>\n`;
 }
 

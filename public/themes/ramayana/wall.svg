@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 58"><style>.w{animation:w 3s ease-in-out infinite alternate}@keyframes w{to{transform:translateX(3px)}}@media (prefers-reduced-motion: reduce){*{animation:none!important}}</style>
-<rect width="120" height="58" fill="#9FD3E8"/><rect y="26" width="120" height="14" fill="#3E8AB8"/><g class="w" stroke="#9FD3E8" stroke-width=".8"><path d="M6 31 q3 -2 6 0 M40 35 q3 -2 6 0 M78 30 q3 -2 6 0"/></g>
-<path d="M30 34 h60" stroke="#8A6A4E" stroke-width="3"/><g fill="#7A5A3E"><circle cx="38" cy="34" r="2"/><circle cx="50" cy="34" r="2"/><circle cx="62" cy="34" r="2"/><circle cx="74" cy="34" r="2"/><circle cx="86" cy="34" r="2"/></g>
-<rect y="40" width="120" height="18" fill="#4E7A4A"/><g fill="#3E6A3A"><circle cx="8" cy="16" r="12"/><circle cx="112" cy="14" r="13"/><rect x="5" y="20" width="5" height="22" fill="#6B4A33"/><rect x="109" y="20" width="5" height="22" fill="#6B4A33"/></g>
-<path d="M0 50 h120" stroke="#3E6A3A" stroke-width="4"/><g fill="#F29EB8"><circle cx="30" cy="46" r="1.6"/><circle cx="56" cy="47" r="1.6"/><circle cx="96" cy="46" r="1.6"/></g></svg>

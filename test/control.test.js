@@ -45,3 +45,40 @@ test('worktree path from the template', () => {
   assert.equal(C.worktreePathFor('/tmp/wt/{repo}-{branch}', '/code/shop', 'fix/1'), '/tmp/wt/shop-fix-1');
   assert.equal(C.branchSlug('../../etc'), '..-..-etc');
 });
+
+
+test('paneSignals: approvals, busy, and the "trust this folder" screen', () => {
+  const approve = 'Bash command\n  npm publish\nDo you want to proceed?\n❯ 1. Yes\n  2. No, and tell Claude what to do differently';
+  assert.deepEqual(C.paneSignals(approve), { waiting: true, busy: false, trust: false });
+  assert.equal(C.paneSignals('✻ Thinking… (12s · esc to interrupt)').busy, true);
+  const trust = 'Accessing workspace:\n\n/Users/rrahul\n\nQuick safety check: Is this a project you created or one you trust?\n\n'
+    + 'Security guide\n\n❯ No, exit\n  Yes, I trust this folder\n\nEnter to confirm · Esc to cancel';
+  assert.deepEqual(C.paneSignals(trust), { waiting: true, busy: false, trust: true });
+  assert.equal(C.paneSignals('> ready').waiting, false);
+});
+
+test('approvalText: what the permission prompt is about, without the box drawing', () => {
+  const screen = [
+    'some earlier output',
+    '╭──────────────────────────────────────╮',
+    '│ Bash command                         │',
+    '│                                      │',
+    '│   kubectl -n prod rollout restart deploy/api │',
+    '│   Restart the API pods               │',
+    '│                                      │',
+    '│ Do you want to proceed?              │',
+    '│ ❯ 1. Yes                             │',
+    '│   2. No, and tell Claude what to do differently (esc) │',
+    '╰──────────────────────────────────────╯',
+  ].join('\n');
+  assert.equal(C.approvalText(screen), 'Bash command\nkubectl -n prod rollout restart deploy/api\nRestart the API pods');
+  assert.equal(C.approvalText('nothing to approve'), '');
+});
+
+test('cleanSize: terminal size from the page, whole numbers inside sane bounds, or nothing', () => {
+  assert.deepEqual(C.cleanSize({ cols: 132.7, rows: 41 }), { cols: 132, rows: 41 });
+  assert.deepEqual(C.cleanSize({ cols: 5, rows: 9000 }), { cols: 60, rows: 200 });
+  assert.equal(C.cleanSize({ cols: 'wide', rows: 40 }), null);
+  assert.equal(C.cleanSize(null), null);
+  assert.equal(C.cleanSize({}), null);
+});

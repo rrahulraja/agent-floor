@@ -147,3 +147,16 @@ test('helperState', () => {
   assert.equal(T.helperState({ ended: false }, {}, now - 5000, now, 10), 'working');
   assert.equal(T.helperState({ ended: false }, {}, now - 400000, now, 10), 'done');
 });
+
+test('analyze keeps the latest to-do list (TodoWrite)', () => {
+  const ts = '2026-10-21T10:00:00Z';
+  const todo = (id, todos) => ({ type: 'assistant', timestamp: ts, message: { content: [{ type: 'tool_use', id, name: 'TodoWrite', input: { todos } }] } });
+  const info = T.analyze([
+    todo('a', [{ content: 'Read the code', status: 'in_progress' }]),
+    todo('b', [{ content: 'Read the code', status: 'completed' }, { content: 'Fix the bug', status: 'in_progress', activeForm: 'Fixing the bug' }, { content: 'Run tests', status: 'pending' }]),
+  ]);
+  assert.deepEqual(info.todos, [
+    { text: 'Read the code', status: 'completed' }, { text: 'Fix the bug', status: 'in_progress' }, { text: 'Run tests', status: 'pending' },
+  ]);
+  assert.equal(T.analyze([]).todos, null);
+});
