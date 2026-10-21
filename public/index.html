@@ -316,6 +316,9 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .card .row { margin-top: 6px; gap: 4px; } .card .btn { padding: 1px 8px; font-size: 12px; }
 .card select { font-size: 12px; max-width: 100%; }
 @media (max-width: 900px) { .board { grid-template-columns: 1fr; } .board-add { grid-template-columns: 1fr; } }
+.handoffs h3 { margin: 0 0 4px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.handoffs p { margin: 2px 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.handoffs button { border: 1px solid var(--line); background: var(--bg); border-radius: 4px; padding: 0 6px; cursor: pointer; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* The instruction box lives inside the terminal window and looks like Claude Code's own input. */
 #dRunning { display: flex; flex-direction: column; flex: 1 0 auto; height: calc(100vh - 150px); min-height: 420px; gap: 8px; }
@@ -520,12 +523,14 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
         <p class="lastline" id="dLastPrompt" hidden></p>
 
         <div class="queue" id="dQueue" hidden></div>
+        <div class="handoffs" id="dHandoffs" hidden></div>
 
         <div class="row" id="dTools">
           <button class="btn" data-key="Escape">Interrupt</button>
           <button class="btn" data-key="BTab" title="Cycles Claude Code modes, like accept edits and plan mode">Switch mode</button>
           <button class="btn" id="timelineBtn">Timeline</button>
           <button class="btn" id="permBtn" title="What this agent may run without asking">Permissions</button>
+          <button class="btn" id="handoffBtn" title="When this agent finishes, pass its result to another agent">Hand off…</button>
           <button class="btn copy" id="copyAttach">Copy attach command</button>
           <button class="btn danger" id="stopBtn">Stop agent</button>
         </div>
@@ -626,6 +631,18 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <div class="board" id="boardCols"></div>
   <div class="row" style="margin-top:12px"><button class="btn" id="boardClose" autofocus>Close</button>
     <small class="hint" style="align-self:center">Tasks move by themselves: a busy agent → Working, its PR opens → In review, merged → Merged.</small></div>
+</dialog>
+<dialog id="handoffDialog">
+  <h2>Hand off</h2>
+  <form id="handoffForm">
+    <p>When <b id="hoFrom"></b> next finishes, send its final message to:</p>
+    <select id="hoTo" aria-label="Agent that takes over"></select>
+    <label for="hoNote" style="display:block;margin-top:10px;font-weight:600">What should it do with it?</label>
+    <textarea id="hoNote" rows="3" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--bg)" placeholder="Update the web client for the new endpoint, then run its tests."></textarea>
+    <label style="display:flex;gap:8px;align-items:center;margin-top:8px;font-weight:400"><input type="checkbox" id="hoEvery"> Every time it finishes, not just the next time</label>
+    <p class="error" id="hoError" hidden></p>
+    <div class="row" style="margin-top:12px"><button class="btn primary" type="submit">Set up hand-off</button><button class="btn" type="button" id="hoCancel">Cancel</button></div>
+  </form>
 </dialog>
 <dialog id="timelineDialog" class="wide">
   <h2 id="tlTitle">Timeline</h2>
@@ -737,7 +754,7 @@ function toast(msg) {
 // ---------- live updates ----------
 function connect() {
   const es = new EventSource('/events');
-  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || [], s.settings); renderUsage(s.usage); renderTokens(s.tokens); renderInboxCount(); renderBoard(s.tasks); };
+  es.onmessage = (ev) => { const s = JSON.parse(ev.data); onSnapshot(s.agents || [], s.settings); renderUsage(s.usage); renderTokens(s.tokens); renderInboxCount(); renderBoard(s.tasks); renderHandoffs(s.handoffs); };
   es.onerror = () => { $('summary').textContent = 'Lost connection to the Agent Floor server. Retrying…'; };
 }
 
@@ -898,7 +915,7 @@ function select(name) {
   localStorage.setItem('af:selected', name || '');
   if (name) markSeen(name);
   renderTags(); renderPanel();
-  fitTerm();
+  fitTerm(); renderHandoffs();
 }
 
 // ---------- terminal: wide view, fitting tmux to the panel, typing like a terminal ----------
@@ -1773,6 +1790,40 @@ $('permSave').addEventListener('click', async () => {
     const v = await api('POST', `/api/agents/${perm.name}/permissions`, perm.draft);
     perm.view = v; toast('Permissions saved'); $('permDialog').close();
   } catch (err) { $('permError').hidden = false; $('permError').textContent = err.message; }
+});
+
+// ---------- hand-offs: when one agent finishes, pass its result to another ----------
+var handoffs = []; // var: select() may run before this line
+function renderHandoffs(list) {
+  if (list) handoffs = list;
+  const box = $('dHandoffs'), a = agents.find((x) => x.name === selected);
+  const mine = a ? handoffs.filter((r) => r.from === a.name || r.to === a.name) : [];
+  box.hidden = !mine.length;
+  if (!mine.length || sameAs(box, [a.name, mine])) return;
+  box.replaceChildren(el('h3', '', 'Hand-offs'), ...mine.map((r) => {
+    const line = el('p', '', r.from === a.name
+      ? `When this finishes → ${labelOf(r.to)}${r.every ? ' (every time)' : ''}`
+      : `Takes over when ${labelOf(r.from)} finishes${r.every ? ' (every time)' : ''}`);
+    if (r.note) line.title = r.note;
+    const x = el('button', '', '×'); x.type = 'button'; x.title = 'Cancel this hand-off';
+    x.addEventListener('click', () => api('DELETE', `/api/handoffs/${r.id}`).catch((err) => toast(err.message)));
+    line.append(x); return line;
+  }));
+}
+$('handoffBtn').addEventListener('click', () => {
+  if (!selected) return;
+  $('hoFrom').textContent = labelOf(selected);
+  $('hoTo').replaceChildren(...agents.filter((x) => x.name !== selected).map((x) => { const o = el('option', '', labelOf(x.name) + (x.state === 'stopped' ? ' (stopped)' : '')); o.value = x.name; return o; }));
+  $('hoError').hidden = true; $('hoNote').value = ''; $('hoEvery').checked = false;
+  $('handoffDialog').showModal();
+});
+$('hoCancel').addEventListener('click', () => $('handoffDialog').close());
+$('handoffForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('POST', '/api/handoffs', { from: selected, to: $('hoTo').value, note: $('hoNote').value, every: $('hoEvery').checked });
+    $('handoffDialog').close(); toast(`${labelOf($('hoTo').value)} takes over when ${labelOf(selected)} finishes`);
+  } catch (err) { $('hoError').hidden = false; $('hoError').textContent = err.message; }
 });
 
 // ---------- task board ----------

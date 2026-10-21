@@ -23,6 +23,7 @@ const Usage = require('./lib/usage');
 const Diff = require('./lib/diffpreview');
 const Perms = require('./lib/permissions');
 const Tasks = require('./lib/tasks');
+const Handoff = require('./lib/handoff');
 const readline = require('readline');
 const Themes = require('./lib/themes');
 
@@ -38,6 +39,7 @@ const SESSION_RE = /^[A-Za-z0-9-]{8,64}$/;
 const KEYS = new Set(['Enter', 'Escape', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'BTab', 'Up', 'Down']);
 const QUEUE = C.jsonStore(path.join(DATA_DIR, 'queue.json'), () => ({}));
 const TASKS = C.jsonStore(path.join(DATA_DIR, 'tasks.json'), () => []);
+const HANDOFFS = C.jsonStore(path.join(DATA_DIR, 'handoffs.json'), () => []);
 const PROMPTS = C.jsonStore(path.join(DATA_DIR, 'prompts.json'), () => C.cleanPrompts(C.DEFAULT_PROMPTS));
 const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
 const { short, textOf } = T;
@@ -757,7 +759,18 @@ async function poll() {
   let tasksChanged = false;
   const tasks = TASKS.get().map((t) => { const n = Tasks.progress(t, byName.get(t.agent)); if (n !== t) tasksChanged = true; return n; });
   if (tasksChanged) TASKS.set(tasks);
-  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage(), tokens: tokensToday.all, tasks };
+  // Hand-offs: when an agent finishes, queue its final reply (with the note) for the next agent.
+  let rules = HANDOFFS.get(), rulesChanged = false;
+  rules = rules.map((r) => {
+    const it = byName.get(r.from);
+    if (!Handoff.fires(r, it) || !saved.find((a) => a.name === r.to)) return r;
+    QUEUE.set(C.enqueue(QUEUE.get(), r.to, Handoff.promptFor(r, it)).all);
+    console.log(`hand-off: ${r.from} -> ${r.to}`);
+    rulesChanged = true;
+    return Handoff.afterFiring(r, it.finishedAt);
+  });
+  if (rulesChanged) HANDOFFS.set(rules);
+  snapshot = { agents, tmux: snapshot.tmux, claude: CLAUDE_BIN, settings: settingsForPage(), usage: planUsage(), tokens: tokensToday.all, tasks, handoffs: rules.filter((r) => !r.done) };
   const json = JSON.stringify(snapshot);
   if (json !== snapshotJson) {
     snapshotJson = json;
@@ -1131,6 +1144,18 @@ const server = http.createServer(async (req, res) => {
       if (r.error) return send(res, r.status, { error: r.error });
       return send(res, 201, { ok: true });
     }
+
+    // ---------- hand-offs ----------
+    if (req.method === 'POST' && p === '/api/handoffs') {
+      const b = await readBody(req);
+      if (!saved.find((a) => a.name === b.from) || !saved.find((a) => a.name === b.to)) return send(res, 400, { error: 'Pick two agents on the floor.' });
+      let rule; try { rule = Handoff.newRule(b); } catch (e) { return send(res, 400, { error: e.message }); }
+      HANDOFFS.set([...HANDOFFS.get().filter((r) => !r.done), rule]);
+      await poll();
+      return send(res, 201, { ok: true, rule });
+    }
+    const hm = p.match(/^\/api\/handoffs\/([a-f0-9]{8})$/);
+    if (hm && req.method === 'DELETE') { HANDOFFS.set(HANDOFFS.get().filter((r) => r.id !== hm[1])); await poll(); return send(res, 200, { ok: true }); }
 
     // ---------- task board ----------
     if (req.method === 'POST' && p === '/api/tasks') {
