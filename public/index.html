@@ -2574,7 +2574,7 @@ function frame(now) {
   if (!firstSnapshot) firstFrameDone = true;
 
   if (use3d) {
-    const st = { W, H, WALL, DX: DX(), rows, cols: COLS, slot, phase, t, dt, motion: !reducedMotion.matches, agents: floorAgents() };
+    const st = { W, H, WALL, DX: DX(), rows, cols: COLS, slot, phase, hour: hourOf(localNow()), t, dt, motion: !reducedMotion.matches, agents: floorAgents() };
     try { if (window.Floor3D.render(st)) renderTags(); positionTags3d(); }
     catch (err) { console.error(err); use3d = false; window.Floor3D.setVisible(false); $('vlayer').hidden = false; canvas.style.height = ''; no3d(`it crashed (${err.message})`); requestAnimationFrame(frame); return; }
     // let the stage take the 3D room's shape instead of the flat floor's

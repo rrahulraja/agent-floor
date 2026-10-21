@@ -32,6 +32,21 @@ const PHASE = {
   night: { sky: '#1a2140', fog: '#1d2440', hemi: ['#8a9ac8', '#24243a', 0.45], sun: ['#9ab0ff', 0.7], fill: 0.3, exposure: 1.0 },
 };
 
+// The light looks like each phase at these hours and blends in between, so the day changes gradually.
+// Night holds from 21:00 to 04:00 (the last anchor wraps round to the first).
+const PHASE_HOURS = [[4, 'night'], [6.5, 'dawn'], [9.5, 'morning'], [14.5, 'afternoon'], [18.5, 'evening'], [21, 'night'], [28, 'night']];
+const _ca = new THREE.Color(), _cb = new THREE.Color();
+function lightAt(hour) {
+  let h = ((hour % 24) + 24) % 24;
+  if (h < PHASE_HOURS[0][0]) h += 24;
+  let i = 0; while (PHASE_HOURS[i + 1][0] <= h) i++;
+  const [h0, a] = PHASE_HOURS[i], [h1, b] = PHASE_HOURS[i + 1];
+  const k = (h - h0) / (h1 - h0), A = PHASE[a], B = PHASE[b];
+  const mix = (x, y) => x + (y - x) * k, col = (x, y) => `#${_ca.set(x).lerp(_cb.set(y), k).getHexString()}`;
+  return { sky: col(A.sky, B.sky), fog: col(A.fog, B.fog), hemi: [col(A.hemi[0], B.hemi[0]), col(A.hemi[1], B.hemi[1]), mix(A.hemi[2], B.hemi[2])],
+    sun: [col(A.sun[0], B.sun[0]), mix(A.sun[1], B.sun[1])], fill: mix(A.fill, B.fill), exposure: mix(A.exposure, B.exposure) };
+}
+
 const hashStr = (s) => { let h = 2166136261; for (const c of String(s)) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return h >>> 0; };
 const rand = (seed) => { let x = seed || 1; return () => ((x = Math.imul(x ^ (x >>> 15), 2246822507) ^ Math.imul(x ^ (x >>> 13), 3266489909)) >>> 0) / 4294967296; };
 const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -127,6 +142,7 @@ class Office {
       this.center = [(b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2];
       this.sun.target.position.set(this.center[0], 0, this.center[1]);
       this.sun.position.set(this.center[0] + 16, 24, this.center[1] + 13);
+      this.lightKey = null; // place the sun for the time of day again
       this.makeDust();
       // everyone re-plans on the new floor
       for (const a of [...this.actors.values(), ...this.extras]) { a.path = null; a.goalKey = ''; }
@@ -533,7 +549,7 @@ class Office {
       if (a.partyIcon) a.partyIcon.position.set(a.pos[0], a.av.height + 0.55 + (L.motion ? Math.abs(Math.sin(t * 4)) * 0.15 : 0), a.pos[1]);
     }
     this.world.update(t, dt, [...this.actors.values(), ...this.extras].map((a) => a.pos));
-    this.light(L.phase, t);
+    this.light(L.phase, t, L.hour);
     if (this.dust && L.motion) { this.dust.rotation.y = Math.sin(t * 0.03) * 0.02; this.dust.position.y = Math.sin(t * 0.2) * 0.05; }
     this.tickSpot(t);
     this.tickFly();
@@ -545,16 +561,27 @@ class Office {
   }
 
   // ---------- look ----------
-  light(phase, t) {
-    const p = PHASE[phase] || PHASE.morning;
-    if (this.phase !== phase) {
-      this.phase = phase;
+  light(phase, t, hour) {
+    // with the hour: blend the light smoothly and move the sun across the sky; without it: the phase as is
+    const smooth = Number.isFinite(hour);
+    const p = smooth ? lightAt(hour) : PHASE[phase] || PHASE.morning;
+    const key = smooth ? Math.round(hour * 60) : phase; // recolour once a minute at most
+    if (smooth && this.lightKey !== key && this.center) {
+      const day = Math.min(1, Math.max(0, (((hour % 24) + 24) % 24 - 6) / 12)); // 06:00 east … 18:00 west
+      const isNight = hour % 24 < 5.5 || hour % 24 > 19.5;
+      const x = isNight ? -6 : 18 * Math.cos(Math.PI * day), y = isNight ? 20 : 5 + 22 * Math.sin(Math.PI * day);
+      this.sun.position.set(this.center[0] + x, y, this.center[1] + 13);
+    }
+    if (smooth && this.phase !== phase) { this.phase = phase; if (this.world.setTimeOfDay) this.world.setTimeOfDay(phase); }
+    if (this.lightKey !== key) {
+      this.lightKey = key;
+      if (!smooth) this.phase = phase;
       this.scene.background = new THREE.Color(p.sky);
       this.scene.fog.color.set(p.fog);
       this.hemi.color.set(p.hemi[0]); this.hemi.groundColor.set(p.hemi[1]); this.hemi.intensity = p.hemi[2];
       this.sun.color.set(p.sun[0]); this.fill.intensity = p.fill;
       this.gl.toneMappingExposure = p.exposure;
-      if (this.world.setTimeOfDay) this.world.setTimeOfDay(phase);
+      if (!smooth && this.world.setTimeOfDay) this.world.setTimeOfDay(phase);
     }
     // Hermes's slow daylight drift: the sun breathes a little over eight minutes
     this.sun.intensity = p.sun[1] * (1 + 0.07 * Math.sin((t / 480) * Math.PI * 2));
