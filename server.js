@@ -449,6 +449,23 @@ async function refreshGit(cwd, c) {
   } finally { c.busy = false; }
 }
 
+// The failing part of a PR's GitHub Actions logs (gh run view --log-failed), cached per run for 5 minutes.
+const ciLogCache = new Map(); // runId -> { at, text }
+async function ciLog(cwd, pr) {
+  const runs = [...new Set((pr.checks.failedChecks || []).map((c) => c.runId).filter(Boolean))].slice(0, 3);
+  const parts = [];
+  for (const id of runs) {
+    let c = ciLogCache.get(id);
+    if (!c || Date.now() - c.at > 300000) {
+      const r = await run(GH_BIN, ['run', 'view', id, '--log-failed'], { cwd, timeout: 30000 });
+      c = { at: Date.now(), text: r.ok ? r.stdout.split('\n').slice(-400).join('\n') : `(could not read run ${id}: ${r.stderr.slice(0, 200)})` };
+      ciLogCache.set(id, c);
+    }
+    parts.push(c.text);
+  }
+  return parts.join('\n\n').slice(-60000);
+}
+
 // ---------- polling ----------
 const memory = new Map();
 const startedAt = new Map();
@@ -1062,7 +1079,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 201, { ok: true });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
       const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
@@ -1089,6 +1106,22 @@ const server = http.createServer(async (req, res) => {
         if (!/^[a-z0-9_-]{1,40}$/i.test(hero)) return send(res, 400, { error: 'Unknown hero.' });
         if (!agent.hero) { agent.hero = hero; persist(); await poll(); }
         return send(res, 200, { ok: true, hero: agent.hero });
+      }
+      // CI watch: the failing logs of this agent's PR, and handing them to the agent to fix.
+      if (action === 'ci-log' || action === 'ci-fix') {
+        const g = gitCache.get(agent.cwd), pr = g && g.pr;
+        if (!pr || !pr.checks || pr.checks.state !== 'fail') return send(res, 409, { error: 'This agent has no PR with failing checks.' });
+        if (!GH_BIN) return send(res, 409, { error: 'The gh CLI is needed to read CI logs.' });
+        const log = await ciLog(agent.cwd, pr);
+        if (req.method === 'GET' && action === 'ci-log') return send(res, 200, { ok: true, checks: pr.checks.failedChecks, log });
+        if (req.method === 'POST' && action === 'ci-fix') {
+          if (!running) return send(res, 409, { error: `${name} is stopped. Start it first.` });
+          const text = G.ciFixPrompt({ number: pr.number, failedChecks: pr.checks.failedChecks }, log);
+          const idle = (memory.get(name) || {}).state === 'idle';
+          if (idle) await sendPrompt(name, text); else QUEUE.set(C.enqueue(QUEUE.get(), name, text).all);
+          await poll();
+          return send(res, 200, { ok: true, sent: idle ? 'sent' : 'queued' });
+        }
       }
       if (req.method === 'POST' && action === 'label') {
         const label = cleanLabel((await readBody(req)).label);

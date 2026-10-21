@@ -291,6 +291,8 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .diff-line i { flex: 0 0 44px; padding-right: 8px; text-align: right; color: #5c6475; font-style: normal; user-select: none; }
 .diff-line.add { background: #12301f; color: #b9f3cf; } .diff-line.del { background: #3a1719; color: #ffc9c9; }
 .diff-line.gap { color: #5c6475; padding-left: 52px; }
+.ci-checks { margin: 0 0 4px; padding-left: 4px; list-style: none; font-size: 14px; } .ci-checks a { color: var(--danger); }
+.ci-log { max-height: 320px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 /* The instruction box lives inside the terminal window and looks like Claude Code's own input. */
 #dRunning { display: flex; flex-direction: column; flex: 1 0 auto; height: calc(100vh - 150px); min-height: 420px; gap: 8px; }
@@ -1551,7 +1553,18 @@ function inboxActions(it) {
   const btn = (text, cls, fn) => { const b = el('button', `btn ${cls || ''}`, text); b.type = 'button'; b.addEventListener('click', async () => { try { await fn(); } catch (err) { toast(err.message); } }); row.append(b); return b; };
   if (it.kind === 'approve') { btn('Approve (a)', 'warn', () => keyTo(a.name, 'Enter')); btn('Option 2', '', () => keyTo(a.name, '2')); btn('Decline (d)', '', () => keyTo(a.name, 'Escape')); }
   if (it.kind === 'trust') { btn('Trust this folder', 'warn', async () => { await keyTo(a.name, 'Down'); await keyTo(a.name, 'Enter'); }); btn('Exit', '', () => keyTo(a.name, 'Escape')); }
-  if (it.kind === 'checks' && a.git.pr.url) btn('Open PR', '', () => window.open(a.git.pr.url, '_blank', 'noopener'));
+  if (it.kind === 'checks') {
+    btn('Send to agent to fix', 'warn', async () => { const r = await api('POST', `/api/agents/${a.name}/ci-fix`); toast(r.sent === 'sent' ? `Sent the failure to ${labelOf(a.name)}` : `Queued for ${labelOf(a.name)} (it's busy)`); });
+    const show = btn('Show log', '', async () => {
+      show.disabled = true; show.textContent = 'Loading…';
+      try {
+        const r = await api('GET', `/api/agents/${a.name}/ci-log`);
+        const pre = el('pre', 'approval ci-log', r.log || '(no log: these checks are not GitHub Actions runs)');
+        row.after(pre); pre.scrollTop = pre.scrollHeight; show.remove();
+      } catch (err) { show.disabled = false; show.textContent = 'Show log'; throw err; }
+    });
+    if (a.git.pr.url) btn('Open PR', '', () => window.open(a.git.pr.url, '_blank', 'noopener'));
+  }
   if (it.kind === 'stuck') btn('Interrupt (Esc)', '', () => keyTo(a.name, 'Escape'));
   btn('Open agent', '', () => { $('inboxDialog').close(); select(a.name); });
   return row;
@@ -1559,7 +1572,7 @@ function inboxActions(it) {
 function renderInbox() {
   const list = $('inboxList'), items = inboxItems();
   $('inboxEmpty').hidden = items.length > 0;
-  const key = JSON.stringify(items.map((it) => [it.a.name, it.kind, it.a.approval, it.a.diff, it.a.question, it.a.state]));
+  const key = JSON.stringify(items.map((it) => [it.a.name, it.kind, it.a.approval, it.a.diff, it.a.question, it.a.state, it.kind === 'checks' && it.a.git.pr.checks]));
   if (list.dataset.key === key) return; // don't rebuild under someone typing a reply
   list.dataset.key = key;
   list.replaceChildren(...items.map((it) => {
@@ -1568,6 +1581,15 @@ function renderInbox() {
     const head = el('div', 'ih'); head.append(el('b', '', labelOf(a.name)), el('span', '', title));
     if (it.since && it.since !== Infinity) head.append(el('time', '', `waiting ${ago(it.since).replace(' ago', '')}`));
     li.append(head);
+    if (it.kind === 'checks') {
+      const list = el('ul', 'ci-checks');
+      for (const c of (a.git.pr.checks.failedChecks || [])) {
+        const item = el('li');
+        if (c.url) { const link = el('a', '', `✗ ${c.name}`); link.href = c.url; link.target = '_blank'; link.rel = 'noopener'; item.append(link); } else item.append(`✗ ${c.name}`);
+        list.append(item);
+      }
+      li.append(list);
+    }
     if (it.kind === 'approve' && a.diff) li.append(diffView(a.diff));
     else if (it.kind === 'approve' && a.approval) li.append(el('pre', 'approval', a.approval));
     if (it.kind === 'question' && a.question) {
