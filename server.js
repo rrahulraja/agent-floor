@@ -208,26 +208,7 @@ async function newestJsonl(dir) {
   return best;
 }
 
-const tailCache = new Map();
-async function readTail(file) {
-  const c = tailCache.get(file.path);
-  if (c && c.mtimeMs === file.mtimeMs && c.size === file.size) return c.entries;
-  const len = Math.min(file.size, 384 * 1024);
-  const fh = await fsp.open(file.path, 'r');
-  try {
-    const buf = Buffer.alloc(len);
-    await fh.read(buf, 0, len, file.size - len);
-    const lines = buf.toString('utf8').split('\n');
-    if (len < file.size) lines.shift(); // partial first line
-    const entries = [];
-    for (const l of lines.slice(-300)) {
-      if (!l.trim()) continue;
-      try { entries.push(JSON.parse(l)); } catch {}
-    }
-    tailCache.set(file.path, { mtimeMs: file.mtimeMs, size: file.size, entries });
-    return entries;
-  } finally { await fh.close(); }
-}
+const readTail = require('./lib/tail').createTail(); // last 300 useful entries of a transcript
 
 // Every project folder Claude Code has a transcript for, plus the agents' folders, most recent first.
 const cwdCache = new Map();
