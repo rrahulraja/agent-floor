@@ -25,6 +25,7 @@ const Perms = require('./lib/permissions');
 const Tasks = require('./lib/tasks');
 const Handoff = require('./lib/handoff');
 const Archive = require('./lib/archive');
+const Templates = require('./lib/templates');
 const Guard = require('./lib/guard');
 const Summary = require('./lib/summary');
 const readline = require('readline');
@@ -44,6 +45,7 @@ const QUEUE = C.jsonStore(path.join(DATA_DIR, 'queue.json'), () => ({}));
 const TASKS = C.jsonStore(path.join(DATA_DIR, 'tasks.json'), () => []);
 const HANDOFFS = C.jsonStore(path.join(DATA_DIR, 'handoffs.json'), () => []);
 const ARCHIVE = C.jsonStore(path.join(DATA_DIR, 'archive.json'), () => []);
+const TEMPLATES = C.jsonStore(path.join(DATA_DIR, 'templates.json'), () => []);
 const SUMMARY = C.jsonStore(path.join(DATA_DIR, 'summary.json'), () => ({ lastSent: 0 }));
 const PROMPTS = C.jsonStore(path.join(DATA_DIR, 'prompts.json'), () => C.cleanPrompts(C.DEFAULT_PROMPTS));
 const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
@@ -985,7 +987,7 @@ function notifyFor(prev, item, now) {
 }
 
 // Add an agent and start it (also used by the task board). Returns { error, status } on a problem.
-async function addAgent({ name, cwd, conversation, label, worktree, size }) {
+async function addAgent({ name, cwd, conversation, label, worktree, size, firstPrompt }) {
   if (!NAME_RE.test(name || '')) return { status: 400, error: 'Use 1–32 letters, numbers, dashes or underscores for the name.' };
   if (saved.find((a) => a.name === name)) return { status: 409, error: `There is already an agent called ${name}.` };
   const dir = path.resolve(expandHome(String(cwd || '').trim()));
@@ -1002,6 +1004,8 @@ async function addAgent({ name, cwd, conversation, label, worktree, size }) {
   try { bindSession(saved.find((a) => a.name === name), await startAgent(name, agentDir, repoRoot ? '' : conversation || '', C.cleanSize(size))); }
   catch (e) { saved = saved.filter((a) => a.name !== name); throw e; }
   startedAt.set(name, Date.now());
+  // A first instruction (from a template) waits in the queue and goes out once Claude Code is ready.
+  if (firstPrompt && String(firstPrompt).trim()) QUEUE.set(C.enqueue(QUEUE.get(), name, String(firstPrompt)).all);
   persist();
   await poll();
   return { name, cwd: agentDir };
@@ -1127,6 +1131,20 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/projects') return send(res, 200, { projects: await listProjects() });
     // Past agents: stopped ones still on the floor, and ones removed from it, with their last conversation.
+    // ---------- agent templates ----------
+    if (req.method === 'GET' && p === '/api/templates') return send(res, 200, { templates: TEMPLATES.get() });
+    if (req.method === 'POST' && p === '/api/templates') {
+      const t = Templates.clean(await readBody(req));
+      if (!t) return send(res, 400, { error: 'A template needs a name and a project folder.' });
+      TEMPLATES.set(Templates.save(TEMPLATES.get(), t, C.newId));
+      return send(res, 200, { templates: TEMPLATES.get() });
+    }
+    const tplM = p.match(/^\/api\/templates\/([a-f0-9]{12})$/);
+    if (tplM && req.method === 'DELETE') {
+      TEMPLATES.set(Templates.remove(TEMPLATES.get(), tplM[1]));
+      return send(res, 200, { templates: TEMPLATES.get() });
+    }
+
     if (req.method === 'GET' && p === '/api/past') {
       const sessions = await listSessions();
       const describe = async (a, onFloor) => {

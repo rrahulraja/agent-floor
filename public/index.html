@@ -414,6 +414,8 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 .field select, .picker select { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--bg); }
 .picker label { display: block; font-weight: 600; margin-bottom: 4px; }
 .picker .row { margin-top: 10px; }
+.field textarea { width: 100%; min-height: 60px; resize: vertical; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--bg); color: var(--ink); font: 14px/1.4 var(--sans); }
+.tpl-row { display: flex; gap: 8px; } .tpl-row select { flex: 1; }
 .field input[type=text] { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--bg); }
 .field small { color: var(--muted); }
 .check { display: flex; gap: 8px; align-items: center; }
@@ -590,6 +592,10 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 <dialog id="addDialog">
   <form id="addForm" method="dialog">
     <h2>Add an agent</h2>
+    <div class="field" id="fTplField" hidden>
+      <label for="fTpl">Template</label>
+      <div class="tpl-row"><select id="fTpl"><option value="">None</option></select><button class="btn" type="button" id="fTplDel" hidden>Delete template</button></div>
+    </div>
     <div class="field">
       <label for="fCwd">Project</label>
       <input type="text" id="fCwd" required list="projectList" placeholder="Pick a project, or type a folder path" autocomplete="off">
@@ -614,9 +620,14 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
       </div>
       <small>Lets several agents work on the same repo without getting in each other's way.</small>
     </div>
+    <div class="field">
+      <label for="fFirst">First instruction <small>(optional)</small></label>
+      <textarea id="fFirst" rows="2" placeholder="Sent as soon as the agent is ready, e.g. Review the open PR and list what to fix"></textarea>
+    </div>
     <p class="error" id="fError" hidden></p>
     <div class="row">
       <button class="btn primary" type="submit" value="ok">Start agent</button>
+      <button class="btn" type="button" id="fTplSave" title="Keep the project, worktree setting and first instruction under this name, to start the same kind of agent again in one click">Save as template</button>
       <button class="btn" type="button" id="cancelAdd">Cancel</button>
     </div>
   </form>
@@ -2189,6 +2200,7 @@ function paletteCommands() {
     { label: 'Search conversations', run: click('searchBtn') },
     { label: 'Broadcast to all agents', run: click('broadcastBtn') },
     { label: 'Add agent', run: () => openAdd() },
+    ...templates.map((t) => ({ label: `New agent from template: ${t.title}`, hint: base(t.cwd), keywords: t.cwd, run: () => openAdd({ template: t }) })),
     { label: 'Past agents', hint: 'bring one back', run: openPast },
     { label: 'Settings', run: openSettings },
     { label: Sound.on ? 'Turn office sounds off' : 'Turn office sounds on', key: 'm', run: () => Sound.toggle() },
@@ -2387,13 +2399,54 @@ function updateNameHint() {
   const v = $('fName').value.trim();
   $('fNameHint').textContent = v ? `Session: cc-${slugFor(v)}` : 'Any name you like.';
 }
+// ---------- agent templates: project + worktree + first instruction, saved under a name ----------
+let templates = [];
+async function loadTemplates() {
+  try { templates = (await (await fetch('/api/templates')).json()).templates || []; } catch { templates = []; }
+  fillTemplates();
+}
+function fillTemplates() {
+  const sel = $('fTpl'), cur = sel.value;
+  sel.replaceChildren(new Option('None', ''), ...templates.map((t) => new Option(`${t.title} · ${base(t.cwd)}`, t.id)));
+  sel.value = templates.some((t) => t.id === cur) ? cur : '';
+  $('fTplField').hidden = !templates.length;
+  $('fTplDel').hidden = !sel.value;
+}
+async function applyTemplate(t) {
+  $('fTpl').value = t.id; $('fTplDel').hidden = false;
+  $('fCwd').value = t.cwd; $('fName').value = t.title; nameTouched = true; updateNameHint();
+  $('fWt').checked = t.worktree; $('fWtFields').hidden = !t.worktree; $('fConv').disabled = t.worktree;
+  $('fBase').value = t.base || ''; $('fBranch').value = '';
+  $('fFirst').value = t.firstPrompt || '';
+  (t.worktree ? $('fBranch') : $('fName')).focus();
+  if (!t.worktree) await fillConversations($('fConv'), t.cwd, $('fConvHint'), false);
+}
+$('fTpl').addEventListener('change', () => { const t = templates.find((x) => x.id === $('fTpl').value); if (t) applyTemplate(t); else $('fTplDel').hidden = true; });
+$('fTplSave').addEventListener('click', async () => {
+  $('fError').hidden = true;
+  try {
+    const r = await api('POST', '/api/templates', { title: $('fName').value, cwd: $('fCwd').value, worktree: $('fWt').checked, base: $('fBase').value, firstPrompt: $('fFirst').value });
+    templates = r.templates; const t = templates.find((x) => x.title.toLowerCase() === $('fName').value.trim().toLowerCase());
+    fillTemplates(); if (t) { $('fTpl').value = t.id; $('fTplDel').hidden = false; }
+    toast(`Saved template ${$('fName').value.trim()}`);
+  } catch (err) { $('fError').textContent = err.message; $('fError').hidden = false; }
+});
+$('fTplDel').addEventListener('click', async () => {
+  const t = templates.find((x) => x.id === $('fTpl').value); if (!t) return;
+  try { templates = (await api('DELETE', `/api/templates/${t.id}`)).templates; $('fTpl').value = ''; fillTemplates(); toast(`Deleted template ${t.title}`); }
+  catch (err) { toast(err.message); }
+});
+loadTemplates();
+
 async function openAdd(prefill) {
   $('fError').hidden = true; $('addForm').reset(); nameTouched = false; $('fWtFields').hidden = true; $('fConv').disabled = false;
+  fillTemplates(); $('fTplDel').hidden = true;
   $('fConv').replaceChildren(new Option('Start fresh', ''));
   $('fConvHint').textContent = 'Pick a project to see its past conversations.';
   updateNameHint();
   $('addDialog').showModal(); $('fCwd').focus();
   loadProjects();
+  if (prefill && prefill.template) return applyTemplate(prefill.template);
   if (prefill && prefill.cwd) {
     $('fCwd').value = prefill.cwd;
     if (prefill.label) { $('fName').value = prefill.label; updateNameHint(); }
@@ -2421,8 +2474,9 @@ $('addForm').addEventListener('submit', async (e) => {
   try {
     const worktree = $('fWt').checked ? { branch: $('fBranch').value.trim(), base: $('fBase').value.trim() } : undefined;
     if (worktree && !worktree.branch) throw new Error('Give the new branch a name.');
-    await api('POST', '/api/agents', { name, label, cwd: $('fCwd').value, conversation: worktree ? '' : $('fConv').value, worktree, size: panelTermSize() });
-    $('addDialog').close(); select(name); toast(`Started ${label}`);
+    const firstPrompt = $('fFirst').value.trim() ? $('fFirst').value : undefined;
+    await api('POST', '/api/agents', { name, label, cwd: $('fCwd').value, conversation: worktree ? '' : $('fConv').value, worktree, size: panelTermSize(), firstPrompt });
+    $('addDialog').close(); select(name); toast(firstPrompt ? `Started ${label}; its first instruction goes out when it's ready` : `Started ${label}`);
   } catch (err) { $('fError').textContent = err.message; $('fError').hidden = false; }
 });
 $('alertsBtn').addEventListener('click', async () => { await Notification.requestPermission(); renderSummary(); });
