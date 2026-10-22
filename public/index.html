@@ -371,6 +371,14 @@ body.termview .resizer { display: none; }
 .keys dt kbd { font: 600 13px var(--mono); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; background: var(--bg); }
 .keys dd { margin: 0; }
 dialog.wide { width: min(760px, 94vw); max-height: 88vh; }
+dialog.palette { width: min(560px, 94vw); padding: 0; margin-top: 12vh; overflow: hidden; }
+.palette input { width: 100%; border: 0; border-bottom: 1px solid var(--line); padding: 14px 16px; font: 16px var(--sans); background: var(--surface); color: var(--ink); outline: none; }
+.palette ul { list-style: none; margin: 0; padding: 6px; max-height: min(420px, 60vh); overflow: auto; }
+.palette li { display: flex; gap: 10px; align-items: baseline; padding: 7px 10px; border-radius: 6px; cursor: pointer; }
+.palette li[aria-selected="true"] { background: color-mix(in srgb, var(--work) 16%, transparent); }
+.palette li .pc-hint { margin-left: auto; color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
+.palette li kbd { font: 600 12px var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--muted); }
+.palette .pc-empty { padding: 12px 16px; color: var(--muted); margin: 0; }
 .turn { padding: 10px 0; border-top: 1px solid var(--line); }
 .turn time { color: var(--muted); font-size: 12px; }
 .turn .prompt { margin: 2px 0 6px; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -698,6 +706,11 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <div id="srBody"></div>
   <div class="row" style="margin-top:14px"><button class="btn" id="srClose">Close</button></div>
 </dialog>
+<dialog id="paletteDialog" class="palette" aria-label="Command palette">
+  <input type="text" id="pcQ" placeholder="Type a command or an agent's name…" aria-label="Command" role="combobox" aria-controls="pcList" aria-expanded="true" autocomplete="off" spellcheck="false">
+  <ul id="pcList" role="listbox"></ul>
+  <p class="pc-empty" id="pcEmpty" hidden>Nothing matches.</p>
+</dialog>
 <dialog id="keysDialog">
   <h2>Keyboard shortcuts</h2>
   <dl class="keys">
@@ -711,6 +724,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     <dt><kbd>a</kbd></dt><dd>Approve (when the agent needs your approval)</dd>
     <dt><kbd>d</kbd></dt><dd>Decline (when the agent needs your approval)</dd>
     <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Pick an answer (when the agent has a question)</dd>
+    <dt><kbd>⌘</kbd> <kbd>K</kbd></dt><dd>Command palette: jump to an agent or run any action by name</dd>
     <dt><kbd>?</kbd></dt><dd>This list</dd>
     <dt><kbd>Esc</kbd></dt><dd>Leave the instruction box</dd>
   </dl>
@@ -733,6 +747,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 <script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js", "three/addons/": "/vendor/addons/" } }</script>
 <script type="module">
 // The 3D office; if it can't load, the simpler 3D floor.
+import('/office/palette.js').then((m) => { window.Palette = m; });
 import('/office/engine.js').catch((err) => { console.warn('3D office unavailable, using the simple 3D floor:', err); return import('/floor3d.js'); });
 </script>
 <script>
@@ -2097,6 +2112,101 @@ document.addEventListener('keydown', (e) => {
   e.preventDefault();
 });
 $('keysClose').addEventListener('click', () => $('keysDialog').close());
+
+// ---------- command palette (Cmd+K / Ctrl+K) ----------
+// Every action by name, plus jumping to any agent. Actions click the same buttons the page shows,
+// so they behave exactly as clicking them would.
+let pcItems = [], pcShown = [], pcAt = 0;
+const shown = (id) => !$(id).hidden && !$(id).closest('[hidden]');
+function paletteCommands() {
+  const a = agents.find((x) => x.name === selected), who = a ? labelOf(a.name) : '';
+  const click = (id) => () => $(id).click();
+  const cmds = agents.map((x) => ({ label: `Go to ${labelOf(x.name)}`, hint: `${displayState(x)} · ${base(x.cwd)}`, keywords: `${x.name} ${x.cwd || ''}`, run: () => select(x.name) }));
+  if (a) {
+    cmds.push({ label: `Write an instruction to ${who}`, key: '/', run: () => $('promptText').focus() });
+    if (a.state === 'waiting') {
+      cmds.push({ label: `Approve ${who}`, key: 'a', run: () => (a.trust ? $('trustYes').click() : api('POST', `/api/agents/${a.name}/key`, { key: 'Enter' }).catch((err) => toast(err.message))) });
+      cmds.push({ label: `Decline ${who}`, key: 'd', run: () => api('POST', `/api/agents/${a.name}/key`, { key: 'Escape' }).catch((err) => toast(err.message)) });
+    }
+    cmds.push(
+      { label: document.body.classList.contains('termview') ? 'Leave terminal view' : 'Terminal view', key: 't', run: () => setTermView(!document.body.classList.contains('termview')) },
+      { label: `Timeline of ${who}`, run: click('timelineBtn') },
+      { label: `Permissions for ${who}`, run: click('permBtn') },
+      { label: `Replay ${who}'s day`, run: click('replayBtn') },
+      { label: `Hand off from ${who}…`, run: click('handoffBtn') },
+      { label: `Rename ${who}`, run: click('renameBtn') },
+      { label: `Copy attach command for ${who}`, run: click('copyAttach') },
+    );
+    if (shown('termFit')) cmds.push({ label: `Fit ${who} to the panel`, run: click('termFit') });
+    if (a.state === 'stopped') cmds.push({ label: `Start ${who}`, run: click('startBtn') }, { label: `Remove ${who} from the floor`, run: click('removeBtn') });
+    else cmds.push({ label: `Stop ${who}`, run: click('stopBtn') });
+  }
+  cmds.push(
+    { label: 'Inbox', hint: 'everything waiting on you', key: 'i', run: openInbox },
+    { label: 'Task board', key: 'b', run: openBoard },
+    { label: 'Today', hint: 'what got done', run: click('todayBtn') },
+    { label: 'Search conversations', run: click('searchBtn') },
+    { label: 'Broadcast to all agents', run: click('broadcastBtn') },
+    { label: 'Add agent', run: () => openAdd() },
+    { label: 'Past agents', hint: 'bring one back', run: openPast },
+    { label: 'Settings', run: openSettings },
+    { label: Sound.on ? 'Turn office sounds off' : 'Turn office sounds on', key: 'm', run: () => Sound.toggle() },
+    { label: 'Keyboard shortcuts', key: '?', run: () => $('keysDialog').showModal() },
+  );
+  if (!$('viewBtn').hidden) cmds.push({ label: `Switch to the ${$('viewBtn').textContent} floor`, run: click('viewBtn') });
+  if (use3d) cmds.push({ label: 'Walk around the office', key: 'f', run: () => setWalk(!(window.Floor3D && window.Floor3D.walking && window.Floor3D.walking())) });
+  if (!$('alertsBtn').hidden) cmds.push({ label: 'Turn on alerts', run: click('alertsBtn') });
+  for (const o of $('themeSel').options) if (o.value !== $('themeSel').value) {
+    cmds.push({ label: `Theme: ${o.textContent}`, run: () => { $('themeSel').value = o.value; $('themeSel').dispatchEvent(new Event('change')); } });
+  }
+  return cmds;
+}
+function renderPalette() {
+  pcShown = window.Palette ? window.Palette.rank($('pcQ').value, pcItems) : pcItems;
+  pcAt = Math.min(pcAt, Math.max(0, pcShown.length - 1));
+  $('pcEmpty').hidden = pcShown.length > 0;
+  $('pcList').replaceChildren(...pcShown.map((c, i) => {
+    const li = el('li'); li.id = `pc${i}`; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', String(i === pcAt));
+    li.append(el('span', '', c.label));
+    if (c.hint) li.append(el('span', 'pc-hint', c.hint));
+    if (c.key) { const k = el('kbd', '', c.key); if (!c.hint) k.style.marginLeft = 'auto'; li.append(k); }
+    li.addEventListener('mousemove', () => { if (pcAt !== i) { pcAt = i; markPalette(); } });
+    li.addEventListener('click', () => runPalette(i));
+    return li;
+  }));
+  markPalette();
+}
+function markPalette() {
+  [...$('pcList').children].forEach((li, i) => li.setAttribute('aria-selected', String(i === pcAt)));
+  const cur = $(`pc${pcAt}`);
+  if (cur) { cur.scrollIntoView({ block: 'nearest' }); $('pcQ').setAttribute('aria-activedescendant', cur.id); }
+  else $('pcQ').removeAttribute('aria-activedescendant');
+}
+function runPalette(i) {
+  const c = pcShown[i]; if (!c) return;
+  $('paletteDialog').close();
+  try { const r = c.run(); if (r && r.catch) r.catch((err) => toast(err.message)); } catch (err) { toast(err.message); }
+}
+function openPalette() {
+  pcItems = paletteCommands(); pcAt = 0; $('pcQ').value = '';
+  renderPalette();
+  $('paletteDialog').showModal(); $('pcQ').focus();
+}
+document.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() !== 'k' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+  if ($('paletteDialog').open) { e.preventDefault(); $('paletteDialog').close(); return; }
+  if (document.querySelector('dialog[open]')) return; // don't stack on top of another dialog
+  e.preventDefault(); e.stopPropagation();
+  openPalette();
+}, true); // capture: the terminal and instruction box handle their own keys
+$('pcQ').addEventListener('input', () => { pcAt = 0; renderPalette(); });
+$('pcQ').addEventListener('keydown', (e) => {
+  const n = pcShown.length;
+  if (e.key === 'ArrowDown' || (e.ctrlKey && e.key === 'n')) { e.preventDefault(); if (n) { pcAt = (pcAt + 1) % n; markPalette(); } }
+  else if (e.key === 'ArrowUp' || (e.ctrlKey && e.key === 'p')) { e.preventDefault(); if (n) { pcAt = (pcAt - 1 + n) % n; markPalette(); } }
+  else if (e.key === 'Enter') { e.preventDefault(); runPalette(pcAt); }
+});
+$('paletteDialog').addEventListener('click', (e) => { if (e.target === $('paletteDialog')) $('paletteDialog').close(); }); // click on the backdrop
 $('promptText').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey && !e.altKey && !e.isComposing) { e.preventDefault(); $('compose').requestSubmit(); }
 });
