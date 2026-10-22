@@ -1308,9 +1308,13 @@ const server = http.createServer(async (req, res) => {
     }
     // Ask all agents: the same question to each, then each one's reply to it, collected in one place.
     if (req.method === 'POST' && p === '/api/ask') {
-      const { names, text } = await readBody(req);
+      const { names, text, review } = await readBody(req);
       if (!text || !String(text).trim()) return send(res, 400, { error: 'Write a question first.' });
       const ask = { id: C.newId(), text: String(text), at: Date.now() };
+      // A review meeting: whose PR it is, so the reviews can go back to that agent.
+      if (review && saved.find((a) => a.name === review.author) && Number.isInteger(review.number)) {
+        ask.review = { author: review.author, number: review.number, title: String(review.title || '').slice(0, 200), url: /^https:\/\/[^\s"<>]+$/.test(review.url || '') ? review.url : '' };
+      }
       ask.results = await deliver(names, ask.text);
       ask.names = Object.keys(ask.results).filter((n) => !ask.results[n].startsWith('skipped'));
       asks.unshift(ask); asks.length = Math.min(asks.length, 10);
@@ -1320,7 +1324,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && askM) {
       const ask = askM[1] === 'latest' ? asks[0] : asks.find((x) => x.id === askM[1]);
       if (!ask) return send(res, 404, { error: 'No question asked since the dashboard started.' });
-      return send(res, 200, { id: ask.id, text: ask.text, at: ask.at, answers: await Promise.all(ask.names.map((n) => answerFor(n, ask))) });
+      return send(res, 200, { id: ask.id, text: ask.text, at: ask.at, review: ask.review || null, answers: await Promise.all(ask.names.map((n) => answerFor(n, ask))) });
     }
 
     if (req.method === 'POST' && p === '/api/agents') {

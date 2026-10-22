@@ -109,6 +109,7 @@ class Office {
     this.confetti = [];
     this.heroes = this.loadHeroes(); this.claimed = new Set();
     this.standup = null;
+    this.meeting = null; // a review meeting: { seats, title }
     this.follow = null;
     this.fly = null;
     this.raycaster = new THREE.Raycaster();
@@ -280,6 +281,11 @@ class Office {
     if (this.standup && this.standup.seats.has(ag.name)) {
       const seat = this.standup.seats.get(ag.name);
       return { pos: seat.pos, facing: seat.facing, pose: 'sit', key: `standup:${ag.name}`, snap: seated(seat) };
+    }
+    if (this.meeting && this.meeting.seats.has(ag.name) && s !== 'waiting' && s !== 'asking') { // a review meeting: at the table until it ends
+      const seat = this.meeting.seats.get(ag.name);
+      if (WORKING.has(s)) a.mood = 'working';
+      return { pos: seat.pos, facing: seat.facing, pose: 'sit', key: `meeting:${ag.name}`, snap: seated(seat) };
     }
     if (a.partyUntil > t) { a.mood = 'happy'; return { pos: stand, facing: desk.facing, pose: 'cheer', key: `desk:${i}:stand` }; }
     if (s === 'waiting') { a.mood = 'waiting'; return { pos: stand, facing: desk.facing, pose: 'raise', key: `desk:${i}:stand` }; }
@@ -478,18 +484,33 @@ class Office {
     }
   }
 
-  // ---------- standup ----------
-  startStandup(names) {
+  // ---------- standup and review meetings, at the meeting table ----------
+  tableSeats(names) {
     const W = this.world && this.world.anchors;
-    if (!W || !W.meeting || !W.meeting.seats.length) return false;
-    const who = names.filter((n) => this.actors.has(n));
-    if (!who.length) return false;
+    if (!W || !W.meeting || !W.meeting.seats.length) return null;
     const seats = new Map();
-    who.forEach((n, k) => {
+    names.forEach((n, k) => {
       const s = W.meeting.seats[k];
       if (s) seats.set(n, s);
-      else { const ang = (k / who.length) * Math.PI * 2, c = W.meeting.center; seats.set(n, { pos: [c[0] + Math.cos(ang) * 2.4, c[1] + Math.sin(ang) * 2.4], facing: Math.atan2(-Math.cos(ang), -Math.sin(ang)) }); }
+      else { const ang = (k / names.length) * Math.PI * 2, c = W.meeting.center; seats.set(n, { pos: [c[0] + Math.cos(ang) * 2.4, c[1] + Math.sin(ang) * 2.4], facing: Math.atan2(-Math.cos(ang), -Math.sin(ang)) }); }
     });
+    return seats;
+  }
+  // m: { names, title, lines } keeps those agents at the table with the PR on the TV; null ends it.
+  setMeeting(m) {
+    const W = this.world && this.world.anchors, tv = W && W.meeting && W.meeting.tv;
+    if (!m) { this.meeting = null; if (tv) tv(null); return true; }
+    const seats = this.tableSeats(m.names || []);
+    if (!seats) return false;
+    this.meeting = { seats, title: m.title };
+    if (tv) tv({ title: m.title, lines: m.lines });
+    return true;
+  }
+  startStandup(names) {
+    const who = names.filter((n) => this.actors.has(n));
+    if (!who.length) return false;
+    const seats = this.tableSeats(who);
+    if (!seats) return false;
     this.standup = { seats, order: who, phase: 'gathering', since: null, speaker: -1, next: 0 }; // since: set on the next frame, on the frame clock
     this.notify();
     return true;
@@ -1053,6 +1074,7 @@ window.Floor3D = {
   headScreen: (name) => (office ? office.headScreen(name) : null),
   characterName: (name) => (office ? office.characterName(name) : ''),
   standup: (names) => (office ? office.startStandup(names) : false),
+  meeting: (m) => (office ? office.setMeeting(m) : false),
   preset: (name) => office && office.preset(name),
   focus: (name) => office && office.focus(name),
   setQuality: (q) => office && office.setQuality(q),

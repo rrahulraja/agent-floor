@@ -641,10 +641,29 @@ export async function buildOffice({ deskCount = 8, quality = 'balanced', palette
     // TV on the west wall, whiteboard standing in the corner
     {
       const c = document.createElement('canvas'); c.width = 512; c.height = 288; const x = c.getContext('2d');
-      x.fillStyle = '#0f172a'; x.fillRect(0, 0, 512, 288);
-      x.fillStyle = '#e2e8f0'; x.font = '700 30px Arial'; x.fillText('Sprint board', 24, 46);
-      ['#38bdf8', '#a78bfa', '#4ade80', '#fbbf24'].forEach((col, k) => { x.fillStyle = '#1e293b'; x.fillRect(24 + k * 120, 70, 108, 190); for (let j = 0; j < 4 - (k % 3); j++) { x.fillStyle = col; x.fillRect(32 + k * 120, 82 + j * 44, 92, 34); } });
-      const tvMat = M('meetTv', { color: '#000000', emissive: '#ffffff', emissiveMap: kit.canvasTexture(c), emissiveIntensity: 0.9, roughness: 0.3 });
+      const sprintBoard = () => {
+        x.fillStyle = '#0f172a'; x.fillRect(0, 0, 512, 288);
+        x.fillStyle = '#e2e8f0'; x.font = '700 30px Arial'; x.fillText('Sprint board', 24, 46);
+        ['#38bdf8', '#a78bfa', '#4ade80', '#fbbf24'].forEach((col, k) => { x.fillStyle = '#1e293b'; x.fillRect(24 + k * 120, 70, 108, 190); for (let j = 0; j < 4 - (k % 3); j++) { x.fillStyle = col; x.fillRect(32 + k * 120, 82 + j * 44, 92, 34); } });
+      };
+      sprintBoard();
+      const tvTex = kit.canvasTexture(c);
+      // A review meeting puts its pull request and each reviewer's progress on the TV; null brings the sprint board back.
+      anchors.meeting.tv = (screen) => {
+        if (!screen) sprintBoard();
+        else {
+          x.fillStyle = '#0f172a'; x.fillRect(0, 0, 512, 288);
+          x.fillStyle = '#94a3b8'; x.font = '600 18px Arial'; x.fillText('REVIEW MEETING', 24, 36);
+          x.fillStyle = '#e2e8f0'; x.font = '700 26px Arial';
+          const words = String(screen.title || '').split(/\s+/); let line = '', y = 72;
+          for (const w of words) { const t = line ? `${line} ${w}` : w; if (x.measureText(t).width > 464 && line) { x.fillText(line, 24, y); y += 32; line = w; if (y > 104) break; } else line = t; }
+          if (line && y <= 104) x.fillText(line, 24, y);
+          x.font = '500 20px Arial';
+          (screen.lines || []).slice(0, 5).forEach((l, k) => { x.fillStyle = l.startsWith('✓') ? '#4ade80' : '#cbd5e1'; x.fillText(String(l).slice(0, 42), 24, 150 + k * 28); });
+        }
+        tvTex.needsUpdate = true;
+      };
+      const tvMat = M('meetTv', { color: '#000000', emissive: '#ffffff', emissiveMap: tvTex, emissiveIntensity: 0.9, roughness: 0.3 });
       glowRegister(tvMat, 0.85, 0.5);
       const tx = B.minX + B.wallT / 2;
       addMesh(statics, G.box(0.05, 0.82, 1.42), flat('#111318', 0.4, 0.5), tx + 0.03, 0.98, mz);

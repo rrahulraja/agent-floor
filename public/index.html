@@ -573,6 +573,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
           <button class="btn" id="timelineBtn">Timeline</button>
           <button class="btn" id="permBtn" title="What this agent may run without asking">Permissions</button>
           <button class="btn" id="replayBtn" title="Replay what this agent did today, on the floor">Replay</button>
+          <button class="btn" id="reviewBtn" hidden title="Other agents review this agent's pull request">Review meeting…</button>
           <button class="btn" id="handoffBtn" title="When this agent finishes, pass its result to another agent">Hand off…</button>
           <button class="btn copy" id="copyAttach">Copy attach command</button>
           <button class="btn danger" id="stopBtn">Stop agent</button>
@@ -646,12 +647,24 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
     <div class="row"><button class="btn primary" type="submit">Send</button><button class="btn" type="button" id="bCancel">Cancel</button></div>
   </form>
 </dialog>
+<dialog id="reviewDialog">
+  <form id="reviewForm" method="dialog">
+    <h2>Review meeting</h2>
+    <p class="hint" style="margin:-6px 0 12px">Other agents read the pull request with <code>gh</code> and report what they find, without changing code or posting on GitHub. On the 3D floor they meet at the meeting table until the reviews are in.</p>
+    <div class="field"><label for="rvPr">Pull request</label><select id="rvPr"></select></div>
+    <div class="field"><label>Reviewers</label><div class="agent-list" id="rvAgents"></div></div>
+    <div class="field"><label for="rvNote">What to look at <small>(optional)</small></label>
+      <textarea id="rvNote" rows="2" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--bg)" placeholder="e.g. the retry logic in the sender, and whether the migration is safe"></textarea></div>
+    <p class="error" id="rvError" hidden></p>
+    <div class="row"><button class="btn primary" type="submit">Start the review</button><button class="btn" type="button" id="rvCancel">Cancel</button></div>
+  </form>
+</dialog>
 <dialog id="askDialog" class="wide">
   <h2>Answers</h2>
   <blockquote class="ask-q" id="askQ"></blockquote>
   <p class="hint" id="askStatus"></p>
   <ol class="past" id="askList"></ol>
-  <div class="row" style="margin-top:12px"><button class="btn" id="askCopy" type="button">Copy as Markdown</button><button class="btn" id="askClose" autofocus>Close</button></div>
+  <div class="row" style="margin-top:12px"><button class="btn primary" id="askBack" type="button" hidden></button><button class="btn" id="askCopy" type="button">Copy as Markdown</button><button class="btn" id="askClose" autofocus>Close</button></div>
 </dialog>
 <dialog id="promptsDialog">
   <form id="promptsForm" method="dialog">
@@ -1030,6 +1043,7 @@ function setTermView(on) {
 }
 $('openTermBtn').addEventListener('click', () => openTerminal(selected));
 $('sideBtn').addEventListener('click', () => openSideBySide(selected));
+$('reviewBtn').addEventListener('click', () => openReviewMeeting(selected));
 // Fit the terminal font so Claude Code's full line width shows without wrapping. (Resizing the agent's tmux
 // window instead made Claude Code redraw and wipe its scrollback, so the size is left to tmux.)
 var charW = 0; // width of one character at 1px font size, in the terminal font
@@ -1196,6 +1210,7 @@ function renderPanel() {
   $('dRunning').hidden = !running;
   $('compose').hidden = !running;
   $('dTools').hidden = !running;
+  $('reviewBtn').hidden = !(a.git && a.git.pr && a.git.pr.state === 'OPEN');
   $('dStopped').hidden = running;
   if (!running && convLoadedFor !== a.name) { convLoadedFor = a.name; fillConversations($('dConv'), a.cwd, null, true); }
   if (running && convLoadedFor === a.name) convLoadedFor = null;
@@ -1638,6 +1653,9 @@ async function loadAnswers() {
   askId = askData.id;
   $('askQ').textContent = askData.text;
   const done = askData.answers.filter((x) => x.status === 'answered').length;
+  const rv = askData.review;
+  $('askBack').hidden = !rv || !done; if (rv) $('askBack').textContent = `Send the reviews to ${labelOf(rv.author)}`;
+  if (rv && meetingAsk === askData.id) showMeeting(askData);
   $('askStatus').textContent = `Asked ${ago(askData.at)} · ${done} of ${askData.answers.length} answered`;
   $('askList').replaceChildren(...askData.answers.map((x) => {
     const li = el('li'), info = el('div');
@@ -1652,6 +1670,73 @@ async function loadAnswers() {
   if ($('askDialog').open && done < askData.answers.length) askTimer = setTimeout(loadAnswers, 3000);
 }
 $('askClose').addEventListener('click', () => $('askDialog').close());
+$('askBack').addEventListener('click', async () => {
+  const rv = askData && askData.review; if (!rv) return;
+  const got = askData.answers.filter((x) => x.status === 'answered' && x.reply);
+  const text = [`Other agents reviewed your pull request #${rv.number}${rv.title ? ` "${rv.title}"` : ''}. Their findings:`,
+    ...got.map((x) => `### ${x.label}\n${x.reply}`),
+    'Go through them: fix what is right, and say which points you disagree with and why. Then run the checks and push.'].join('\n\n');
+  try {
+    const r = await api('POST', '/api/broadcast', { names: [rv.author], text });
+    toast(r.results[rv.author] === 'sent' ? `Sent ${got.length} review${got.length > 1 ? 's' : ''} to ${labelOf(rv.author)}` : `Queued for ${labelOf(rv.author)} (it's busy)`);
+  } catch (err) { toast(err.message); }
+});
+
+// ---------- review meeting: other agents review one agent's PR, at the meeting table on the 3D floor ----------
+let meetingAsk = '', meetingTimer = 0, meetingEnd = 0;
+const openPrs = () => agents.filter((a) => a.git && a.git.pr && a.git.pr.state === 'OPEN' && a.state !== 'stopped');
+function openReviewMeeting(author) {
+  const prs = openPrs();
+  if (!prs.length) { toast('No agent has an open pull request right now.'); return; }
+  $('rvPr').replaceChildren(...prs.map((a) => new Option(`#${a.git.pr.number} ${a.git.pr.title} · ${labelOf(a.name)}`, a.name)));
+  if (author && prs.some((a) => a.name === author)) $('rvPr').value = author;
+  fillReviewers(); $('rvError').hidden = true; $('rvNote').value = '';
+  $('reviewDialog').showModal();
+}
+function fillReviewers() {
+  const author = $('rvPr').value;
+  const others = agents.filter((a) => a.name !== author && a.state !== 'stopped');
+  $('rvAgents').replaceChildren(...(others.length ? others.map((a) => {
+    const l = el('label'); const c = el('input'); c.type = 'checkbox'; c.value = a.name; c.checked = true;
+    l.append(c, document.createTextNode(`${a.label || a.name}  `), el('span', 'hint', LABEL[displayState(a)] || a.state));
+    return l;
+  }) : [el('p', 'hint', 'No other agent is running to review it. Start one first.')]));
+}
+$('rvPr').addEventListener('change', fillReviewers);
+$('rvCancel').addEventListener('click', () => $('reviewDialog').close());
+$('reviewForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const a = agents.find((x) => x.name === $('rvPr').value), pr = a && a.git && a.git.pr;
+  const names = [...$('rvAgents').querySelectorAll('input:checked')].map((c) => c.value);
+  if (!pr || !names.length) { $('rvError').textContent = 'Pick a pull request and at least one reviewer.'; $('rvError').hidden = false; return; }
+  const ref = pr.url || `#${pr.number}`, note = $('rvNote').value.trim();
+  const text = [`Please review pull request #${pr.number} "${pr.title}" (${ref}) by ${labelOf(a.name)}${pr.url ? '' : `, in ${a.cwd}`}.`,
+    `Read it with \`gh pr view ${ref}\` and \`gh pr diff ${ref}\`. Don't change any code and don't post anything on GitHub: reply here with what you find. Bugs first, then risks, then smaller suggestions, each with file:line. If you find nothing, say "No issues found".`,
+    note ? `Look especially at: ${note}` : ''].filter(Boolean).join('\n\n');
+  try {
+    const r = await api('POST', '/api/ask', { names, text, review: { author: a.name, number: pr.number, title: pr.title, url: pr.url } });
+    $('reviewDialog').close();
+    meetingAsk = r.id; meetingEnd = 0;
+    showMeeting({ id: r.id, review: { author: a.name, number: pr.number, title: pr.title }, answers: names.map((n) => ({ name: n, label: labelOf(n), status: 'waiting' })) });
+    watchMeeting(); openAnswers(r.id);
+  } catch (err) { $('rvError').textContent = err.message; $('rvError').hidden = false; }
+});
+// The meeting on the 3D floor: author and reviewers at the table, the PR and who's done on the TV.
+function showMeeting(d) {
+  if (!use3d || !window.Floor3D.meeting) return;
+  const done = d.answers.filter((x) => x.status === 'answered').length;
+  window.Floor3D.meeting({ names: [d.review.author, ...d.answers.map((x) => x.name)], title: `#${d.review.number} ${d.review.title}`,
+    lines: d.answers.map((x) => `${x.status === 'answered' ? '✓' : '…'} ${x.label}${x.status === 'answered' ? '' : `: ${ASK_LABEL[x.status] || x.status}`}`) });
+  if (done === d.answers.length && !meetingEnd) meetingEnd = Date.now() + 20000; // a short wrap-up, then back to the desks
+}
+async function watchMeeting() {
+  clearTimeout(meetingTimer);
+  if (!meetingAsk) return;
+  if (meetingEnd && Date.now() > meetingEnd) { meetingAsk = ''; if (window.Floor3D && window.Floor3D.meeting) window.Floor3D.meeting(null); return; }
+  try { const d = await api('GET', `/api/ask/${meetingAsk}`); if (d.review) showMeeting(d); }
+  catch { meetingAsk = ''; if (window.Floor3D && window.Floor3D.meeting) window.Floor3D.meeting(null); return; }
+  meetingTimer = setTimeout(watchMeeting, 4000);
+}
 $('askDialog').addEventListener('close', () => clearTimeout(askTimer));
 $('askCopy').addEventListener('click', async () => {
   if (!askData) return;
@@ -2315,6 +2400,7 @@ function paletteCommands() {
     { label: 'Broadcast to all agents', run: () => openBroadcast() },
     { label: 'Ask all agents', hint: 'collect the answers', run: () => openBroadcast(true) },
     { label: 'Answers to the last question', run: () => openAnswers() },
+    { label: 'Review meeting', hint: 'agents review a PR', run: () => openReviewMeeting(a && a.name) },
     { label: 'Add agent', run: () => openAdd() },
     ...templates.map((t) => ({ label: `New agent from template: ${t.title}`, hint: base(t.cwd), keywords: t.cwd, run: () => openAdd({ template: t }) })),
     { label: 'Past agents', hint: 'bring one back', run: openPast },
