@@ -353,6 +353,12 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 body.termview .layout { grid-template-columns: 0 minmax(0, 1fr); }
 body.termview .floor { visibility: hidden; overflow: hidden; }
 body.termview .resizer { display: none; }
+/* The main page shows no terminal: each agent's terminal opens in its own window at /t/<agent>. */
+body:not(.termpage) #dRunning { display: none !important; }
+/* The terminal window: one agent's screen, instruction box and anything waiting on you, nothing else. */
+body.termpage > header, body.termpage #panelHint, body.termpage #renameBtn, body.termpage #openTermBtn { display: none !important; }
+body.termpage #detail > :not(#dHead, #dPath, #dError, #dTrust, #dNeeds, #dQuestion, #dRunning, #dQueue) { display: none !important; }
+body.termpage #dRunning { height: calc(100vh - 110px); }
 
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chips button { border: 1px solid var(--line); background: var(--bg); border-radius: 999px; padding: 2px 10px; font-size: 13px; cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -535,7 +541,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
           <div class="term">
             <div class="term-bar"><i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i><span id="termTitle">claude</span>
               <button type="button" class="term-btn" id="termFit" title="Fit this agent to the panel at full text size (clears its scroll history)">⇔</button>
-              <button type="button" class="term-btn" id="termWide" title="Terminal view: widen the terminal (t)" aria-pressed="false">⤢</button></div>
+</div>
             <pre class="screen" id="dScreen" tabindex="0" aria-label="Agent terminal"></pre>
             <form class="compose" id="compose">
               <label for="promptText" id="promptLabel" class="sr-only">Instruction</label>
@@ -556,6 +562,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
         <div class="handoffs" id="dHandoffs" hidden></div>
 
         <div class="row" id="dTools">
+          <button class="btn primary" id="openTermBtn" title="Open this agent's terminal in its own window (t)">Open terminal ↗</button>
           <button class="btn" data-key="Escape">Interrupt</button>
           <button class="btn" data-key="BTab" title="Cycles Claude Code modes, like accept edits and plan mode">Switch mode</button>
           <button class="btn" id="timelineBtn">Timeline</button>
@@ -715,18 +722,17 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <h2>Keyboard shortcuts</h2>
   <dl class="keys">
     <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next / previous agent</dd>
-    <dt><kbd>/</kbd></dt><dd>Write an instruction (↑ / ↓ go through what you sent before)</dd>
+    <dt><kbd>/</kbd> or <kbd>t</kbd></dt><dd>Open the agent's terminal in its own window, to watch it and write instructions (↑ / ↓ there go through what you sent before)</dd>
     <dt><kbd>i</kbd></dt><dd>Inbox: everything waiting on you, oldest first</dd>
     <dt><kbd>b</kbd></dt><dd>Task board</dd>
     <dt><kbd>f</kbd></dt><dd>Walk around the office yourself (W A S D, Esc stops)</dd>
     <dt><kbd>m</kbd></dt><dd>Office sounds on or off</dd>
-    <dt><kbd>t</kbd></dt><dd>Terminal view: widen the terminal (Esc goes back)</dd>
     <dt><kbd>a</kbd></dt><dd>Approve (when the agent needs your approval)</dd>
     <dt><kbd>d</kbd></dt><dd>Decline (when the agent needs your approval)</dd>
     <dt><kbd>1</kbd>–<kbd>9</kbd></dt><dd>Pick an answer (when the agent has a question)</dd>
     <dt><kbd>⌘</kbd> <kbd>K</kbd></dt><dd>Command palette: jump to an agent or run any action by name</dd>
     <dt><kbd>?</kbd></dt><dd>This list</dd>
-    <dt><kbd>Esc</kbd></dt><dd>Leave the instruction box</dd>
+    <dt><kbd>Esc</kbd></dt><dd>Leave the instruction box (in a terminal window)</dd>
   </dl>
   <div class="row" style="margin-top:14px"><button class="btn" id="keysClose">Close</button></div>
 </dialog>
@@ -748,13 +754,21 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 <script type="module">
 // The 3D office; if it can't load, the simpler 3D floor.
 import('/office/palette.js').then((m) => { window.Palette = m; });
-import('/office/engine.js').catch((err) => { console.warn('3D office unavailable, using the simple 3D floor:', err); return import('/floor3d.js'); });
+if (!location.pathname.startsWith('/t/')) import('/office/engine.js').catch((err) => { console.warn('3D office unavailable, using the simple 3D floor:', err); return import('/floor3d.js'); });
 </script>
 <script>
 'use strict';
 // ---------- state ----------
 let agents = [];
-let selected = localStorage.getItem('af:selected') || null;
+// /t/<agent>: this window is that agent's terminal (opened from the main page), not the floor.
+const TERM_PAGE = (/^\/t\/([A-Za-z0-9_-]{1,32})\/?$/.exec(location.pathname) || [])[1] || '';
+if (TERM_PAGE) document.body.classList.add('termpage', 'termview');
+let selected = TERM_PAGE || localStorage.getItem('af:selected') || null;
+function openTerminal(name) {
+  if (!name) return;
+  const w = window.open(`/t/${encodeURIComponent(name)}`, `af-term-${name}`, 'popup,width=1100,height=820'); // one window per agent: opening again brings it forward
+  if (w) w.focus(); else toast('Your browser blocked the terminal window. Allow pop-ups for this page.');
+}
 let seen = {};
 try { seen = JSON.parse(localStorage.getItem('af:seen') || '{}') || {}; } catch {}
 const prevStates = {};
@@ -896,7 +910,7 @@ function showCheer(icon, title, sub, url, linkText) {
 }
 
 function notify(title, body) {
-  if (settings.desktopNotify) return; // the server sends desktop notifications itself
+  if (settings.desktopNotify || TERM_PAGE) return; // the main page alerts; terminal windows would repeat it // the server sends desktop notifications itself
   if ('Notification' in window && Notification.permission === 'granted' && (document.hidden || !document.hasFocus())) {
     new Notification(title, { body: (body || '').slice(0, 140) });
   }
@@ -953,15 +967,16 @@ function renderSummary() {
   }
   $('summary').innerHTML = parts.join(', ');
   const appName = (theme.header && theme.header.title) || 'Agent floor';
-  document.title = waiting ? `(${waiting}) ${appName}` : appName;
+  document.title = TERM_PAGE ? `${labelOf(TERM_PAGE)} · terminal` : waiting ? `(${waiting}) ${appName}` : appName;
   $('empty').hidden = agents.length > 0;
   $('alertsBtn').hidden = !('Notification' in window) || Notification.permission !== 'default';
 }
 
 // ---------- panel ----------
 function select(name) {
+  if (TERM_PAGE && name !== TERM_PAGE) return; // a terminal window stays on its agent
   selected = name;
-  localStorage.setItem('af:selected', name || '');
+  if (!TERM_PAGE) localStorage.setItem('af:selected', name || '');
   if (name) markSeen(name);
   renderTags(); renderPanel();
   fitTerm(); renderHandoffs();
@@ -970,12 +985,10 @@ function select(name) {
 // ---------- terminal: wide view, fitting tmux to the panel, typing like a terminal ----------
 function setTermView(on) {
   document.body.classList.toggle('termview', on);
-  $('termWide').setAttribute('aria-pressed', String(on));
-  try { localStorage.setItem('af:termview', on ? '1' : ''); } catch {}
   if (use3d) window.Floor3D.setVisible(!on);
   fitTerm();
 }
-$('termWide').addEventListener('click', () => setTermView(!document.body.classList.contains('termview')));
+$('openTermBtn').addEventListener('click', () => openTerminal(selected));
 // Fit the terminal font so Claude Code's full line width shows without wrapping. (Resizing the agent's tmux
 // window instead made Claude Code redraw and wipe its scrollback, so the size is left to tmux.)
 var charW = 0; // width of one character at 1px font size, in the terminal font
@@ -1011,7 +1024,7 @@ $('termFit').addEventListener('click', async () => {
   try { await api('POST', `/api/agents/${selected}/fit`, panelTermSize()); toast(`Fitted ${labelOf(selected)} to the panel`); } catch (err) { toast(err.message); }
 });
 document.fonts && document.fonts.ready.then(() => { charW = 0; fitTerm(); });
-try { if (localStorage.getItem('af:termview')) setTimeout(() => setTermView(true), 0); } catch {}
+try { localStorage.removeItem('af:termview'); } catch {} // the old wide terminal view; the terminal has its own window now
 
 // The instruction box grows with what you type, up to 40% of the screen.
 function growPrompt() { const t = $('promptText'); t.style.height = 'auto'; t.style.height = `${Math.min(t.scrollHeight, window.innerHeight * 0.4)}px`; }
@@ -2110,12 +2123,11 @@ document.addEventListener('keydown', (e) => {
   const a = agents[idx];
   const key = (k) => api('POST', `/api/agents/${a.name}/key`, { key: k }).catch((err) => toast(err.message));
   if (e.key === 'j' || e.key === 'k') {
-    if (!agents.length) return;
+    if (!agents.length || TERM_PAGE) return;
     const n = idx < 0 ? 0 : (idx + (e.key === 'j' ? 1 : -1) + agents.length) % agents.length;
     select(agents[n].name);
-  } else if (e.key === '/') { e.preventDefault(); $('promptText').focus(); }
-  else if (e.key === 't' && a) setTermView(!document.body.classList.contains('termview'));
-  else if (e.key === 'Escape' && document.body.classList.contains('termview')) setTermView(false);
+  } else if (e.key === '/' && TERM_PAGE) { e.preventDefault(); $('promptText').focus(); }
+  else if ((e.key === '/' || e.key === 't') && a) openTerminal(a.name);
   else if (e.key === '?') $('keysDialog').showModal();
   else if (e.key === 'i') openInbox();
   else if (e.key === 'b') openBoard();
@@ -2139,13 +2151,12 @@ function paletteCommands() {
   const click = (id) => () => $(id).click();
   const cmds = agents.map((x) => ({ label: `Go to ${labelOf(x.name)}`, hint: `${displayState(x)} · ${base(x.cwd)}`, keywords: `${x.name} ${x.cwd || ''}`, run: () => select(x.name) }));
   if (a) {
-    cmds.push({ label: `Write an instruction to ${who}`, key: '/', run: () => $('promptText').focus() });
+    cmds.push({ label: `Open ${who}'s terminal`, hint: 'own window', key: 't', run: () => openTerminal(a.name) });
     if (a.state === 'waiting') {
       cmds.push({ label: `Approve ${who}`, key: 'a', run: () => (a.trust ? $('trustYes').click() : api('POST', `/api/agents/${a.name}/key`, { key: 'Enter' }).catch((err) => toast(err.message))) });
       cmds.push({ label: `Decline ${who}`, key: 'd', run: () => api('POST', `/api/agents/${a.name}/key`, { key: 'Escape' }).catch((err) => toast(err.message)) });
     }
     cmds.push(
-      { label: document.body.classList.contains('termview') ? 'Leave terminal view' : 'Terminal view', key: 't', run: () => setTermView(!document.body.classList.contains('termview')) },
       { label: `Timeline of ${who}`, run: click('timelineBtn') },
       { label: `Permissions for ${who}`, run: click('permBtn') },
       { label: `Replay ${who}'s day`, run: click('replayBtn') },
@@ -2211,7 +2222,7 @@ function openPalette() {
 document.addEventListener('keydown', (e) => {
   if (e.key.toLowerCase() !== 'k' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
   if ($('paletteDialog').open) { e.preventDefault(); $('paletteDialog').close(); return; }
-  if (document.querySelector('dialog[open]')) return; // don't stack on top of another dialog
+  if (document.querySelector('dialog[open]') || TERM_PAGE) return; // don't stack on top of another dialog
   e.preventDefault(); e.stopPropagation();
   openPalette();
 }, true); // capture: the terminal and instruction box handle their own keys
@@ -3007,7 +3018,7 @@ let feedFresh = 0;
 const clip = (t, n = 90) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 function addFeed(a, ev, role, data = {}) {
   feed.unshift({ at: Date.now(), agent: a.name, label: a.label || a.name, ev, role, data });
-  if (!firstSnapshot) Sound.event(ev);
+  if (!firstSnapshot && !TERM_PAGE) Sound.event(ev);
   feed = feed.slice(0, 200); feedFresh++;
   try { localStorage.setItem('af:feed', JSON.stringify(feed)); } catch {}
 }
