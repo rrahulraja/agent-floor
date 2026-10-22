@@ -701,7 +701,15 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <input id="pastFilter" type="search" placeholder="Filter by name, folder or conversation" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:7px 9px;background:var(--bg);margin-bottom:8px">
   <ol class="past" id="pastList"></ol>
   <p class="hint" id="pastEmpty" hidden>No past agents yet. Agents you stop or remove show up here.</p>
-  <div class="row" style="margin-top:12px"><button class="btn" id="pastClose" autofocus>Close</button></div>
+  <div class="row" style="margin-top:12px"><button class="btn" id="pastClose" autofocus>Close</button><button class="btn" id="pastWt" type="button">Clean up worktrees…</button></div>
+</dialog>
+<dialog id="wtDialog" class="wide">
+  <h2>Clean up worktrees</h2>
+  <p class="hint">Extra worktrees of the repos your agents work in. One can go when its branch is merged (a merged pull request, or already in the base branch), it has no uncommitted changes, and no agent on the floor works in it. Removing never forces: git refuses anything with changes.</p>
+  <label class="check" style="display:block;margin-bottom:8px"><input type="checkbox" id="wtDelBranch" checked> Also delete the local branch</label>
+  <p class="hint" id="wtStatus">Checking…</p>
+  <ol class="past" id="wtList"></ol>
+  <div class="row" style="margin-top:12px"><button class="btn warn" id="wtAll" type="button" hidden></button><button class="btn" id="wtClose" autofocus>Close</button></div>
 </dialog>
 <dialog id="timelineDialog" class="wide">
   <h2 id="tlTitle">Timeline</h2>
@@ -2064,6 +2072,52 @@ $('pastPick').addEventListener('change', async () => {
 fillPastPick();
 setInterval(() => { if (document.activeElement !== $('pastPick')) fillPastPick(); }, 30000); // newly stopped or removed agents show up
 $('pastClose').addEventListener('click', () => $('pastDialog').close());
+
+// ---------- worktree clean-up ----------
+let wtItems = [];
+async function openWorktrees() {
+  if ($('pastDialog').open) $('pastDialog').close();
+  if (!$('wtDialog').open) $('wtDialog').showModal();
+  $('wtStatus').textContent = 'Checking worktrees and merged pull requests…'; $('wtList').replaceChildren(); $('wtAll').hidden = true;
+  try { wtItems = (await api('GET', '/api/worktrees')).items; } catch (err) { $('wtStatus').textContent = err.message; return; }
+  renderWorktrees();
+}
+function renderWorktrees() {
+  const ready = wtItems.filter((w) => w.canRemove);
+  $('wtStatus').textContent = !wtItems.length ? 'No extra worktrees in the repos your agents use.'
+    : `${wtItems.length} worktree${wtItems.length > 1 ? 's' : ''}, ${ready.length} ready to remove.`;
+  $('wtAll').hidden = ready.length < 2; $('wtAll').textContent = `Remove all ${ready.length} merged`;
+  $('wtList').replaceChildren(...wtItems.map((w) => {
+    const li = el('li'), info = el('div');
+    info.append(el('b', '', w.branch || '(detached)'), el('span', 'tag-s', base(w.repo)));
+    info.append(el('small', '', w.path));
+    const why = w.canRemove ? (w.merged.pr ? `Merged in PR #${w.merged.pr}` : `Already in ${w.merged.base && w.merged.base !== 'HEAD' ? w.merged.base : 'the base branch'}`) : w.reason;
+    info.append(el('small', '', why));
+    const acts = el('div', 'acts');
+    if (w.canRemove) {
+      const go = el('button', 'btn', 'Remove'); go.type = 'button';
+      go.addEventListener('click', () => removeWorktree([w]));
+      acts.append(go);
+    }
+    li.append(info, acts);
+    return li;
+  }));
+}
+async function removeWorktree(list) {
+  const del = $('wtDelBranch').checked;
+  const what = list.length === 1 ? `the worktree for ${list[0].branch}` : `${list.length} worktrees`;
+  if (!confirm(`Remove ${what}${del ? ' and delete the local branch' + (list.length > 1 ? 'es' : '') : ''}?\n\nThe folder goes away. The branch's work is already merged.`)) return;
+  let done = 0;
+  for (const w of list) {
+    try { await api('POST', '/api/worktrees/remove', { repo: w.repo, path: w.path, deleteBranch: del }); done++; wtItems = wtItems.filter((x) => x !== w); }
+    catch (err) { toast(`${w.branch}: ${err.message}`); }
+  }
+  if (done) toast(`Removed ${done} worktree${done > 1 ? 's' : ''}`);
+  renderWorktrees();
+}
+$('wtAll').addEventListener('click', () => removeWorktree(wtItems.filter((w) => w.canRemove)));
+$('wtClose').addEventListener('click', () => $('wtDialog').close());
+$('pastWt').addEventListener('click', openWorktrees);
 $('pastFilter').addEventListener('input', renderPast);
 
 // ---------- task board ----------
@@ -2204,6 +2258,7 @@ function paletteCommands() {
     { label: 'Add agent', run: () => openAdd() },
     ...templates.map((t) => ({ label: `New agent from template: ${t.title}`, hint: base(t.cwd), keywords: t.cwd, run: () => openAdd({ template: t }) })),
     { label: 'Past agents', hint: 'bring one back', run: openPast },
+    { label: 'Clean up worktrees', hint: 'merged branches', run: openWorktrees },
     { label: 'Settings', run: openSettings },
     { label: Sound.on ? 'Turn office sounds off' : 'Turn office sounds on', key: 'm', run: () => Sound.toggle() },
     { label: 'Keyboard shortcuts', key: '?', run: () => $('keysDialog').showModal() },

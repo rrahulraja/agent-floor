@@ -27,6 +27,7 @@ const Handoff = require('./lib/handoff');
 const Archive = require('./lib/archive');
 const Templates = require('./lib/templates');
 const CiFix = require('./lib/cifix');
+const Wt = require('./lib/worktrees');
 const Guard = require('./lib/guard');
 const Summary = require('./lib/summary');
 const readline = require('readline');
@@ -1065,6 +1066,47 @@ async function removeWorktree(agent) {
   return r.ok ? {} : { error: `git worktree remove failed: ${r.stderr}` };
 }
 
+// ---------- worktree clean-up ----------
+// Every extra worktree of the repos the floor's agents (and removed agents) work in, with whether it can go:
+// merged (a merged PR, or already in the base branch), no uncommitted changes, no agent on the floor in it.
+async function repoOf(dir) {
+  const r = await run('git', ['-C', dir, 'rev-parse', '--path-format=absolute', '--git-common-dir'], { timeout: 5000 });
+  return r.ok ? path.dirname(r.stdout.trim()) : null; // the main checkout, also when dir is a worktree
+}
+async function mergedState(repo, branch) {
+  if (GH_BIN) {
+    const g = await run(GH_BIN, ['pr', 'list', '--head', branch, '--state', 'merged', '--json', 'number,url', '--limit', '1'], { cwd: repo, timeout: 15000 });
+    try { const pr = g.ok && JSON.parse(g.stdout)[0]; if (pr && pr.number) return { pr: pr.number, url: /^https:\/\//.test(pr.url || '') ? pr.url : '' }; } catch {}
+  }
+  const head = await run('git', ['-C', repo, 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD'], { timeout: 5000 });
+  const baseRef = head.ok ? head.stdout.trim() : 'HEAD';
+  const anc = await run('git', ['-C', repo, 'merge-base', '--is-ancestor', `refs/heads/${branch}`, baseRef], { timeout: 10000 });
+  return anc.ok ? { ancestor: true, base: baseRef } : null;
+}
+async function scanWorktrees(onlyRepo) {
+  const dirs = [...new Set([...saved, ...ARCHIVE.get()].map((a) => a.repo || a.cwd).filter(Boolean))];
+  const repos = onlyRepo ? [onlyRepo] : [...new Set((await Promise.all(dirs.filter((d) => fs.existsSync(d)).map(repoOf))).filter(Boolean))];
+  const items = [];
+  for (const repo of repos.slice(0, 30)) {
+    const l = await run('git', ['-C', repo, 'worktree', 'list', '--porcelain'], { timeout: 10000 });
+    if (!l.ok) continue;
+    const list = Wt.parseList(l.stdout).filter((w) => !w.main).slice(0, 60);
+    await Promise.all(list.map(async (w) => {
+      const agent = saved.find((a) => path.resolve(a.cwd) === path.resolve(w.path));
+      let dirty = 0, merged = null;
+      if (!w.prunable) {
+        const st = await run('git', ['-C', w.path, 'status', '--porcelain'], { timeout: 10000 });
+        dirty = st.ok ? st.stdout.split('\n').filter(Boolean).length : 1;
+      }
+      if (w.branch && !agent && !dirty) merged = await mergedState(repo, w.branch);
+      const v = w.prunable ? { canRemove: false, reason: 'Folder is already gone (git worktree prune clears the entry)' }
+        : Wt.verdict({ ...w, dirty, merged, agent: agent ? (agent.label || agent.name) : null });
+      items.push({ repo, path: w.path, branch: w.branch, merged, dirty, agent: agent ? agent.name : null, ...v });
+    }));
+  }
+  return items.sort((a, b) => Number(b.canRemove) - Number(a.canRemove) || a.path.localeCompare(b.path));
+}
+
 // ---------- http ----------
 // localhost, plus host names listed in Settings (e.g. a Tailscale name for `tailscale serve`)
 const allowedHost = (req) => C.allowedHost(req.headers.host, req.headers.origin, C.parseHosts(CONFIG.get('access.extraHosts')));
@@ -1156,6 +1198,26 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/projects') return send(res, 200, { projects: await listProjects() });
     // Past agents: stopped ones still on the floor, and ones removed from it, with their last conversation.
+    // ---------- worktree clean-up ----------
+    if (req.method === 'GET' && p === '/api/worktrees') return send(res, 200, { items: await scanWorktrees() });
+    if (req.method === 'POST' && p === '/api/worktrees/remove') {
+      const b = await readBody(req);
+      const repo = await repoOf(String(b.repo || '')), want = path.resolve(String(b.path || ''));
+      // Check everything again now: only a worktree the scan would offer can be removed, and never with --force.
+      const it = repo && (await scanWorktrees(repo)).find((x) => path.resolve(x.path) === want);
+      if (!it) return send(res, 404, { error: 'That worktree is no longer there.' });
+      if (!it.canRemove) return send(res, 409, { error: it.reason });
+      const r = await run('git', ['-C', repo, 'worktree', 'remove', it.path], { timeout: 30000 });
+      if (!r.ok) return send(res, 500, { error: `git worktree remove failed: ${r.stderr.slice(0, 300)}` });
+      let branch = '';
+      if (b.deleteBranch && it.branch) {
+        // A squash-merged branch isn't an ancestor of the base, so -d would refuse it; the merged PR is the proof.
+        const d = await run('git', ['-C', repo, 'branch', it.merged.pr ? '-D' : '-d', '--', it.branch], { timeout: 10000 });
+        branch = d.ok ? 'deleted' : `kept (${d.stderr.trim().slice(0, 200)})`;
+      }
+      return send(res, 200, { ok: true, branch });
+    }
+
     // ---------- agent templates ----------
     if (req.method === 'GET' && p === '/api/templates') return send(res, 200, { templates: TEMPLATES.get() });
     if (req.method === 'POST' && p === '/api/templates') {
