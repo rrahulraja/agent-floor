@@ -117,3 +117,15 @@ test('checkedOptions reads ticked boxes from a multi-select question on screen',
   assert.deepEqual(C.checkedOptions('no question here\n  1. [✔] stray'), []);
   assert.deepEqual(C.checkedOptions(''), []);
 });
+
+test('promptPending: is the instruction still sitting in the input box, not sent?', () => {
+  const rule = '─'.repeat(60);
+  const screen = (box, above = '❯ What is 2+2?\n⏺ 4') => [above, rule, box, rule, '  Opus 5.5 · ctx 5%', '  ⏵⏵ auto mode on'].join('\n');
+  const q = 'What is 7+7? Reply with just the number.';
+  assert.equal(C.promptPending(screen(`❯ ${q}`), q), true);
+  assert.equal(C.promptPending(screen('❯ '), q), false);
+  assert.equal(C.promptPending(screen('❯ ', `❯ ${q}\n⏺ 14`), q), false); // sent: it shows above the box, not in it
+  assert.equal(C.promptPending(screen('❯ [Pasted text #1 +40 lines]'), 'line one\nline two'), true);
+  assert.equal(C.promptPending(screen(`❯ ${q.slice(0, 30)}`), q), true); // wrapped onto the next line
+  assert.equal(C.promptPending('no input box on screen', q), false);
+});

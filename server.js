@@ -188,6 +188,13 @@ async function sendPrompt(name, text) {
   if (!r.ok) throw new Error(r.stderr);
   await sleep(150);
   await tmux('send-keys', '-t', target(name), 'Enter');
+  // Right after Claude Code starts, or while it is still taking in a long paste, that Enter can get lost and
+  // the instruction just sits in the input box. Check, and press Enter again (twice at most).
+  for (let i = 0; i < 2; i++) {
+    await sleep(600);
+    if (!C.promptPending(stripAnsi(await capture(name, 60, false)), text)) return;
+    await tmux('send-keys', '-t', target(name), 'Enter');
+  }
 }
 
 // ---------- transcripts ----------
