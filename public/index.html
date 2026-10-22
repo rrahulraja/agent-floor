@@ -356,7 +356,7 @@ body.termview .resizer { display: none; }
 /* The main page shows no terminal: each agent's terminal opens in its own window at /t/<agent>. */
 body:not(.termpage) #dRunning { display: none !important; }
 /* The terminal window: one agent's screen, instruction box and anything waiting on you, nothing else. */
-body.termpage > header, body.termpage #panelHint, body.termpage #renameBtn, body.termpage #openTermBtn { display: none !important; }
+body.termpage > header, body.termpage #panelHint, body.termpage #renameBtn, body.termpage #openTermBtn, body.termpage #sideBtn { display: none !important; }
 body.termpage #detail > :not(#dHead, #dPath, #dError, #dTrust, #dNeeds, #dQuestion, #dRunning, #dQueue) { display: none !important; }
 body.termpage #dRunning { height: calc(100vh - 110px); }
 
@@ -563,6 +563,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 
         <div class="row" id="dTools">
           <button class="btn primary" id="openTermBtn" title="Open this agent's terminal in its own window (t)">Open terminal ↗</button>
+          <button class="btn" id="sideBtn" title="This agent's terminal next to the others that need you or are busy, in one window (s)">Side by side</button>
           <button class="btn" data-key="Escape">Interrupt</button>
           <button class="btn" data-key="BTab" title="Cycles Claude Code modes, like accept edits and plan mode">Switch mode</button>
           <button class="btn" id="timelineBtn">Timeline</button>
@@ -723,6 +724,7 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
   <dl class="keys">
     <dt><kbd>j</kbd> / <kbd>k</kbd></dt><dd>Next / previous agent</dd>
     <dt><kbd>/</kbd> or <kbd>t</kbd></dt><dd>Open the agent's terminal in its own window, to watch it and write instructions (↑ / ↓ there go through what you sent before)</dd>
+    <dt><kbd>s</kbd></dt><dd>Terminals side by side: this agent and the ones that need you or are busy, in one window (add or close panes there)</dd>
     <dt><kbd>i</kbd></dt><dd>Inbox: everything waiting on you, oldest first</dd>
     <dt><kbd>b</kbd></dt><dd>Task board</dd>
     <dt><kbd>f</kbd></dt><dd>Walk around the office yourself (W A S D, Esc stops)</dd>
@@ -767,6 +769,15 @@ let selected = TERM_PAGE || localStorage.getItem('af:selected') || null;
 function openTerminal(name) {
   if (!name) return;
   const w = window.open(`/t/${encodeURIComponent(name)}`, `af-term-${name}`, 'popup,width=1100,height=820'); // one window per agent: opening again brings it forward
+  if (w) w.focus(); else toast('Your browser blocked the terminal window. Allow pop-ups for this page.');
+}
+// Up to three terminals side by side in one window: this agent, then others that need you, then busy ones.
+function openSideBySide(name) {
+  const rank = (x) => (needsYou(x) ? 0 : WORKING.has(x.state) ? 1 : 2);
+  const others = agents.filter((x) => x.name !== name && x.state !== 'stopped').sort((x, y) => rank(x) - rank(y)).slice(0, name ? 2 : 3);
+  const list = [name, ...others.map((x) => x.name)].filter(Boolean);
+  if (list.length < 2) return openTerminal(list[0]);
+  const w = window.open(`/t/${list.map(encodeURIComponent).join(',')}`, 'af-terms');
   if (w) w.focus(); else toast('Your browser blocked the terminal window. Allow pop-ups for this page.');
 }
 let seen = {};
@@ -989,6 +1000,7 @@ function setTermView(on) {
   fitTerm();
 }
 $('openTermBtn').addEventListener('click', () => openTerminal(selected));
+$('sideBtn').addEventListener('click', () => openSideBySide(selected));
 // Fit the terminal font so Claude Code's full line width shows without wrapping. (Resizing the agent's tmux
 // window instead made Claude Code redraw and wipe its scrollback, so the size is left to tmux.)
 var charW = 0; // width of one character at 1px font size, in the terminal font
@@ -2128,6 +2140,7 @@ document.addEventListener('keydown', (e) => {
     select(agents[n].name);
   } else if (e.key === '/' && TERM_PAGE) { e.preventDefault(); $('promptText').focus(); }
   else if ((e.key === '/' || e.key === 't') && a) openTerminal(a.name);
+  else if (e.key === 's' && !TERM_PAGE && agents.length) openSideBySide(a && a.name);
   else if (e.key === '?') $('keysDialog').showModal();
   else if (e.key === 'i') openInbox();
   else if (e.key === 'b') openBoard();
@@ -2152,6 +2165,7 @@ function paletteCommands() {
   const cmds = agents.map((x) => ({ label: `Go to ${labelOf(x.name)}`, hint: `${displayState(x)} · ${base(x.cwd)}`, keywords: `${x.name} ${x.cwd || ''}`, run: () => select(x.name) }));
   if (a) {
     cmds.push({ label: `Open ${who}'s terminal`, hint: 'own window', key: 't', run: () => openTerminal(a.name) });
+    cmds.push({ label: 'Terminals side by side', hint: 'up to 3 in one window', key: 's', run: () => openSideBySide(a.name) });
     if (a.state === 'waiting') {
       cmds.push({ label: `Approve ${who}`, key: 'a', run: () => (a.trust ? $('trustYes').click() : api('POST', `/api/agents/${a.name}/key`, { key: 'Enter' }).catch((err) => toast(err.message))) });
       cmds.push({ label: `Decline ${who}`, key: 'd', run: () => api('POST', `/api/agents/${a.name}/key`, { key: 'Escape' }).catch((err) => toast(err.message)) });

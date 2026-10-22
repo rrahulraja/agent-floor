@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminals</title>
+<style>
+:root { color-scheme: dark; --bg: #0b0d13; --bar: #151826; --ink: #e6e8f2; --muted: #9ba1b8; --line: #33395a; --work: #8aaaf2;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); font: 14px/1.4 var(--sans); }
+body { display: flex; flex-direction: column; }
+header { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: var(--bar); border-bottom: 1px solid var(--line); }
+header b { font-size: 15px; } header .sp { flex: 1; }
+select, button { font: 13px var(--sans); color: var(--ink); background: #1f2336; border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; cursor: pointer; }
+main { flex: 1; min-height: 0; display: grid; gap: 1px; background: var(--line); }
+.pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+.pane-bar { display: flex; align-items: center; gap: 6px; padding: 3px 8px; background: var(--bar); color: var(--muted); font-size: 12px; }
+.pane-bar span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pane-bar button { padding: 0 6px; font-size: 12px; }
+iframe { flex: 1; width: 100%; border: 0; background: var(--bg); }
+.empty { margin: auto; color: var(--muted); text-align: center; padding: 20px; }
+</style>
+</head>
+<body>
+<header>
+  <b>Terminals</b><span class="sp"></span>
+  <select id="add" aria-label="Add an agent"><option value="">+ Add agent</option></select>
+  <a href="/" style="color:var(--work);font-size:13px">Floor</a>
+</header>
+<main id="grid"></main>
+<script>
+'use strict';
+// Several agents' terminals side by side: each pane is that agent's own terminal page (/t/<name>).
+const MAX = 4;
+const $ = (id) => document.getElementById(id);
+const NAME_RE = /^[A-Za-z0-9_-]{1,32}$/;
+let names = decodeURIComponent(location.pathname.replace(/^\/t\//, '').replace(/\/$/, '')).split(',').filter((n) => NAME_RE.test(n));
+names = [...new Set(names)].slice(0, MAX);
+const panes = new Map(); // name -> pane element; kept while open so a pane isn't reloaded when another closes
+
+function pane(name) {
+  const p = document.createElement('section'); p.className = 'pane';
+  const bar = document.createElement('div'); bar.className = 'pane-bar';
+  const label = document.createElement('span'); label.textContent = name;
+  const pop = document.createElement('button'); pop.type = 'button'; pop.textContent = '↗'; pop.title = 'Open in its own window';
+  pop.addEventListener('click', () => { window.open(`/t/${encodeURIComponent(name)}`, `af-term-${name}`, 'popup,width=1100,height=820'); });
+  const close = document.createElement('button'); close.type = 'button'; close.textContent = '✕'; close.title = 'Close this pane';
+  close.addEventListener('click', () => { names = names.filter((n) => n !== name); render(); });
+  const frame = document.createElement('iframe'); frame.src = `/t/${encodeURIComponent(name)}`; frame.title = `${name} terminal`;
+  frame.addEventListener('load', () => { try { label.textContent = frame.contentDocument.title.replace(/ · terminal$/, '') || name; } catch {} });
+  bar.append(label, pop, close); p.append(bar, frame);
+  return p;
+}
+function render() {
+  const grid = $('grid');
+  for (const [n, p] of panes) if (!names.includes(n)) { p.remove(); panes.delete(n); }
+  for (const n of names) { if (!panes.has(n)) panes.set(n, pane(n)); grid.append(panes.get(n)); } // append keeps order
+  grid.style.gridTemplateColumns = `repeat(${Math.max(1, names.length)}, minmax(0, 1fr))`;
+  let empty = grid.querySelector('.empty');
+  if (!names.length && !empty) { empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'No terminals open. Add an agent above.'; grid.append(empty); }
+  if (names.length && empty) empty.remove();
+  if (names.length) history.replaceState(null, '', `/t/${names.map(encodeURIComponent).join(',')}`);
+  document.title = names.length ? `Terminals · ${names.join(', ')}` : 'Terminals';
+  fillAdd();
+}
+let agents = [];
+function fillAdd() {
+  const sel = $('add');
+  const opts = [new Option(names.length >= MAX ? `Up to ${MAX} side by side` : '+ Add agent', '')];
+  if (names.length < MAX) for (const a of agents) if (!names.includes(a.name)) opts.push(new Option(`${a.label || a.name}${a.state === 'stopped' ? ' (stopped)' : ''}`, a.name));
+  sel.replaceChildren(...opts);
+}
+$('add').addEventListener('change', () => { const v = $('add').value; if (v && names.length < MAX) { names.push(v); render(); } });
+async function loadAgents() {
+  try { agents = (await (await fetch('/api/state', { headers: { 'X-Agent-Floor': '1' } })).json()).agents || []; } catch { return; }
+  fillAdd();
+}
+$('add').addEventListener('focus', loadAgents);
+loadAgents();
+render();
+</script>
+</body>
+</html>

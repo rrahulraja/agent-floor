@@ -1064,6 +1064,10 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return fs.createReadStream(path.join(__dirname, 'public', 'mobile.html')).pipe(res);
     }
+    if (req.method === 'GET' && /^\/t\/[A-Za-z0-9_-]{1,32}(,[A-Za-z0-9_-]{1,32}){1,3}\/?$/.test(p)) { // several terminals side by side
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+      return fs.createReadStream(path.join(__dirname, 'public', 'grid.html')).pipe(res);
+    }
     if (req.method === 'GET' && (p === '/' || p === '/index.html' || /^\/t\/[A-Za-z0-9_-]{1,32}\/?$/.test(p))) { // /t/<agent>: that agent's terminal in its own window
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
       return fs.createReadStream(INDEX_FILE).pipe(res);
