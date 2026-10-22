@@ -331,6 +331,8 @@ dialog.settings { width: min(640px, 94vw); max-height: 88vh; }
 .past small { display: block; color: var(--muted); font-size: 12.5px; overflow-wrap: anywhere; }
 .past .acts { display: flex; gap: 6px; align-items: center; } .past .btn { padding: 3px 10px; font-size: 13px; } .past select { max-width: 220px; font-size: 12.5px; }
 .past-pick { max-width: 190px; }
+.ask-q { margin: 0 0 8px; padding: 8px 12px; border-left: 3px solid var(--work); background: var(--bg); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ask-a { grid-column: 1 / -1; margin: 4px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 14px; max-height: 40vh; overflow: auto; }
 .tok-today.guard-warn b { color: var(--wait); } .tok-today.guard-limit b { color: var(--danger); }
 .summary { border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; margin-bottom: 10px; background: var(--bg); font-size: 14px; } .summary b { display: block; margin-bottom: 4px; } .summary div { color: var(--muted); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
@@ -634,14 +636,22 @@ dialog h2 { font: 700 20px/1.1 var(--pixel); margin: 0 0 14px; }
 </dialog>
 <dialog id="broadcastDialog">
   <form id="broadcastForm" method="dialog">
-    <h2>Broadcast an instruction</h2>
+    <h2 id="bTitle">Broadcast an instruction</h2>
     <p class="hint" style="margin:-6px 0 12px">Idle agents get it now; busy ones get it queued.</p>
     <div class="agent-list" id="bAgents"></div>
-    <div class="field"><label for="bText">Instruction</label>
+    <label class="check" style="display:block;margin-bottom:10px"><input type="checkbox" id="bAsk"> Ask a question and collect the answers in one place</label>
+    <div class="field"><label for="bText" id="bTextLabel">Instruction</label>
       <textarea id="bText" style="width:100%;min-height:90px;border:1px solid var(--line);border-radius:6px;padding:8px 10px;background:var(--bg)"></textarea></div>
     <p class="error" id="bError" hidden></p>
     <div class="row"><button class="btn primary" type="submit">Send</button><button class="btn" type="button" id="bCancel">Cancel</button></div>
   </form>
+</dialog>
+<dialog id="askDialog" class="wide">
+  <h2>Answers</h2>
+  <blockquote class="ask-q" id="askQ"></blockquote>
+  <p class="hint" id="askStatus"></p>
+  <ol class="past" id="askList"></ol>
+  <div class="row" style="margin-top:12px"><button class="btn" id="askCopy" type="button">Copy as Markdown</button><button class="btn" id="askClose" autofocus>Close</button></div>
 </dialog>
 <dialog id="promptsDialog">
   <form id="promptsForm" method="dialog">
@@ -1575,7 +1585,13 @@ $('promptsForm').addEventListener('submit', async (e) => {
 });
 
 // ---------- broadcast ----------
-$('broadcastBtn').addEventListener('click', () => {
+function setAskMode(on) {
+  $('bAsk').checked = on;
+  $('bTitle').textContent = on ? 'Ask all agents' : 'Broadcast an instruction';
+  $('bTextLabel').textContent = on ? 'Question' : 'Instruction';
+}
+$('bAsk').addEventListener('change', () => setAskMode($('bAsk').checked));
+function openBroadcast(ask = false) {
   const running = agents.filter((a) => a.state !== 'stopped');
   if (!running.length) { toast('No agents are running.'); return; }
   $('bError').hidden = true;
@@ -1584,14 +1600,21 @@ $('broadcastBtn').addEventListener('click', () => {
     l.append(c, document.createTextNode(`${a.label || a.name}  `), el('span', 'hint', LABEL[displayState(a)] || a.state));
     return l;
   }));
+  setAskMode(ask);
   $('broadcastDialog').showModal(); $('bText').focus();
-});
+}
+$('broadcastBtn').addEventListener('click', () => openBroadcast());
 $('bCancel').addEventListener('click', () => $('broadcastDialog').close());
 $('broadcastForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const names = [...$('bAgents').querySelectorAll('input:checked')].map((c) => c.value);
   const text = $('bText').value;
-  if (!names.length || !text.trim()) { $('bError').textContent = 'Pick at least one agent and write an instruction.'; $('bError').hidden = false; return; }
+  if (!names.length || !text.trim()) { $('bError').textContent = `Pick at least one agent and write ${$('bAsk').checked ? 'a question' : 'an instruction'}.`; $('bError').hidden = false; return; }
+  if ($('bAsk').checked) {
+    try { const r = await api('POST', '/api/ask', { names, text }); $('broadcastDialog').close(); $('bText').value = ''; openAnswers(r.id); }
+    catch (err) { $('bError').textContent = err.message; $('bError').hidden = false; }
+    return;
+  }
   try {
     const r = await api('POST', '/api/broadcast', { names, text });
     const sent = Object.values(r.results).filter((v) => v === 'sent').length, queued = Object.values(r.results).filter((v) => v === 'queued').length;
@@ -1599,6 +1622,41 @@ $('broadcastForm').addEventListener('submit', async (e) => {
     toast(`Sent to ${sent}, queued for ${queued}`);
     if (use3d && window.Floor3D.standup) window.Floor3D.standup(names); // everyone it went to gathers for a quick standup
   } catch (err) { $('bError').textContent = err.message; $('bError').hidden = false; }
+});
+
+// ---------- ask all: each agent's answer to one question ----------
+let askId = 'latest', askTimer = 0, askData = null;
+const ASK_LABEL = { queued: 'queued (busy)', waiting: 'not started yet', answering: 'answering…', answered: 'answered' };
+async function openAnswers(id = 'latest') {
+  askId = id;
+  if (!$('askDialog').open) $('askDialog').showModal();
+  await loadAnswers();
+}
+async function loadAnswers() {
+  clearTimeout(askTimer);
+  try { askData = await api('GET', `/api/ask/${askId}`); } catch (err) { $('askQ').textContent = ''; $('askStatus').textContent = err.message; $('askList').replaceChildren(); return; }
+  askId = askData.id;
+  $('askQ').textContent = askData.text;
+  const done = askData.answers.filter((x) => x.status === 'answered').length;
+  $('askStatus').textContent = `Asked ${ago(askData.at)} · ${done} of ${askData.answers.length} answered`;
+  $('askList').replaceChildren(...askData.answers.map((x) => {
+    const li = el('li'), info = el('div');
+    info.append(el('b', '', x.label), el('span', 'tag-s', ASK_LABEL[x.status] || x.status));
+    const acts = el('div', 'acts'), go = el('button', 'btn', 'Go to agent'); go.type = 'button';
+    go.addEventListener('click', () => { $('askDialog').close(); select(x.name); });
+    acts.append(go);
+    li.append(info, acts);
+    if (x.reply) li.append(el('p', 'ask-a', x.reply));
+    return li;
+  }));
+  if ($('askDialog').open && done < askData.answers.length) askTimer = setTimeout(loadAnswers, 3000);
+}
+$('askClose').addEventListener('click', () => $('askDialog').close());
+$('askDialog').addEventListener('close', () => clearTimeout(askTimer));
+$('askCopy').addEventListener('click', async () => {
+  if (!askData) return;
+  const md = [`**Q:** ${askData.text}`, ...askData.answers.map((x) => `### ${x.label}\n${x.reply || `_${ASK_LABEL[x.status] || x.status}_`}`)].join('\n\n');
+  try { await navigator.clipboard.writeText(md); toast('Copied'); } catch { toast('Could not copy'); }
 });
 
 // ---------- timeline ----------
@@ -2254,7 +2312,9 @@ function paletteCommands() {
     { label: 'Task board', key: 'b', run: openBoard },
     { label: 'Today', hint: 'what got done', run: click('todayBtn') },
     { label: 'Search conversations', run: click('searchBtn') },
-    { label: 'Broadcast to all agents', run: click('broadcastBtn') },
+    { label: 'Broadcast to all agents', run: () => openBroadcast() },
+    { label: 'Ask all agents', hint: 'collect the answers', run: () => openBroadcast(true) },
+    { label: 'Answers to the last question', run: () => openAnswers() },
     { label: 'Add agent', run: () => openAdd() },
     ...templates.map((t) => ({ label: `New agent from template: ${t.title}`, hint: base(t.cwd), keywords: t.cwd, run: () => openAdd({ template: t }) })),
     { label: 'Past agents', hint: 'bring one back', run: openPast },

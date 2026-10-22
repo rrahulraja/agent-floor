@@ -1054,6 +1054,33 @@ async function removeWorktree(agent) {
   return r.ok ? {} : { error: `git worktree remove failed: ${r.stderr}` };
 }
 
+// ---------- broadcast and ask all ----------
+// Idle agents get the text now; busy ones get it queued.
+async function deliver(names, text) {
+  const sessions = await listSessions();
+  const results = {};
+  for (const name of Array.isArray(names) ? names.slice(0, 50) : []) {
+    const agent = saved.find((a) => a.name === name);
+    if (!agent || !sessions.has(name)) { results[name] = 'skipped (not running)'; continue; }
+    const state = (memory.get(name) || {}).state;
+    if (state === 'idle') { await sendPrompt(name, text); results[name] = 'sent'; }
+    else { QUEUE.set(C.enqueue(QUEUE.get(), name, text).all); results[name] = 'queued'; }
+  }
+  await poll();
+  return results;
+}
+const asks = []; // the last few questions asked of several agents, newest first (kept until restart)
+async function answerFor(name, ask) {
+  const label = (saved.find((a) => a.name === name) || {}).label || name;
+  if (C.queueOf(QUEUE.get(), name).items.some((i) => i.text === ask.text)) return { name, label, status: 'queued', reply: '' };
+  const item = snapshot.agents.find((a) => a.name === name);
+  if (!item || !item.sessionId || !SESSION_RE.test(item.sessionId)) return { name, label, status: 'waiting', reply: '' };
+  try {
+    const fp = path.join(PROJECTS_DIR, encodeCwd(item.cwd), `${item.sessionId}.jsonl`), st = await fsp.stat(fp);
+    return { name, label, ...Hist.answerTo(await readTail({ path: fp, mtimeMs: st.mtimeMs, size: st.size }), ask.text, ask.at) };
+  } catch { return { name, label, status: 'waiting', reply: '' }; }
+}
+
 // ---------- worktree clean-up ----------
 // Every extra worktree of the repos the floor's agents (and removed agents) work in, with whether it can go:
 // merged (a merged PR, or already in the base branch), no uncommitted changes, no agent on the floor in it.
@@ -1277,17 +1304,23 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/broadcast') {
       const { names, text } = await readBody(req);
       if (!text || !String(text).trim()) return send(res, 400, { error: 'Write an instruction first.' });
-      const sessions = await listSessions();
-      const results = {};
-      for (const name of Array.isArray(names) ? names.slice(0, 50) : []) {
-        const agent = saved.find((a) => a.name === name);
-        if (!agent || !sessions.has(name)) { results[name] = 'skipped (not running)'; continue; }
-        const state = (memory.get(name) || {}).state;
-        if (state === 'idle') { await sendPrompt(name, String(text)); results[name] = 'sent'; }
-        else { QUEUE.set(C.enqueue(QUEUE.get(), name, String(text)).all); results[name] = 'queued'; }
-      }
-      await poll();
-      return send(res, 200, { ok: true, results });
+      return send(res, 200, { ok: true, results: await deliver(names, String(text)) });
+    }
+    // Ask all agents: the same question to each, then each one's reply to it, collected in one place.
+    if (req.method === 'POST' && p === '/api/ask') {
+      const { names, text } = await readBody(req);
+      if (!text || !String(text).trim()) return send(res, 400, { error: 'Write a question first.' });
+      const ask = { id: C.newId(), text: String(text), at: Date.now() };
+      ask.results = await deliver(names, ask.text);
+      ask.names = Object.keys(ask.results).filter((n) => !ask.results[n].startsWith('skipped'));
+      asks.unshift(ask); asks.length = Math.min(asks.length, 10);
+      return send(res, 200, { ok: true, id: ask.id, results: ask.results });
+    }
+    const askM = p.match(/^\/api\/ask\/(latest|[a-f0-9]{12})$/);
+    if (req.method === 'GET' && askM) {
+      const ask = askM[1] === 'latest' ? asks[0] : asks.find((x) => x.id === askM[1]);
+      if (!ask) return send(res, 404, { error: 'No question asked since the dashboard started.' });
+      return send(res, 200, { id: ask.id, text: ask.text, at: ask.at, answers: await Promise.all(ask.names.map((n) => answerFor(n, ask))) });
     }
 
     if (req.method === 'POST' && p === '/api/agents') {
