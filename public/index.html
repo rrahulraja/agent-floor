@@ -1193,19 +1193,22 @@ function renderQuestion(a) {
     return;
   }
   const single = q.questions.length === 1 && !q.questions[0].multiSelect;
+  const multi = q.questions.length === 1 && q.questions[0].multiSelect; // tick boxes, then Submit
+  const checked = new Set(q.checked || []);
   for (const qq of q.questions) {
     const wrap = el('div', 'q');
     if (qq.header) wrap.append(el('h4', '', qq.header));
     wrap.append(el('p', '', qq.question));
     const opts = el('div', 'opts');
     qq.options.forEach((o, i) => {
-      if (single && i < 9) {
+      if ((single || multi) && i < 9) {
         const b = el('button', 'btn opt');
         b.type = 'button';
-        b.append(el('span', '', `${i + 1}. ${o.label}`));
+        b.append(el('span', '', multi ? `${checked.has(i + 1) ? '☑' : '☐'} ${i + 1}. ${o.label}` : `${i + 1}. ${o.label}`));
+        if (multi) b.setAttribute('aria-pressed', String(checked.has(i + 1)));
         if (o.description) b.append(el('small', '', o.description));
         b.addEventListener('click', async () => {
-          try { await api('POST', `/api/agents/${a.name}/key`, { key: String(i + 1) }); toast(`Answered: ${o.label}`); }
+          try { await api('POST', `/api/agents/${a.name}/key`, { key: String(i + 1) }); if (!multi) toast(`Answered: ${o.label}`); }
           catch (err) { toast(err.message); }
         });
         opts.append(b);
@@ -1218,9 +1221,17 @@ function renderQuestion(a) {
     wrap.append(opts);
     box.append(wrap);
   }
+  if (multi) {
+    const sub = el('button', 'btn primary', 'Submit answers'); sub.type = 'button';
+    sub.addEventListener('click', async () => {
+      try { await api('POST', `/api/agents/${a.name}/submit-answers`); toast('Answers sent'); } catch (err) { toast(err.message); }
+    });
+    const row = el('div', 'row'); row.append(sub); box.append(row);
+  }
   box.append(el('p', 'hint', single
     ? 'Pick one here. To write your own answer, use "Other" in the terminal.'
-    : 'This question has several parts or allows more than one answer, so answer it in the terminal (Copy attach command below).'));
+    : multi ? 'Tick as many as you like, then Submit. To write your own answer, use "Type something" in the terminal.'
+    : 'This question has several parts, so answer it in the terminal (Copy attach command below).'));
 }
 
 function renderHealth(a) {
@@ -1760,7 +1771,12 @@ function renderInbox() {
         const q = a.question.questions[0] || {};
         li.append(el('p', '', q.question || ''));
         const opts = el('div', 'row');
-        (q.options || []).slice(0, 9).forEach((o, i) => { const b = el('button', 'btn', `${i + 1}. ${o.label}`); b.type = 'button'; b.title = o.description || ''; b.addEventListener('click', () => keyTo(a.name, String(i + 1)).then(() => toast(`Answered: ${o.label}`)).catch((err) => toast(err.message))); opts.append(b); });
+        const multi = q.multiSelect && a.question.questions.length === 1, checked = new Set(a.question.checked || []);
+        (q.options || []).slice(0, 9).forEach((o, i) => {
+          const b = el('button', 'btn', multi ? `${checked.has(i + 1) ? '☑' : '☐'} ${i + 1}. ${o.label}` : `${i + 1}. ${o.label}`); b.type = 'button'; b.title = o.description || '';
+          b.addEventListener('click', () => keyTo(a.name, String(i + 1)).then(() => { if (!multi) toast(`Answered: ${o.label}`); }).catch((err) => toast(err.message))); opts.append(b);
+        });
+        if (multi) { const sub = el('button', 'btn primary', 'Submit answers'); sub.type = 'button'; sub.addEventListener('click', () => api('POST', `/api/agents/${a.name}/submit-answers`).then(() => toast('Answers sent')).catch((err) => toast(err.message))); opts.append(sub); }
         li.append(opts);
       }
     }

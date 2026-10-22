@@ -71,7 +71,11 @@ function needCard(a) {
   } else if (a.question && a.question.kind === 'tool') {
     const q = a.question.questions[0] || {};
     c.append(el('div', 'reply', q.question || ''));
-    (q.options || []).slice(0, 9).forEach((o, i) => row.append(btn(`${i + 1}. ${o.label}`, '', act(() => key(a, String(i + 1)), `Answered: ${o.label}`))));
+    const multi = q.multiSelect && a.question.questions.length === 1, checked = new Set(a.question.checked || []);
+    (q.options || []).slice(0, 9).forEach((o, i) => row.append(multi
+      ? btn(`${checked.has(i + 1) ? '☑' : '☐'} ${i + 1}. ${o.label}`, '', act(() => key(a, String(i + 1))))
+      : btn(`${i + 1}. ${o.label}`, '', act(() => key(a, String(i + 1)), `Answered: ${o.label}`))));
+    if (multi) row.append(btn('Submit answers', 'go', act(() => api('POST', `/api/agents/${a.name}/submit-answers`), 'Answers sent')));
   } else if (a.question) {
     c.append(el('div', 'reply', a.question.text || ''));
   }

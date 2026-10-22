@@ -95,3 +95,25 @@ test('allowedHost: localhost always; extra host names only when listed, exactly'
   assert.equal(C.allowedHost('mac.tail1234.ts.net', 'https://evil.com', extra), false);
   assert.deepEqual(C.parseHosts('bad host!, ok.local'), ['ok.local']);
 });
+
+test('checkedOptions reads ticked boxes from a multi-select question on screen', () => {
+  const screen = [
+    '  1. [✔] old answer from scrollback',
+    '────────',
+    '←  ☒ Free disk  ✔ Submit  →',
+    'Host disk has 119 MiB free. Which caches should I clear?',
+    '❯ 1. [ ] Maven target/ dirs (~6 GB)',
+    '         Build output under Developer.',
+    '  2. [ ] Docker build cache (~5.2 GB)',
+    '  3. [✔] npm cache (~2.9 GB)',
+    '  4. [✔] Gradle caches (~5.7 GB)',
+    '  5. [ ] Type something',
+    '     Submit',
+    '────────',
+    '  6. Chat about this',
+  ].join('\n');
+  assert.deepEqual(C.checkedOptions(screen), [3, 4]);
+  assert.deepEqual(C.checkedOptions(screen.replace(/✔\]/g, ' ]')), []);
+  assert.deepEqual(C.checkedOptions('no question here\n  1. [✔] stray'), []);
+  assert.deepEqual(C.checkedOptions(''), []);
+});

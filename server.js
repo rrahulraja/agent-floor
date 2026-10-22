@@ -720,7 +720,7 @@ async function poll() {
 
       if (toolQuestion || proseQuestion) {
         item.state = 'asking';
-        item.question = toolQuestion ? { kind: 'tool', questions: info.question.questions } : { kind: 'prose', text: info.question.text, mode: proseMode };
+        item.question = toolQuestion ? { kind: 'tool', questions: info.question.questions, checked: C.checkedOptions(screen) } : { kind: 'prose', text: info.question.text, mode: proseMode };
         item.detail = toolQuestion ? 'Has a question for you' : 'May have a question';
       } else if (waiting) {
         item.state = 'waiting'; item.detail = sig.trust ? 'Asks whether to trust this folder' : 'Needs your approval';
@@ -1275,7 +1275,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 404, { error: 'Not found' });
     }
 
-    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|start|stop|label|context|queue|hero|ci-log|ci-fix|fit|permissions|history-text|replay))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
+    const m = p.match(/^\/api\/agents\/([A-Za-z0-9_-]{1,32})(?:\/(prompt|key|submit-answers|start|stop|label|context|queue|hero|ci-log|ci-fix|fit|permissions|history-text|replay))?(?:\/([a-f0-9]{12}))?(?:\/(up|down))?$/);
     if (m) {
       const [, name, action, itemId, moveDir] = m;
       const agent = saved.find((a) => a.name === name);
@@ -1294,6 +1294,14 @@ const server = http.createServer(async (req, res) => {
         if (!KEYS.has(key)) return send(res, 400, { error: 'That key is not allowed.' });
         if (!running) return send(res, 409, { error: `${name} is stopped.` });
         await tmux('send-keys', '-t', target(name), key);
+        return send(res, 200, { ok: true });
+      }
+      // Submit a multi-select question: → opens its Submit tab (cursor on "Submit answers"), Enter sends.
+      if (req.method === 'POST' && action === 'submit-answers') {
+        if (!running) return send(res, 409, { error: `${name} is stopped.` });
+        await tmux('send-keys', '-t', target(name), 'Right');
+        await new Promise((r) => setTimeout(r, 300)); // let Claude Code draw the Submit tab first
+        await tmux('send-keys', '-t', target(name), 'Enter');
         return send(res, 200, { ok: true });
       }
       // The hero this agent plays in the heroes theme, so every browser shows the same one. First claim wins.
