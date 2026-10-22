@@ -1338,12 +1338,13 @@ function renderStatus(a) {
       if (g.pr.draft) dd.append(document.createTextNode('  ·  draft'));
       if (review) dd.append(document.createTextNode(`  ·  ${review}`));
       if (g.pr.state && g.pr.state !== 'OPEN') dd.append(document.createTextNode(`  ·  ${g.pr.state.toLowerCase()}`));
+      if (a.ciFix) dd.append(document.createTextNode(a.ciFix.gaveUp ? `  ·  auto-fix stopped after ${a.ciFix.attempts} tries` : `  ·  auto-fix try ${a.ciFix.attempts} of ${a.ciFix.max}`));
       rows.push(['Pull request', dd]);
     }
   }
   box.hidden = !rows.length;
   if (document.activeElement && box.contains(document.activeElement)) return; // don't rebuild under an open select
-  if (sameAs(box, [a.name, c, r, g, a.tokens, a.todos, a.guard])) return;
+  if (sameAs(box, [a.name, c, r, g, a.tokens, a.todos, a.guard, a.ciFix])) return;
   box.replaceChildren(...rows.flatMap(([k, dd]) => [el('dt', '', k), dd]));
 }
 
@@ -1754,6 +1755,7 @@ function inboxActions(it) {
   if (it.kind === 'approve') { btn('Approve (a)', 'warn', () => keyTo(a.name, 'Enter')); btn('Option 2', '', () => keyTo(a.name, '2')); btn('Decline (d)', '', () => keyTo(a.name, 'Escape')); }
   if (it.kind === 'trust') { btn('Trust this folder', 'warn', async () => { await keyTo(a.name, 'Down'); await keyTo(a.name, 'Enter'); }); btn('Exit', '', () => keyTo(a.name, 'Escape')); }
   if (it.kind === 'checks') {
+    if (a.ciFix) row.append(el('small', 'hint', a.ciFix.gaveUp ? `Automatic fixing stopped after ${a.ciFix.attempts} tries.` : `Automatic fix: try ${a.ciFix.attempts} of ${a.ciFix.max}.`));
     btn('Send to agent to fix', 'warn', async () => { const r = await api('POST', `/api/agents/${a.name}/ci-fix`); toast(r.sent === 'sent' ? `Sent the failure to ${labelOf(a.name)}` : `Queued for ${labelOf(a.name)} (it's busy)`); });
     const show = btn('Show log', '', async () => {
       show.disabled = true; show.textContent = 'Loading…';
@@ -1773,7 +1775,7 @@ function inboxActions(it) {
 function renderInbox() {
   const list = $('inboxList'), items = inboxItems();
   $('inboxEmpty').hidden = items.length > 0;
-  const key = JSON.stringify(items.map((it) => [it.a.name, it.kind, it.a.approval, it.a.diff, it.a.question, it.a.state, it.kind === 'checks' && it.a.git.pr.checks, it.a.guard, it.kind === 'plan' && planGuard]));
+  const key = JSON.stringify(items.map((it) => [it.a.name, it.kind, it.a.approval, it.a.diff, it.a.question, it.a.state, it.kind === 'checks' && [it.a.git.pr.checks, it.a.ciFix], it.a.guard, it.kind === 'plan' && planGuard]));
   if (list.dataset.key === key) return; // don't rebuild under someone typing a reply
   list.dataset.key = key;
   list.replaceChildren(...items.map((it) => {

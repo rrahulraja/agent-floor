@@ -26,6 +26,7 @@ const Tasks = require('./lib/tasks');
 const Handoff = require('./lib/handoff');
 const Archive = require('./lib/archive');
 const Templates = require('./lib/templates');
+const CiFix = require('./lib/cifix');
 const Guard = require('./lib/guard');
 const Summary = require('./lib/summary');
 const readline = require('readline');
@@ -46,6 +47,7 @@ const TASKS = C.jsonStore(path.join(DATA_DIR, 'tasks.json'), () => []);
 const HANDOFFS = C.jsonStore(path.join(DATA_DIR, 'handoffs.json'), () => []);
 const ARCHIVE = C.jsonStore(path.join(DATA_DIR, 'archive.json'), () => []);
 const TEMPLATES = C.jsonStore(path.join(DATA_DIR, 'templates.json'), () => []);
+const CIFIX = C.jsonStore(path.join(DATA_DIR, 'cifix.json'), () => ({})); // agent -> { pr, attempts, last, gaveUp }
 const SUMMARY = C.jsonStore(path.join(DATA_DIR, 'summary.json'), () => ({ lastSent: 0 }));
 const PROMPTS = C.jsonStore(path.join(DATA_DIR, 'prompts.json'), () => C.cleanPrompts(C.DEFAULT_PROMPTS));
 const CONFIG = createConfig(path.join(DATA_DIR, 'config.json'), { log: (m) => console.warn(m) });
@@ -480,6 +482,25 @@ async function ciLog(cwd, pr) {
   return parts.join('\n\n').slice(-60000);
 }
 
+// Auto-retry on CI failure (opt-in): the failing log goes into the agent's queue, at most ci.autoFixMax
+// times per PR. Runs beside the poll; reading the log can take a while.
+const ciFixBusy = new Set();
+async function autoFixCi(a, pr) {
+  if (!CONFIG.get('ci.autoFix') || !GH_BIN || ciFixBusy.has(a.name)) return;
+  const all = CIFIX.get(), d = CiFix.decide(all[a.name], pr, CONFIG.get('ci.autoFixMax'));
+  if (JSON.stringify(d.rec) === JSON.stringify(all[a.name]) && !d.send) return;
+  const save = () => { const next = { ...CIFIX.get() }; if (d.rec) next[a.name] = d.rec; else delete next[a.name]; CIFIX.set(next); };
+  if (!d.send) return save();
+  ciFixBusy.add(a.name);
+  try {
+    const log = await ciLog(a.cwd, pr);
+    const text = `(Automatic retry ${d.rec.attempts} of ${CONFIG.get('ci.autoFixMax')})\n\n` + G.ciFixPrompt({ number: pr.number, failedChecks: pr.checks.failedChecks }, log);
+    QUEUE.set(C.enqueue(QUEUE.get(), a.name, text).all);
+    save();
+  } catch (e) { console.warn(`CI auto-fix for ${a.name}:`, e.message); }
+  finally { ciFixBusy.delete(a.name); }
+}
+
 // ---------- Claude Code permission rules (the rules editor) ----------
 // Three files apply to an agent's project; the dashboard only ever writes the personal one.
 function permissionFiles(cwd) {
@@ -759,6 +780,10 @@ async function poll() {
       if (info.looping && info.looping.count >= CONFIG.get('loopingFailures')) item.looping = info.looping;
 
       item.git = gitInfo(a.cwd);
+      // One agent per folder gets its PR's failures (agents sharing a folder share the branch and the PR).
+      if (saved.find((x) => x.cwd === a.cwd) === a) autoFixCi(a, item.git && item.git.pr);
+      const cf = CIFIX.get()[a.name];
+      if (cf) item.ciFix = { attempts: cf.attempts, max: CONFIG.get('ci.autoFixMax'), gaveUp: !!cf.gaveUp };
     }
     const wasWorking = prev.state && WORKING_KINDS.has(prev.state);
     item.finishedAt = item.state === 'idle' ? (wasWorking ? now : prev.finishedAt || 0) : 0;
