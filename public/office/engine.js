@@ -19,6 +19,7 @@ import { loadKChars, kReady, buildKChar } from './kchar.js';
 // the hand-built costumed figures, which read better as those characters.
 const buildFigure = (profile) => (kReady() && !(profile && profile.costume) ? buildKChar(profile) : buildAvatar(profile));
 import { createNav } from './nav.js';
+import { petGoal, buildDog, buildBed } from './pet.js';
 
 const WALK = 1.25;            // metres per second
 const HOLD = 6;               // seconds a new state must last before an agent walks somewhere for it
@@ -109,6 +110,8 @@ class Office {
     this.confetti = [];
     this.heroes = this.loadHeroes(); this.claimed = new Set();
     this.standup = null;
+    this.pet = null; this.petBed = null; this.petBedMesh = null; // the office dog, on unless turned off in this browser
+    this.petOn = (() => { try { return localStorage.getItem('af:pet') !== '0'; } catch { return true; } })();
     this.meeting = null; // a review meeting: { seats, title }
     this.follow = null;
     this.fly = null;
@@ -151,6 +154,7 @@ class Office {
       this.sun.position.set(this.center[0] + 16, 24, this.center[1] + 13);
       this.lightKey = null; // place the sun for the time of day again
       this.makeDust();
+      this.placePetBed();
       // everyone re-plans on the new floor
       for (const a of [...this.actors.values(), ...this.extras]) { a.path = null; a.goalKey = ''; }
       this.sizeKey = '';
@@ -484,6 +488,55 @@ class Office {
     }
   }
 
+  // ---------- the office dog ----------
+  // Its bed is by the lounge couch; see pet.js for where it goes and why.
+  placePetBed() {
+    if (this.petBedMesh) { this.scene.remove(this.petBedMesh); this.petBedMesh.traverse((o) => { if (o.geometry) o.geometry.dispose(); if (o.material) o.material.dispose(); }); this.petBedMesh = null; }
+    const W = this.world.anchors, c = W.couches[W.couches.length - 1];
+    const near = c ? [c.pos[0], c.pos[1] + 0.8] : this.center;
+    this.petBed = (this.nav && this.nav.nearestFree(near[0], near[1])) || near;
+    if (this.pet) { this.pet.path = null; this.pet.goalKey = ''; if (this.nav && !this.nav.isFree(this.pet.pos[0], this.pet.pos[1])) this.pet.pos = [...this.petBed]; }
+    if (!this.petOn) return;
+    this.petBedMesh = buildBed(THREE); this.petBedMesh.position.set(this.petBed[0], 0, this.petBed[1]);
+    this.scene.add(this.petBedMesh);
+  }
+  setPet(on) {
+    this.petOn = !!on;
+    try { localStorage.setItem('af:pet', on ? '1' : '0'); } catch {}
+    if (!on && this.pet) { this.scene.remove(this.pet.dog.group); this.pet.dog.dispose(); this.pet = null; }
+    if (this.world) this.placePetBed();
+    return this.petOn;
+  }
+  tickPet(t, dt, L) {
+    if (!this.petOn || !this.petBed) return;
+    if (!this.pet) { const dog = buildDog(THREE); this.scene.add(dog.group); this.pet = { dog, pos: [...this.petBed], yaw: 0, path: null, goalKey: '', wander: null, n: 0 }; }
+    const p = this.pet;
+    const agents = L.agents.map((ag) => { const a = this.actors.get(ag.name); return { name: ag.name, state: ag.state, since: a ? a.stSince || 0 : 0, pos: a && !a.gone ? a.pos : null }; });
+    if (!p.wander || t > p.wander.until) {
+      // somewhere new every 12-24 s: next to someone working, or a random spot in the lounge, kitchen or desks
+      const working = agents.filter((a) => a.pos && WORKING.has(a.state)), W = this.world.anchors;
+      const rooms = [W.rooms.lounge, W.rooms.kitchen, W.rooms.desks].filter(Boolean);
+      let pos;
+      if (working.length && Math.random() < 0.5) { const w = working[Math.floor(Math.random() * working.length)]; pos = [w.pos[0] + 0.35, w.pos[1] - 0.45]; }
+      else { const r = rooms[Math.floor(Math.random() * rooms.length)]; pos = r ? [r.minX + Math.random() * (r.maxX - r.minX), r.minZ + Math.random() * (r.maxZ - r.minZ)] : this.petBed; }
+      p.wander = { pos, key: `wander:${++p.n}`, until: t + 12 + Math.random() * 12 };
+    }
+    if (this.motionOff) { p.pos = [...this.petBed]; p.path = null; p.goalKey = ''; }
+    const g = this.motionOff ? { mode: 'sleep', pos: this.petBed, key: 'bed' } : petGoal({ agents, night: L.phase === 'night', bed: this.petBed, wander: p.wander });
+    let arrived = true;
+    if (!this.motionOff) {
+      this.goTo(p, g.pos, 0, 'walk', g.key);
+      arrived = this.step(p, dt, g.mode === 'alert' || g.mode === 'happy' ? 1.9 : 1.1);
+    }
+    if (arrived && g.key.startsWith('visit:')) { // look up at the agent it came for
+      const a = this.actors.get(g.key.slice(6));
+      if (a) p.yaw = lerpAngle(p.yaw, Math.atan2(a.pos[0] - p.pos[0], a.pos[1] - p.pos[1]), Math.min(1, dt * 6));
+    }
+    p.dog.group.position.set(p.pos[0], 0, p.pos[1]);
+    p.dog.group.rotation.y = p.yaw;
+    p.dog.update(t, dt, { mode: g.mode, moving: !arrived && !!p.moving });
+  }
+
   // ---------- standup and review meetings, at the meeting table ----------
   tableSeats(names) {
     const W = this.world && this.world.anchors;
@@ -616,6 +669,7 @@ class Office {
     for (const x of this.extras) if (x.gone) { this.dropActor(x); const o = this.actors.get(x.owner); if (o && o.helpers) for (const [k, v] of o.helpers) if (v === x) o.helpers.delete(k); }
     this.extras = this.extras.filter((x) => !x.gone);
     this.tickStandup(t, L.agents);
+    this.tickPet(t, dt, L);
     if (L.draw !== false) { this.syncMonitors(L.agents, t); this.syncDesks(L.agents); }
     this.pairPingPong(t);
     this.tickLife(t, L.agents);
@@ -1075,6 +1129,8 @@ window.Floor3D = {
   characterName: (name) => (office ? office.characterName(name) : ''),
   standup: (names) => (office ? office.startStandup(names) : false),
   meeting: (m) => (office ? office.setMeeting(m) : false),
+  pet: (on) => (office ? office.setPet(on) : false),
+  petOn: () => !!(office && office.petOn),
   preset: (name) => office && office.preset(name),
   focus: (name) => office && office.focus(name),
   setQuality: (q) => office && office.setQuality(q),

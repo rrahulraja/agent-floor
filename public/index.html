@@ -2411,6 +2411,7 @@ function paletteCommands() {
   );
   if (!$('viewBtn').hidden) cmds.push({ label: `Switch to the ${$('viewBtn').textContent} floor`, run: click('viewBtn') });
   if (use3d) cmds.push({ label: 'Walk around the office', key: 'f', run: () => setWalk(!(window.Floor3D && window.Floor3D.walking && window.Floor3D.walking())) });
+  if (use3d && window.Floor3D.pet) cmds.push({ label: window.Floor3D.petOn() ? 'Office dog off' : 'Office dog on', run: () => { window.Floor3D.pet(!window.Floor3D.petOn()); const b = document.getElementById('petBtn'); if (b) b.style.opacity = window.Floor3D.petOn() ? '' : '0.45'; } });
   if (!$('alertsBtn').hidden) cmds.push({ label: 'Turn on alerts', run: click('alertsBtn') });
   for (const o of $('themeSel').options) if (o.value !== $('themeSel').value) {
     cmds.push({ label: `Theme: ${o.textContent}`, run: () => { $('themeSel').value = o.value; $('themeSel').dispatchEvent(new Event('change')); } });
@@ -3455,7 +3456,11 @@ function showHud(on) {
     snd.addEventListener('click', () => Sound.toggle());
     const walk = el('button', '', 'Walk'); walk.type = 'button'; walk.id = 'walkBtn'; walk.title = 'Walk around the office yourself (f)';
     walk.addEventListener('click', () => setWalk(!window.Floor3D.walking()));
-    hud.append(su, walk, q, snd, el('span', 'chip'));
+    const dog = el('button', '', '🐕'); dog.type = 'button'; dog.id = 'petBtn';
+    const dogState = () => { const on = window.Floor3D.petOn(); dog.setAttribute('aria-pressed', String(on)); dog.title = `Office dog: ${on ? 'on' : 'off'}. It runs to agents waiting for you and naps at night`; dog.style.opacity = on ? '' : '0.45'; };
+    dog.addEventListener('click', () => { window.Floor3D.pet(!window.Floor3D.petOn()); dogState(); });
+    dogState();
+    hud.append(su, walk, q, snd, dog, el('span', 'chip'));
     help = el('div', 'o3d-help', HELP_ORBIT);
     stage.append(hud, help);
   }
